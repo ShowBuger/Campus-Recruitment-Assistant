@@ -14,6 +14,8 @@ class FeishuConfig(BaseModel):
     feishu_app_secret: str = ""
     feishu_app_token: str = ""
     main_table_id: str = ""
+    deepseek_api_key: str = ""
+    deepseek_model: str = ""
 
 
 class TestConfig(FeishuConfig):
@@ -42,6 +44,8 @@ def get_config():
             "feishu_app_secret_masked": _masked(cfg.get("FEISHU_APP_SECRET", "")),
             "feishu_app_token": cfg.get("FEISHU_APP_TOKEN", ""),
             "main_table_id": cfg.get("MAIN_TABLE_ID", ""),
+            "deepseek_api_key_masked": _masked(cfg.get("DEEPSEEK_API_KEY", "")),
+            "deepseek_model": cfg.get("DEEPSEEK_MODEL", "") or "deepseek-v4-flash",
         },
     }
 
@@ -69,6 +73,12 @@ def _build_payload(cfg: FeishuConfig) -> dict:
         "FEISHU_APP_SECRET": cfg.feishu_app_secret.strip() or current.get("FEISHU_APP_SECRET", ""),
         "FEISHU_APP_TOKEN": app_token,
         "MAIN_TABLE_ID": table_id,
+        "DEEPSEEK_API_KEY": cfg.deepseek_api_key.strip() or current.get("DEEPSEEK_API_KEY", ""),
+        "DEEPSEEK_MODEL": (
+            cfg.deepseek_model.strip()
+            if cfg.deepseek_model.strip() in {"deepseek-v4-flash", "deepseek-v4-pro"}
+            else current.get("DEEPSEEK_MODEL", "") or "deepseek-v4-flash"
+        ),
     }
 
 

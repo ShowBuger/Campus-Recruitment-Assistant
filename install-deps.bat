@@ -1,18 +1,18 @@
 ﻿@echo off
 chcp 65001 >nul
-title 嵌入式校招雷达 - 安装依赖
+title 校招信息看板 - 安装依赖
 cd /d "%~dp0"
 
 echo.
 echo ========================================
-echo   嵌入式校招雷达 - 一键安装依赖
+echo   校招信息看板 - 一键安装依赖
 echo ========================================
 echo.
 
 where py >nul 2>nul
 if errorlevel 1 (
   echo [错误] 没有找到 Python 启动器 py。
-  echo 请先安装 Python 3.10+，并勾选 Add Python to PATH。
+  echo 请先安装 Python 3.11+，并勾选 Add Python to PATH。
   echo.
   pause
   exit /b 1
@@ -23,14 +23,18 @@ py --version
 if errorlevel 1 goto :fail
 
 echo.
-echo [2/3] 安装 Python 依赖 requirements.txt...
+echo [2/3] 安装 requirements.txt 中的全部依赖...
 py -m pip install -r requirements.txt
 if errorlevel 1 goto :fail
 
 echo.
-echo [3/3] 安装 Playwright Chromium 浏览器内核...
-py -m playwright install chromium
-if errorlevel 1 goto :fail
+echo [3/3] 验证内置简历分析 Skill...
+if not exist "app\prompts\interview_analysis.md" (
+  echo [错误] 缺少 app\prompts\interview_analysis.md
+  echo 请重新克隆或下载完整项目后再安装。
+  goto :fail
+)
+echo [完成] 简历分析 Skill 已随项目安装。
 
 echo.
 echo ========================================

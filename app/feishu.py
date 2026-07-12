@@ -16,6 +16,8 @@ CONFIG_KEYS = [
     "FEISHU_APP_SECRET",
     "FEISHU_APP_TOKEN",
     "MAIN_TABLE_ID",
+    "DEEPSEEK_API_KEY",
+    "DEEPSEEK_MODEL",
 ]
 REQUIRED_CONFIG_KEYS = ["FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_APP_TOKEN", "MAIN_TABLE_ID"]
 
@@ -25,6 +27,8 @@ APP_ID = os.getenv("FEISHU_APP_ID")
 APP_SECRET = os.getenv("FEISHU_APP_SECRET")
 APP_TOKEN = os.getenv("FEISHU_APP_TOKEN")
 MAIN_TABLE_ID = os.getenv("MAIN_TABLE_ID")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL") or "deepseek-v4-flash"
 API = "https://open.feishu.cn/open-apis"
 
 # 缓存 wiki 节点 token -> 多维表格 app_token 的映射，避免每次请求都解析
@@ -155,11 +159,13 @@ def parse_table_id(value: str) -> str:
 
 
 def _apply_config(cfg: dict) -> None:
-    global APP_ID, APP_SECRET, APP_TOKEN, MAIN_TABLE_ID
+    global APP_ID, APP_SECRET, APP_TOKEN, MAIN_TABLE_ID, DEEPSEEK_API_KEY, DEEPSEEK_MODEL
     APP_ID = cfg.get("FEISHU_APP_ID") or ""
     APP_SECRET = cfg.get("FEISHU_APP_SECRET") or ""
     APP_TOKEN = cfg.get("FEISHU_APP_TOKEN") or ""
     MAIN_TABLE_ID = cfg.get("MAIN_TABLE_ID") or ""
+    DEEPSEEK_API_KEY = cfg.get("DEEPSEEK_API_KEY") or ""
+    DEEPSEEK_MODEL = cfg.get("DEEPSEEK_MODEL") or "deepseek-v4-flash"
     _APP_TOKEN_CACHE.clear()
 
 
@@ -169,6 +175,8 @@ def get_config() -> dict:
         "FEISHU_APP_SECRET": "APP_SECRET",
         "FEISHU_APP_TOKEN": "APP_TOKEN",
         "MAIN_TABLE_ID": "MAIN_TABLE_ID",
+        "DEEPSEEK_API_KEY": "DEEPSEEK_API_KEY",
+        "DEEPSEEK_MODEL": "DEEPSEEK_MODEL",
     }
     return {k: (globals().get(names[k]) if k in names else None) or os.getenv(k) or "" for k in CONFIG_KEYS}
 
@@ -304,6 +312,34 @@ def list_fields(table_id):
     return out
 
 
+def create_application(fields: dict) -> dict:
+    """创建投递记录；公司名称允许重复。"""
+    company = (fields.get("公司名称") or "").strip()
+    if not company:
+        raise ValueError("公司名称不能为空")
+
+    path = f"/bitable/v1/apps/{_bitable_app_token()}/tables/{MAIN_TABLE_ID}/records"
+    data = _feishu(path, method="POST", payload={"fields": fields})
+    record = data.get("record") or {}
+    return {"record_id": record.get("record_id", "")}
+
+
+def update_record(record_id: str, fields: dict) -> None:
+    """按飞书记录 ID 精确更新主表中的指定字段。"""
+    path = f"/bitable/v1/apps/{_bitable_app_token()}/tables/{MAIN_TABLE_ID}/records/batch_update"
+    _feishu(
+        path,
+        method="POST",
+        payload={"records": [{"record_id": record_id, "fields": fields}]},
+    )
+
+
+def delete_record(record_id: str) -> None:
+    """按飞书记录 ID 删除主表记录。"""
+    path = f"/bitable/v1/apps/{_bitable_app_token()}/tables/{MAIN_TABLE_ID}/records/batch_delete"
+    _feishu(path, method="POST", payload={"records": [record_id]})
+
+
 # ── 看板数据组装 ─────────────────────────────────────
 def _unwrap_url(val):
     """飞书链接字段返回 {'link':'...','text':'...'}，这里提取纯 URL 字符串。"""
@@ -314,7 +350,10 @@ def _unwrap_url(val):
 
 def get_main_stats():
     recs = list_records(MAIN_TABLE_ID)
-    rows = [r["fields"] for r in recs if r.get("fields", {}).get("公司名称")]
+    rows = [
+        {**r["fields"], "_record_id": r.get("record_id", "")}
+        for r in recs if r.get("fields", {}).get("公司名称")
+    ]
     progress, directions, ctypes = Counter(), Counter(), Counter()
     exam_counter, interview_counter, offer_counter = Counter(), Counter(), Counter()
     for f in rows:
@@ -345,6 +384,30 @@ def get_main_stats():
          "progress": f.get("进展", [])}
         for f in deadlines_raw
     ]
+    def serialize_row(f):
+        return {
+            "record_id": f.get("_record_id", ""),
+            "company": f.get("公司名称", ""),
+            "type": (f.get("公司/行业类型") or [""])[0] if f.get("公司/行业类型") else "",
+            "dir": f.get("嵌入式方向", []),
+            "progress": f.get("进展", []),
+            "job": f.get("秋招岗位", ""),
+            "city": f.get("城市", ""),
+            "batch": f.get("批次", ""),
+            "priority": f.get("优先级", ""),
+            "note": f.get("备注", ""),
+            "job_jd": f.get("岗位JD", ""),
+            "url": _unwrap_url(f.get("投递链接")),
+            "deadline": f.get("投递截止时间", 0),
+            "apply_date": f.get("投递时间", ""),
+            "exam_date": f.get("机考时间", ""),
+            "interview1": f.get("一面", ""),
+            "interview2": f.get("二面", ""),
+            "interview3": f.get("三面", ""),
+            "warm": f.get("保温", ""),
+            "result": f.get("结果", ""),
+        }
+
     return {
         "total_companies": len(rows),
         "exam_count": sum(exam_counter.values()),
@@ -353,23 +416,8 @@ def get_main_stats():
         "directions": directions.most_common(15),
         "ctypes": ctypes.most_common(15),
         "deadlines": deadlines,
-        "recent": [
-            {"company": f.get("公司名称", ""),
-             "type": (f.get("公司/行业类型") or [""])[0] if f.get("公司/行业类型") else "",
-             "dir": f.get("嵌入式方向", []),
-             "progress": f.get("进展", []),
-             "job": f.get("秋招岗位", ""),
-             "url": _unwrap_url(f.get("投递链接")),
-             "deadline": f.get("投递截止时间", 0),
-             "apply_date": f.get("投递时间", ""),
-             "exam_date": f.get("机考时间", ""),
-             "interview1": f.get("一面", ""),
-             "interview2": f.get("二面", ""),
-             "interview3": f.get("三面", ""),
-             "warm": f.get("保温", ""),
-             "result": f.get("结果", "")}
-            for f in recent
-        ]
+        "recent": [serialize_row(f) for f in recent],
+        "records": [serialize_row(f) for f in rows],
     }
 
 

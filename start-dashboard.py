@@ -1,5 +1,5 @@
 """
-嵌入式校招看板 - 一键启动脚本
+校招信息看板 - 一键启动脚本
 双击此文件即可：检查环境 → 启动 FastAPI (uvicorn) → 打开浏览器
 """
 import os, subprocess, sys, time, webbrowser
@@ -8,6 +8,7 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parent
 PORT = 8765
 URL = f"http://localhost:{PORT}"
+ANALYSIS_SKILL = PROJECT_DIR / "app" / "prompts" / "interview_analysis.md"
 
 
 def check(name: str) -> bool:
@@ -21,17 +22,35 @@ def check(name: str) -> bool:
 def main():
     os.chdir(PROJECT_DIR)
     print("=" * 52)
-    print("  嵌入式校招看板  (FastAPI + SPA)")
+    print("  校招信息看板  (FastAPI + SPA)")
     print("=" * 52)
     print()
 
+    if not ANALYSIS_SKILL.is_file():
+        print(f"[错误] 缺少内置简历分析 Skill: {ANALYSIS_SKILL}")
+        print("请重新克隆或下载完整项目后再启动。")
+        raise SystemExit(1)
+
     # 依赖检查
-    need = {"fastapi": "fastapi", "uvicorn": "uvicorn[standard]",
-            "requests": "requests", "dotenv": "python-dotenv"}
-    missing = [pip for mod, pip in need.items() if not check(mod)]
+    need = {
+        "fastapi": "FastAPI",
+        "uvicorn": "Uvicorn",
+        "requests": "requests",
+        "dotenv": "python-dotenv",
+        "multipart": "python-multipart",
+        "docx": "python-docx",
+        "pypdf": "pypdf",
+        "markdown": "Markdown",
+        "bleach": "bleach",
+    }
+    missing = [package for module, package in need.items() if not check(module)]
     if missing:
         print(f"[安装] 缺少依赖: {', '.join(missing)}，正在安装...")
-        subprocess.run([sys.executable, "-m", "pip", "install", *missing], cwd=PROJECT_DIR, check=True)
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
+            cwd=PROJECT_DIR,
+            check=True,
+        )
 
     print("[启动] uvicorn app.main:app  ->", URL)
     proc = subprocess.Popen(

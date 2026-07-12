@@ -1,126 +1,152 @@
-# 嵌入式校招看板
+# 校招信息看板
 
-> 把你的飞书投递表实时变成本地进度驾驶舱，看数据不再靠翻表格。
->
-> 飞书多维表格 × FastAPI × 原生前端，零外部前端框架。
+本地运行的校招投递管理工具。项目通过飞书 OpenAPI 读写多维表格，在浏览器中展示投递进度、维护记录、预览简历，并使用 DeepSeek 分析简历与岗位的匹配情况。
 
-![License](https://img.shields.io/badge/license-MIT-green)
-![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Status](https://img.shields.io/badge/status-active-brightgreen)
+## 功能
 
----
+- 看板总览：公司数量、投递漏斗、截止时间、方向与公司类型分布
+- 投递记录：新增、编辑和删除记录，修改会同步回写飞书
+- 总表信息：浏览飞书主表全部公司，编辑优先级、备注和岗位 JD
+- 简历预览：上传 PDF/DOCX 到本地 `resume/`，直接在网页中预览
+- 简历分析：选择简历和总表岗位，调用 DeepSeek 输出 Markdown 分析报告
+- 分析历史：分析结果以 JSON 保存在本地 `analysis_history/`，可随时二次预览
+- 本地配置：管理飞书凭证、DeepSeek API Key 和模型
+- 亮色/暗色主题
 
-## 能做什么
+## 环境要求
 
-打开 `http://localhost:8765` 就能直接看：
+- Python 3.11 或更高版本
+- Windows 10/11 推荐使用项目自带的 `.bat` 脚本
+- 可访问 `open.feishu.cn` 和 `api.deepseek.com` 的网络
+- 一个已发布的飞书企业自建应用
 
-- 监控公司数量、已投递数量、面试中数量
-- 投递漏斗：已投 → 机考 → 面试 → Offer
-- 截止时间轴：哪些快到期的要注意
-- 方向分布、公司类型分布
-- 你的投递记录列表
-- 暗色 / 亮色主题
+## 快速安装
 
-所有投递数据都由你在飞书多维表格里手动录入和维护，看板只负责读出来展示。
+### Windows
 
----
+1. 克隆项目：
 
-## 六步跑起来
-
-### 1. 复制飞书多维表格模板
-
-> 飞书多维表格模板：[点此打开](https://j0pbq4vb3lh.feishu.cn/wiki/Niv3we4Ldiw56LkEWV2cLuCynvc)
->
-> 申请阅读权限后在右上角「...」→ **复制此表格**到你的飞书空间。
-
-### 2. 打开你的表格填公司
-
-在飞书里打开复制好的表格，手动填入你想关注的公司。至少填：
-
-- 公司名称
-- 投递链接
-
-推荐也把嵌入式方向、工作地点、意愿填上。
-
-### 3. 创建飞书自建应用
-
-打开 [飞书开放平台](https://open.feishu.cn/app) → 创建企业自建应用：
-
-- 开通 `bitable:app` 权限
-- 复制 App ID 和 App Secret
-- 创建版本并发布
-- 从表格链接里记下 App Token、主表 ID
-
-### 4. 克隆并安装
-
-```bash
-git clone https://github.com/kaoya-123/embeded_job_rader.git
-cd embeded_job_rader
-pip install -r requirements.txt
+```powershell
+git clone https://github.com/kaoya-123/embeded_qiuzhao_kanban.git
+cd embeded_qiuzhao_kanban
 ```
 
-### 5. 配置 .env
+2. 双击 `install-deps.bat`，脚本会安装 `requirements.txt` 中的全部依赖。
+3. 双击 `start-dashboard.bat`。
+4. 打开 `http://localhost:8765`。
 
-```bash
-cp .env.example .env
+`start-dashboard.py` 启动时也会检查全部运行依赖，发现缺失后自动执行：
+
+```powershell
+python -m pip install -r requirements.txt
 ```
 
-```bash
+简历分析 skill 已内置在 `app/prompts/interview_analysis.md`，随仓库一起安装。安装脚本和启动脚本都会校验该文件，缺失时停止运行并提示重新获取完整项目，不需要额外克隆 `interview-skills` 仓库。
+
+### 命令行
+
+```powershell
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
+```
+
+## 配置
+
+首次打开网页后进入“飞书配置”，填写：
+
+| 配置项 | 说明 |
+|---|---|
+| App ID | 飞书自建应用 App ID |
+| App Secret | 飞书自建应用密钥 |
+| Base Token | 多维表格链接或 App Token |
+| 主表 ID | 目标数据表的 `table_id` |
+| DeepSeek API Key | DeepSeek 开放平台密钥，仅保存在本机 |
+| DeepSeek 模型 | `deepseek-v4-flash` 或 `deepseek-v4-pro` |
+
+也可以复制配置模板：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+```dotenv
 FEISHU_APP_ID=cli_xxx
 FEISHU_APP_SECRET=xxx
-FEISHU_APP_TOKEN=你的多维表格 token
-MAIN_TABLE_ID=你的主表 table_id
+FEISHU_APP_TOKEN=你的多维表格_token
+MAIN_TABLE_ID=tblxxxxxxxx
+DEEPSEEK_API_KEY=sk-xxx
+DEEPSEEK_MODEL=deepseek-v4-flash
 ```
 
-也可以启动后在浏览器配置页直接填。
+`.env` 已被 Git 忽略。不要提交、截图或分享真实密钥。
 
-### 6. 启动看板
+## 飞书权限与字段
 
-```bash
-dev -m uvicorn app.main:app --port 8765
-```
+飞书应用至少需要多维表格读写权限，并需要被添加为目标多维表格的协作者。修改权限后需创建并发布新版本。
 
-打开浏览器访问：
+看板使用以下主表字段：
 
 ```text
-http://localhost:8765
+公司名称、秋招岗位、岗位JD、城市、批次、优先级、备注、投递链接、
+投递时间、投递截止时间、机考时间、一面、二面、三面、保温、结果、
+进展、嵌入式方向、公司/行业类型
 ```
 
----
+字段类型应与看板匹配：日期列使用日期时间字段，`进展`使用多选，`批次`和`优先级`使用单选，`岗位JD`和`备注`使用文本。
 
-## 原理一句话
+## 简历文件
 
-```text
-你在飞书表格里维护投递数据
-      ↓ Feishu OpenAPI
-本地 FastAPI 读取并聚合
-      ↓
-浏览器看板展示：KPI / 漏斗 / 截止时间轴 / 方向分布 / 你的投递列表
-```
+- 支持 `.pdf` 和 `.docx`
+- 单文件最大 20 MB
+- 文件保存在项目的 `resume/` 目录
+- 实际简历文件默认被 Git 忽略
+- DOCX 预览提取文本、标题和表格；复杂排版可能与 Word 略有差异
+- 扫描版 PDF 若无文本层，AI 分析前需要先执行 OCR
 
-不写飞书，不等同步，不自动改你手动录入的任何内容。
+## AI 分析
 
----
+AI 分析会将以下内容发送到配置的 DeepSeek API：
+
+- 公司名称
+- 目标岗位
+- 岗位 JD
+- 所选简历中提取的文本
+
+分析结果按 Markdown 渲染，包含匹配度、优势、缺口、简历修改建议、面试问题和准备计划。调用前必须先填写 DeepSeek API Key，并确保所选总表记录已有`岗位JD`。
+
+每次成功分析都会保存到本地 `analysis_history/`。历史记录包含公司、岗位、简历文件名、模型、分析时间和原始 Markdown；分析历史默认被 Git 忽略。
+
+项目内置分析 skill 参考 `jennifer88huang/interview-skills` 的 JD 解析、简历解析、匹配分析和面试题设计流程，并以本项目所需的固定输出结构封装在 `app/prompts/interview_analysis.md` 中。网页后端直接加载该文件，而不是依赖用户目录中的 Codex/OpenClaw skill。
+
+## 依赖
+
+所有 Python 依赖均维护在 `requirements.txt`：
+
+- FastAPI、Uvicorn、requests、python-dotenv
+- python-multipart
+- python-docx、pypdf
+- Markdown、bleach
+
+不需要 Node.js、Playwright 或外部前端构建工具。
 
 ## 安全说明
 
-- 真实密钥只保存在本地 `.env` 或浏览器配置页中
-- `.env` 已被 `.gitignore` 忽略，不要提交真实凭证
-
----
+- 浏览器不会读取或保存飞书 App Secret 与 DeepSeek API Key 原文
+- 密钥只保存在本机 `.env`，接口仅返回掩码
+- AI 分析会把所选简历文本发送给 DeepSeek，请确认内容符合你的隐私要求
+- 删除投递记录会同步删除飞书主表对应行，操作前会二次确认
 
 ## 技术栈
 
 | 组件 | 技术 |
 |---|---|
-| 后端框架 | FastAPI |
-| 服务运行 | Uvicorn |
-| 数据存储 | 飞书多维表格 Bitable |
-| 前端 | 原生 HTML / CSS / JS |
-| HTTP 客户端 | requests |
+| 后端 | FastAPI / Uvicorn |
+| 数据源 | 飞书多维表格 Bitable |
+| AI | DeepSeek Chat Completions API |
+| 前端 | 原生 HTML / CSS / JavaScript |
+| 文档解析 | python-docx / pypdf |
+| Markdown | Python-Markdown / bleach |
 
----
+## 许可
 
-## 贡献 & 许可
-
-MIT License — 可自由使用、修改和分发。
+MIT License。
