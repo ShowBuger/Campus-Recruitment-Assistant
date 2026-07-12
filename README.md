@@ -2,13 +2,14 @@
 
 本地运行的校招投递管理工具。项目通过飞书 OpenAPI 读写多维表格，在浏览器中展示投递进度、维护记录、预览简历，并使用 DeepSeek 分析简历与岗位的匹配情况。
 
-**当前版本：v0.2**
+**当前版本：v0.3**
 
 ## 功能
 
 - 看板总览：公司数量、投递漏斗、截止时间、方向与公司类型分布
-- 投递记录：新增、编辑和删除记录，修改会同步回写飞书
-- 总表信息：浏览飞书主表全部公司，编辑优先级、备注和岗位 JD
+- 投递记录：新增和编辑记录；移出投递时保留主表行并重置投递流程
+- 总表信息：浏览、编辑和永久删除飞书主表记录，维护优先级、备注和岗位 JD
+- 秋招日历：按月查看投递、机考/笔试、面试、保温、结果和截止事件；点击"新建日程"可直接在日历上为已有记录添加日期，或创建无需绑定公司的自定义本地日程
 - 简历预览：上传 PDF/DOCX 到本地 `resume/`，直接在网页中预览
 - 简历分析：选择简历和总表岗位，调用 DeepSeek 输出 Markdown 分析报告
 - 分析历史：分析结果以 JSON 保存在本地 `analysis_history/`，可随时二次预览
@@ -18,7 +19,7 @@
 ## 环境要求
 
 - Python 3.11 或更高版本
-- Windows 10/11 推荐使用项目自带的 `.bat` 脚本
+- Windows 10/11 推荐使用 `.bat` 脚本，Linux/macOS 使用 `.sh` 脚本
 - 可访问 `open.feishu.cn` 和 `api.deepseek.com` 的网络
 - 一个已发布的飞书企业自建应用
 
@@ -37,6 +38,30 @@ cd embeded_qiuzhao_kanban
 3. 双击 `start-dashboard.bat`。
 4. 打开 `http://localhost:8765`。
 
+### Linux / macOS
+
+1. 克隆项目：
+
+```bash
+git clone https://github.com/kaoya-123/embeded_qiuzhao_kanban.git
+cd embeded_qiuzhao_kanban
+```
+
+2. 给脚本添加执行权限并安装依赖：
+
+```bash
+chmod +x install-deps.sh start-dashboard.sh
+./install-deps.sh
+```
+
+3. 启动看板：
+
+```bash
+./start-dashboard.sh
+```
+
+4. 打开 `http://localhost:8765`。
+
 `start-dashboard.py` 启动时也会检查全部运行依赖，发现缺失后自动执行：
 
 ```powershell
@@ -45,11 +70,17 @@ python -m pip install -r requirements.txt
 
 简历分析 skill 已内置在 `app/prompts/interview_analysis.md`，随仓库一起安装。安装脚本和启动脚本都会校验该文件，缺失时停止运行并提示重新获取完整项目，不需要额外克隆 `interview-skills` 仓库。
 
-### 命令行
+### 命令行（所有平台通用）
 
-```powershell
-python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
+```bash
+# 安装依赖
+python3 -m pip install -r requirements.txt
+
+# 启动看板
+python3 start-dashboard.py
+
+# 或直接使用 uvicorn
+python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 ```
 
 ## 复制飞书表格模板
@@ -152,7 +183,8 @@ AI 分析会将以下内容发送到配置的 DeepSeek API：
 - 浏览器不会读取或保存飞书 App Secret 与 DeepSeek API Key 原文
 - 密钥只保存在本机 `.env`，接口仅返回掩码
 - AI 分析会把所选简历文本发送给 DeepSeek，请确认内容符合你的隐私要求
-- 删除投递记录会同步删除飞书主表对应行，操作前会二次确认
+- 投递记录的删除只会改为“未投递”并清空投递后产生的流程时间
+- 只有总表信息中的删除会永久删除飞书主表对应行，操作前会二次确认
 
 ## 技术栈
 
@@ -178,8 +210,16 @@ MIT License。
 - 新增投递记录的创建、编辑、删除和一键加入投递功能
 - 支持批次、进展、各轮面试时间、岗位 JD、优先级和备注维护
 - 新增总表信息页面，公司详情修改可同步回写飞书
+- 新增秋招日历，聚合展示投递和招聘流程中的重要日期
 - 新增 PDF/DOCX 简历上传、本地保存和网页预览
 - 新增 DeepSeek API Key 与模型配置
 - 新增综合匹配、技术面试、HR 面试、完整流程和简历优化五种 AI 分析模式
 - 分析结果支持安全 Markdown 渲染、本地历史保存、二次预览和 MD 下载
 - 完善 Windows 一键安装、完整依赖检查、配置模板和安全说明
+
+### v0.3
+
+- 秋招日历支持"新建日程"：可选择投递、机考、各轮面试、保温、结果、截止等类型，自动写入飞书对应日期字段并推进进展状态
+- 新增"其他（自定义）"事件类型：无需绑定公司，自由填写日程内容，数据保存在本地 `data/calendar_events.json`
+- 日历图例新增紫色"其他"标记，自定义日程与飞书字段事件在同一视图中合并展示
+- 日历工具栏新增"新建日程"按钮，弹窗内置日期选择器，默认填充当天日期
