@@ -71,10 +71,15 @@ async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> dict:
-    """FastAPI 依赖：从 Authorization header 解析 JWT，返回当前用户。"""
-    if not credentials or not credentials.credentials:
+    """FastAPI 依赖：从 Authorization header 或 ?token= 查询参数解析 JWT。"""
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    else:
+        token = request.query_params.get("token")
+    if not token:
         raise HTTPException(status_code=401, detail="请先登录")
-    payload = verify_token(credentials.credentials)
+    payload = verify_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
     return {"user_id": payload["user_id"], "username": payload["username"]}
@@ -85,7 +90,12 @@ def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> dict | None:
     """可选认证：不强制要求登录，有 token 就解析。"""
-    if not credentials or not credentials.credentials:
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    else:
+        token = request.query_params.get("token")
+    if not token:
         return None
-    payload = verify_token(credentials.credentials)
+    payload = verify_token(token)
     return {"user_id": payload["user_id"], "username": payload["username"]} if payload else None
