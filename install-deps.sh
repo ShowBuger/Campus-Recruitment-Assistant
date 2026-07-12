@@ -26,11 +26,13 @@ if ! python3 -m venv --help &>/dev/null; then
   echo "请运行: sudo apt install python3.12-venv"
   exit 1
 fi
-if [ ! -d "$VENV_DIR" ]; then
+if [ -f "$VENV_DIR/bin/activate" ]; then
+  echo "[跳过] 虚拟环境已存在且完整: $VENV_DIR"
+else
+  echo "[清理] 移除不完整的虚拟环境..."
+  rm -rf "$VENV_DIR"
   python3 -m venv "$VENV_DIR"
   echo "[完成] 虚拟环境已创建: $VENV_DIR"
-else
-  echo "[跳过] 虚拟环境已存在: $VENV_DIR"
 fi
 
 # 激活虚拟环境
