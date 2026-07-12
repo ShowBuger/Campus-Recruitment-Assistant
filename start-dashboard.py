@@ -22,7 +22,7 @@ def check(name: str) -> bool:
 def main():
     os.chdir(PROJECT_DIR)
     print("=" * 52)
-    print("  校招信息看板  (FastAPI + SPA)")
+    print("  校招信息看板 v0.2  (FastAPI + SPA)")
     print("=" * 52)
     print()
 

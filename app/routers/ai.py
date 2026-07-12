@@ -1,16 +1,18 @@
 """DeepSeek-powered resume and job analysis."""
 import json
 import os
+import re
 from pathlib import Path
 from datetime import datetime
 from uuid import uuid4
+from urllib.parse import quote
 
 import bleach
 import markdown
 import requests
 from docx import Document
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Response
+from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
 from app import feishu
@@ -31,6 +33,68 @@ MARKDOWN_TAGS = {
 class AnalysisRequest(BaseModel):
     resume_filename: str
     record_id: str
+    analysis_mode: str = "match"
+    focus: str = Field(default="", max_length=1000)
+
+
+ANALYSIS_MODES = {
+    "match": {
+        "label": "综合匹配分析",
+        "instruction": """请输出：
+# 匹配结论
+- 综合匹配度（0-100 分）、一句话判断、最适合强调的候选人定位
+## JD 核心要求
+## 简历匹配优势
+列出 3-5 条，每条引用具体证据。
+## 缺口与风险
+列出 3-5 条并标注“未体现/证据不足/可能缺乏”。
+## 简历修改建议
+## 面试重点
+## 针对性面试题
+生成 8 道题，每题包含考察点、回答思路和可能追问。
+## 7 天准备计划""",
+    },
+    "technical": {
+        "label": "技术面试训练",
+        "instruction": """生成 10 道针对性技术面试题：技术基础 3-4 道、项目深挖 3-4 道、系统/场景题 1-2 道、反问环节 1 道。
+每题严格包含：题目类型、题目、依据（JD 或简历）、难度、参考回答框架、优秀回答应包含的证据、可能追问。
+最后输出“最高风险知识点”和“面试前冲刺清单”。""",
+    },
+    "hr": {
+        "label": "HR 面试训练",
+        "instruction": """生成 8 道校招 HR 面专项问题，覆盖求职动机、公司与岗位理解、地点接受度、offer 选择、稳定性、协作冲突、职业规划和薪资预期。
+每题包含：HR 真正判断什么、结合本简历的回答原则、可直接说出口的回答框架、踩坑提醒、可能追问。
+最后总结候选人的 HR 面风险与应对策略。""",
+    },
+    "full": {
+        "label": "完整面试流程",
+        "instruction": """设计一套连贯的完整面试流程：
+# 整体判断
+## Round 1 · 一面
+基础知识与简历入口，至少 5 题。
+## Round 2 · 二面
+项目深挖、技术方案和权衡，至少 5 题，并承接一面暴露的问题。
+## Round 3 · 三面
+综合判断、协作、业务理解和成长潜力，至少 4 题。
+## Round 4 · HR 面
+动机、稳定性、地点、薪资和规划，至少 5 题。
+每轮说明关注点、通过关键、淘汰风险和准备建议。""",
+    },
+    "resume": {
+        "label": "简历定向优化",
+        "instruction": """针对目标岗位审查简历并输出：
+# 简历诊断摘要
+## 应保留和强化的内容
+## 应删除或弱化的内容
+## 缺失的关键词与证据
+## 逐段修改建议
+引用原表述，给出修改方向和示例表达；禁止虚构数据。
+## 项目经历重写模板
+## 面向该岗位的一分钟自我介绍
+## 修改优先级清单
+按 P0/P1/P2 排序。""",
+    },
+}
 
 
 def _render_markdown(content: str) -> str:
@@ -68,7 +132,13 @@ def list_history():
     for path in sorted(HISTORY_DIR.glob("*.json"), reverse=True):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            items.append({key: data.get(key, "") for key in ("id", "created_at", "company", "job", "resume", "model")})
+            items.append({
+                key: data.get(key, "")
+                for key in (
+                    "id", "created_at", "company", "job", "resume", "model",
+                    "analysis_mode", "analysis_mode_label",
+                )
+            })
         except (OSError, ValueError):
             continue
     return {"items": items}
@@ -85,6 +155,27 @@ def get_history(history_id: str):
         raise HTTPException(status_code=422, detail="分析记录文件损坏") from exc
     analysis = str(data.get("analysis") or "")
     return {**data, "analysis_html": _render_markdown(analysis)}
+
+
+@router.get("/history/{history_id}/download")
+def download_history(history_id: str):
+    path = _history_path(history_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="分析记录不存在")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="分析记录文件损坏") from exc
+    analysis = str(data.get("analysis") or "")
+    company = re.sub(r'[\\/:*?"<>|]+', "_", str(data.get("company") or "公司"))
+    job = re.sub(r'[\\/:*?"<>|]+', "_", str(data.get("job") or "岗位"))
+    created = str(data.get("created_at") or history_id).replace(":", "-").replace("T", "_")
+    filename = f"{company}-{job}-{created}.md"
+    return Response(
+        content=analysis.encode("utf-8"),
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
 
 
 def _extract_resume_text(path: Path) -> str:
@@ -124,6 +215,9 @@ def analyze_resume(request: AnalysisRequest):
     api_key = (feishu.DEEPSEEK_API_KEY or "").strip()
     if not api_key:
         raise HTTPException(status_code=400, detail="请先在飞书配置中填写 DeepSeek API Key")
+    mode = ANALYSIS_MODES.get(request.analysis_mode)
+    if not mode:
+        raise HTTPException(status_code=422, detail="不支持的分析模式")
 
     fields = _find_record(request.record_id)
     resume_text = _extract_resume_text(resume_path)
@@ -147,6 +241,15 @@ def analyze_resume(request: AnalysisRequest):
 
 【候选人简历】
 {resume_text}
+
+【本次任务】
+{mode['label']}
+
+【输出要求】
+{mode['instruction']}
+
+【用户特别关注】
+{request.focus.strip() or '无，请按默认流程全面分析。'}
 """
     try:
         response = requests.post(
@@ -183,6 +286,8 @@ def analyze_resume(request: AnalysisRequest):
         "job": job,
         "resume": resume_path.name,
         "model": feishu.DEEPSEEK_MODEL or "deepseek-v4-flash",
+        "analysis_mode": request.analysis_mode,
+        "analysis_mode_label": mode["label"],
         "record_id": request.record_id,
         "analysis": content,
     })
@@ -195,4 +300,6 @@ def analyze_resume(request: AnalysisRequest):
         "job": job,
         "resume": resume_path.name,
         "history_id": history_id,
+        "analysis_mode": request.analysis_mode,
+        "analysis_mode_label": mode["label"],
     }

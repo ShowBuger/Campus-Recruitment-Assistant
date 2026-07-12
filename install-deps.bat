@@ -1,11 +1,11 @@
 ﻿@echo off
 chcp 65001 >nul
-title 校招信息看板 - 安装依赖
+title 校招信息看板 v0.2 - 安装依赖
 cd /d "%~dp0"
 
 echo.
 echo ========================================
-echo   校招信息看板 - 一键安装依赖
+echo   校招信息看板 v0.2 - 一键安装依赖
 echo ========================================
 echo.
 
@@ -18,17 +18,26 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [1/3] 检查 Python 版本...
+echo [1/4] 检查 Python 版本...
 py --version
 if errorlevel 1 goto :fail
 
 echo.
-echo [2/3] 安装 requirements.txt 中的全部依赖...
+echo [2/4] 安装 requirements.txt 中的全部依赖...
 py -m pip install -r requirements.txt
 if errorlevel 1 goto :fail
 
 echo.
-echo [3/3] 验证内置简历分析 Skill...
+echo [3/4] 验证全部运行依赖...
+py -c "import fastapi, uvicorn, requests, dotenv, multipart, docx, pypdf, markdown, bleach"
+if errorlevel 1 (
+  echo [错误] 运行依赖验证失败。
+  goto :fail
+)
+echo [完成] 全部运行依赖可正常导入。
+
+echo.
+echo [4/4] 验证内置简历分析 Skill...
 if not exist "app\prompts\interview_analysis.md" (
   echo [错误] 缺少 app\prompts\interview_analysis.md
   echo 请重新克隆或下载完整项目后再安装。

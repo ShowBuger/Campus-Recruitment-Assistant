@@ -150,6 +150,38 @@ def remove_application(record_id: str):
     return {"success": True, "message": "投递记录已删除", "dashboard": data}
 
 
+@router.post("/records/{record_id}/apply")
+def add_to_applications(record_id: str):
+    if not record_id.startswith("rec"):
+        raise HTTPException(status_code=422, detail="无效的飞书记录 ID")
+    try:
+        record = next(
+            (item for item in feishu.list_records(feishu.MAIN_TABLE_ID) if item.get("record_id") == record_id),
+            None,
+        )
+        if not record:
+            raise HTTPException(status_code=404, detail="未找到对应的总表记录")
+        current_fields = record.get("fields") or {}
+        if not current_fields.get("投递时间"):
+            feishu.update_record(
+                record_id,
+                {
+                    "进展": ["已投递"],
+                    "投递时间": int(datetime.now(timezone.utc).timestamp() * 1000),
+                },
+            )
+            message = "已加入投递记录"
+        else:
+            message = "该记录已在投递记录中"
+        data = feishu.get_dashboard_data()
+        state.set_cache(data)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=feishu.friendly_error(exc)) from exc
+    return {"success": True, "message": message, "dashboard": data}
+
+
 @router.post("/records/{record_id}/details")
 def save_company_details(record_id: str, details: CompanyDetails):
     if not record_id.startswith("rec"):
