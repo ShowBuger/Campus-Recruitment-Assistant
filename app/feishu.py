@@ -166,7 +166,7 @@ def parse_app_token(value: str) -> str:
 def parse_table_id(value: str) -> str:
     """从用户输入里提取多维表格 table_id（tbl 开头）。
 
-    支持从链接的 ?table=<id> 参数解析，或直接粘贴的纯 table_id。
+    支持从链接的 ?table=<id> 参数解析，或直接粘贴 tbl 开头的纯 table_id。
     """
     value = (value or "").strip()
     if not value:
@@ -174,10 +174,13 @@ def parse_table_id(value: str) -> str:
     m = re.search(r"[?&]table=([^&#]+)", value)
     if m:
         return unquote(m.group(1))
-    # 看起来是链接但没带 table 参数：无法解析出 table_id
+    # 链接但没带 table 参数：无法解析
     if "://" in value or "/" in value:
         return ""
-    return value
+    # 纯文本：只有 tbl 开头才视为 table_id，否则是 base token
+    if value.startswith("tbl"):
+        return value
+    return ""
 
 
 def _apply_config(cfg: dict) -> None:

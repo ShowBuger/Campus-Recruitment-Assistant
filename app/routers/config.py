@@ -52,14 +52,11 @@ def get_config(user: dict = Depends(auth_module.get_current_user)):
 
 def _build_payload(cfg: FeishuConfig, user_id: int) -> dict:
     current = database.get_user_config(user_id)
-    raw_token = cfg.feishu_app_token.strip()
-    app_token = feishu.parse_app_token(raw_token) or current.get("feishu_app_token", "")
+    raw = cfg.feishu_app_token.strip()
 
-    table_id = feishu.parse_table_id(cfg.main_table_id.strip())
-    if not table_id and raw_token:
-        table_id = feishu.parse_table_id(raw_token)
-    if not table_id:
-        table_id = current.get("main_table_id", "")
+    # 从链接统一解析 Base Token 和 Table ID
+    app_token = feishu.parse_app_token(raw) or current.get("feishu_app_token", "")
+    table_id = feishu.parse_table_id(raw) or current.get("main_table_id", "")
 
     return {
         "FEISHU_APP_ID": cfg.feishu_app_id.strip() or current.get("feishu_app_id", ""),
