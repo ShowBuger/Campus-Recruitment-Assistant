@@ -85,6 +85,11 @@ def friendly_error(exc: Exception) -> str:
             return f"多维表格不存在或已被删除。\n详情：[{code}] {msg}"
         if code == 1254002:
             return f"Table ID 不存在，或应用没有该子表的查看权限。\n详情：[{code}] {msg}"
+        if code == 1254004:
+            return (
+                f"Table ID 不正确，在当前多维表格中找不到对应的数据表。\n"
+                f"请核对飞书配置中的主表 ID 是否为 tbl 开头的字符串。\n"
+                f"详情：[{code}] {msg}")
         if code == 1254041:
             return f"Table ID「{_cfg('MAIN_TABLE_ID')}」在该多维表格中不存在。\n详情：[{code}] {msg}"
         # 知识库 / wiki
