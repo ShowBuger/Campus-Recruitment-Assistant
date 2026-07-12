@@ -54,7 +54,7 @@ def main():
 
     print("[启动] uvicorn app.main:app  ->", URL)
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(PORT)],
+        [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", str(PORT)],
         cwd=PROJECT_DIR,
     )
 
