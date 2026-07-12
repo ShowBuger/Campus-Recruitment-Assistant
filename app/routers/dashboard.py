@@ -417,3 +417,29 @@ def delete_local_event(
     if not ok:
         raise HTTPException(status_code=404, detail="未找到该本地日程")
     return {"success": True, "message": "本地日程已删除"}
+
+
+class CalendarEventDelete(BaseModel):
+    record_id: str
+    event_type: Literal["apply", "exam", "interview1", "interview2", "interview3", "warm", "result", "deadline"]
+
+
+@router.delete("/calendar/event")
+def delete_calendar_event(
+    body: CalendarEventDelete,
+    user: dict = Depends(auth_module.get_current_user),
+    _cfg=Depends(_use_feishu),
+):
+    """删除飞书记录上的某个日程（将对应日期字段设为空）。"""
+    if not body.record_id.startswith("rec"):
+        raise HTTPException(status_code=422, detail="无效的飞书记录 ID")
+    field_name = EVENT_TYPE_FIELD_MAP.get(body.event_type)
+    if not field_name:
+        raise HTTPException(status_code=422, detail=f"未知事件类型: {body.event_type}")
+    try:
+        feishu.update_record(body.record_id, {field_name: None})
+        data = feishu.get_dashboard_data()
+        state.set_cache(user["user_id"], data)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=feishu.friendly_error(exc)) from exc
+    return {"success": True, "message": f"已删除「{field_name}」日程", "dashboard": data}
