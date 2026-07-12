@@ -52,6 +52,20 @@ python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 ```
 
+## 复制飞书表格模板
+
+项目推荐使用已经适配字段结构的多维表格模板：
+
+**[打开并复制“校招信息看板”飞书多维表格](https://my.feishu.cn/base/FQjJbI4yUaQXzts7cGEcx6dIn2d?from=from_copylink)**
+
+打开链接后，将表格复制到自己的飞书空间，再使用复制后表格的链接、Base Token 和主表 ID 配置看板。不要直接把模板原表作为个人投递表使用。
+
+复制后还需要：
+
+1. 将自己的飞书自建应用添加为该多维表格的协作者。
+2. 为应用开通多维表格读写权限并发布应用版本。
+3. 在看板“飞书配置”页面粘贴复制后的表格链接和应用凭证。
+
 ## 配置
 
 首次打开网页后进入“飞书配置”，填写：
