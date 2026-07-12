@@ -20,6 +20,12 @@ python3 --version
 
 echo
 echo "[2/5] 创建 Python 虚拟环境..."
+# 检测是否安装了 python3-venv（Debian/Ubuntu 常见缺失）
+if ! python3 -m venv --help &>/dev/null; then
+  echo "[错误] 缺少 python3-venv，无法创建虚拟环境。"
+  echo "请运行: sudo apt install python3.12-venv"
+  exit 1
+fi
 if [ ! -d "$VENV_DIR" ]; then
   python3 -m venv "$VENV_DIR"
   echo "[完成] 虚拟环境已创建: $VENV_DIR"
