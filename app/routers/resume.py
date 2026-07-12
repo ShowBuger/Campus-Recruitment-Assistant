@@ -1,26 +1,32 @@
-"""Resume upload, listing, and browser preview endpoints."""
+"""Resume upload, listing, and preview — per-user isolation."""
 import html
 import os
 import zipfile
 from pathlib import Path
 
 from docx import Document
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
+from app import auth as auth_module
 
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 PROJECT_DIR = Path(__file__).resolve().parents[2]
-RESUME_DIR = PROJECT_DIR / "resume"
 ALLOWED_SUFFIXES = {".pdf", ".docx"}
 MAX_FILE_SIZE = 20 * 1024 * 1024
 
 
-def _resume_path(filename: str) -> Path:
+def _user_resume_dir(user_id: int) -> Path:
+    d = PROJECT_DIR / "data" / "users" / str(user_id) / "resumes"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _resume_path(user_id: int, filename: str) -> Path:
     clean = Path(filename).name
     if not clean or clean != filename or Path(clean).suffix.lower() not in ALLOWED_SUFFIXES:
         raise HTTPException(status_code=400, detail="无效的简历文件名")
-    return RESUME_DIR / clean
+    return _user_resume_dir(user_id) / clean
 
 
 def _file_info(path: Path) -> dict:
@@ -34,18 +40,20 @@ def _file_info(path: Path) -> dict:
 
 
 @router.get("")
-def list_resumes():
-    RESUME_DIR.mkdir(parents=True, exist_ok=True)
-    files = [p for p in RESUME_DIR.iterdir() if p.is_file() and p.suffix.lower() in ALLOWED_SUFFIXES]
+def list_resumes(user: dict = Depends(auth_module.get_current_user)):
+    resume_dir = _user_resume_dir(user["user_id"])
+    files = [p for p in resume_dir.iterdir() if p.is_file() and p.suffix.lower() in ALLOWED_SUFFIXES]
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return {"files": [_file_info(path) for path in files]}
 
 
 @router.post("")
-async def upload_resume(file: UploadFile = File(...)):
+async def upload_resume(
+    file: UploadFile = File(...),
+    user: dict = Depends(auth_module.get_current_user),
+):
     filename = Path(file.filename or "").name
-    target = _resume_path(filename)
-    RESUME_DIR.mkdir(parents=True, exist_ok=True)
+    target = _resume_path(user["user_id"], filename)
     temp = target.with_suffix(target.suffix + ".uploading")
     size = 0
     try:
@@ -75,8 +83,8 @@ async def upload_resume(file: UploadFile = File(...)):
 
 
 @router.get("/{filename}/file")
-def get_resume_file(filename: str):
-    path = _resume_path(filename)
+def get_resume_file(filename: str, user: dict = Depends(auth_module.get_current_user)):
+    path = _resume_path(user["user_id"], filename)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="简历文件不存在")
     media_type = "application/pdf" if path.suffix.lower() == ".pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -127,8 +135,8 @@ def _docx_html(path: Path) -> str:
 
 
 @router.get("/{filename}/preview")
-def preview_resume(filename: str):
-    path = _resume_path(filename)
+def preview_resume(filename: str, user: dict = Depends(auth_module.get_current_user)):
+    path = _resume_path(user["user_id"], filename)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="简历文件不存在")
     if path.suffix.lower() == ".pdf":

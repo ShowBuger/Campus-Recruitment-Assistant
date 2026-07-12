@@ -1,4 +1,4 @@
-"""DeepSeek-powered resume and job analysis."""
+"""DeepSeek-powered resume and job analysis — per-user isolation."""
 import json
 import os
 import re
@@ -11,17 +11,16 @@ import bleach
 import markdown
 import requests
 from docx import Document
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
-from app import feishu
-from app.routers.resume import RESUME_DIR, _resume_path
+from app import auth as auth_module, database, feishu
 
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "interview_analysis.md"
-HISTORY_DIR = Path(__file__).resolve().parents[2] / "analysis_history"
+PROJECT_DIR = Path(__file__).resolve().parents[2]
 MAX_RESUME_CHARS = 40_000
 MARKDOWN_TAGS = {
     "h1", "h2", "h3", "h4", "h5", "h6", "p", "br", "hr",
@@ -108,10 +107,16 @@ def _render_markdown(content: str) -> str:
     )
 
 
-def _save_history(data: dict) -> str:
-    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+def _user_history_dir(user_id: int) -> Path:
+    d = PROJECT_DIR / "data" / "users" / str(user_id) / "analysis_history"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _save_history(data: dict, user_id: int) -> str:
+    hist_dir = _user_history_dir(user_id)
     history_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:8]
-    target = HISTORY_DIR / f"{history_id}.json"
+    target = hist_dir / f"{history_id}.json"
     temp = target.with_suffix(".json.tmp")
     payload = {"id": history_id, "created_at": datetime.now().isoformat(timespec="seconds"), **data}
     temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -119,17 +124,25 @@ def _save_history(data: dict) -> str:
     return history_id
 
 
-def _history_path(history_id: str) -> Path:
+def _history_path(history_id: str, user_id: int) -> Path:
     if not history_id or any(ch not in "0123456789abcdefghijklmnopqrstuvwxyz-" for ch in history_id.lower()):
         raise HTTPException(status_code=400, detail="无效的分析记录 ID")
-    return HISTORY_DIR / f"{history_id}.json"
+    return _user_history_dir(user_id) / f"{history_id}.json"
+
+
+def _user_resume_path(user_id: int, filename: str) -> Path:
+    clean = Path(filename).name
+    from app.routers.resume import ALLOWED_SUFFIXES
+    if not clean or Path(clean).suffix.lower() not in ALLOWED_SUFFIXES:
+        raise HTTPException(status_code=400, detail="无效的简历文件名")
+    return PROJECT_DIR / "data" / "users" / str(user_id) / "resumes" / clean
 
 
 @router.get("/history")
-def list_history():
-    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+def list_history(user: dict = Depends(auth_module.get_current_user)):
+    hist_dir = _user_history_dir(user["user_id"])
     items = []
-    for path in sorted(HISTORY_DIR.glob("*.json"), reverse=True):
+    for path in sorted(hist_dir.glob("*.json"), reverse=True):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             items.append({
@@ -145,8 +158,8 @@ def list_history():
 
 
 @router.get("/history/{history_id}")
-def get_history(history_id: str):
-    path = _history_path(history_id)
+def get_history(history_id: str, user: dict = Depends(auth_module.get_current_user)):
+    path = _history_path(history_id, user["user_id"])
     if not path.is_file():
         raise HTTPException(status_code=404, detail="分析记录不存在")
     try:
@@ -158,8 +171,8 @@ def get_history(history_id: str):
 
 
 @router.get("/history/{history_id}/download")
-def download_history(history_id: str):
-    path = _history_path(history_id)
+def download_history(history_id: str, user: dict = Depends(auth_module.get_current_user)):
+    path = _history_path(history_id, user["user_id"])
     if not path.is_file():
         raise HTTPException(status_code=404, detail="分析记录不存在")
     try:
@@ -195,11 +208,23 @@ def _extract_resume_text(path: Path) -> str:
     return text[:MAX_RESUME_CHARS]
 
 
-def _find_record(record_id: str) -> dict:
+def _find_record(record_id: str, user_id: int) -> dict:
     if not record_id.startswith("rec"):
         raise HTTPException(status_code=422, detail="无效的飞书记录 ID")
+    cfg = database.get_user_config(user_id)
+    table_id = cfg.get("main_table_id", "")
+    if not table_id:
+        raise HTTPException(status_code=400, detail="请先在飞书配置中填写表格信息")
+    feishu.set_request_config({
+        "APP_ID": cfg.get("feishu_app_id", ""),
+        "APP_SECRET": cfg.get("feishu_app_secret", ""),
+        "APP_TOKEN": cfg.get("feishu_app_token", ""),
+        "MAIN_TABLE_ID": table_id,
+        "DEEPSEEK_API_KEY": cfg.get("deepseek_api_key", ""),
+        "DEEPSEEK_MODEL": cfg.get("deepseek_model", "deepseek-v4-flash"),
+    })
     record = next(
-        (item for item in feishu.list_records(feishu.MAIN_TABLE_ID) if item.get("record_id") == record_id),
+        (item for item in feishu.list_records(table_id) if item.get("record_id") == record_id),
         None,
     )
     if not record:
@@ -208,18 +233,24 @@ def _find_record(record_id: str) -> dict:
 
 
 @router.post("/analyze")
-def analyze_resume(request: AnalysisRequest):
-    resume_path = _resume_path(request.resume_filename)
-    if not resume_path.is_file() or resume_path.parent != RESUME_DIR:
-        raise HTTPException(status_code=404, detail="所选简历不存在")
-    api_key = (feishu.DEEPSEEK_API_KEY or "").strip()
+def analyze_resume(
+    request: AnalysisRequest,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    cfg = database.get_user_config(user["user_id"])
+    api_key = cfg.get("deepseek_api_key", "")
     if not api_key:
         raise HTTPException(status_code=400, detail="请先在飞书配置中填写 DeepSeek API Key")
+    model = cfg.get("deepseek_model", "") or "deepseek-v4-flash"
+
+    resume_path = _user_resume_path(user["user_id"], request.resume_filename)
+    if not resume_path.is_file():
+        raise HTTPException(status_code=404, detail="所选简历不存在")
     mode = ANALYSIS_MODES.get(request.analysis_mode)
     if not mode:
         raise HTTPException(status_code=422, detail="不支持的分析模式")
 
-    fields = _find_record(request.record_id)
+    fields = _find_record(request.record_id, user["user_id"])
     resume_text = _extract_resume_text(resume_path)
     system_prompt = PROMPT_PATH.read_text(encoding="utf-8")
     company = str(fields.get("公司名称") or "")
@@ -256,7 +287,7 @@ def analyze_resume(request: AnalysisRequest):
             "https://api.deepseek.com/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
-                "model": feishu.DEEPSEEK_MODEL or "deepseek-v4-flash",
+                "model": model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content},
@@ -285,17 +316,17 @@ def analyze_resume(request: AnalysisRequest):
         "company": company,
         "job": job,
         "resume": resume_path.name,
-        "model": feishu.DEEPSEEK_MODEL or "deepseek-v4-flash",
+        "model": model,
         "analysis_mode": request.analysis_mode,
         "analysis_mode_label": mode["label"],
         "record_id": request.record_id,
         "analysis": content,
-    })
+    }, user["user_id"])
     return {
         "success": True,
         "analysis": content,
         "analysis_html": safe_html,
-        "model": feishu.DEEPSEEK_MODEL or "deepseek-v4-flash",
+        "model": model,
         "company": company,
         "job": job,
         "resume": resume_path.name,

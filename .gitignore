@@ -9,8 +9,10 @@ resume/*
 analysis_history/*
 !analysis_history/.gitkeep
 
-# 本地日历日程
-data/calendar_events.json
+# 本地数据库与用户数据
+data/app.db
+data/app.db-*
+data/users/
 
 # Python
 __pycache__/

@@ -1,6 +1,7 @@
 """飞书 API 封装 + 看板数据读取。"""
 import os
 import re
+import threading
 from datetime import datetime
 from collections import Counter
 from urllib.parse import unquote
@@ -33,6 +34,22 @@ API = "https://open.feishu.cn/open-apis"
 
 # 缓存 wiki 节点 token -> 多维表格 app_token 的映射，避免每次请求都解析
 _APP_TOKEN_CACHE = {}
+
+# ── 多用户请求级配置（线程隔离）──────────────────────────
+_req = threading.local()
+
+
+def set_request_config(cfg: dict | None) -> None:
+    """为当前请求设置用户专属飞书/DeepSeek 配置。"""
+    _req.cfg = cfg
+
+
+def _cfg(key: str, default: str = "") -> str:
+    """读取当前请求的用户配置，未设置则回退到全局环境变量。"""
+    c = getattr(_req, "cfg", None)
+    if c and c.get(key):
+        return c[key]
+    return globals().get(key, default) or default
 
 
 # ── 飞书业务错误 ──────────────────────────────────────
@@ -69,7 +86,7 @@ def friendly_error(exc: Exception) -> str:
         if code == 1254002:
             return f"Table ID 不存在，或应用没有该子表的查看权限。\n详情：[{code}] {msg}"
         if code == 1254041:
-            return f"Table ID「{MAIN_TABLE_ID}」在该多维表格中不存在。\n详情：[{code}] {msg}"
+            return f"Table ID「{_cfg('MAIN_TABLE_ID')}」在该多维表格中不存在。\n详情：[{code}] {msg}"
         # 知识库 / wiki
         if code == 99991403:
             return (
@@ -223,7 +240,8 @@ def test_config(cfg: dict) -> bool:
         missing = [k for k in REQUIRED_CONFIG_KEYS if not cfg_now.get(k)]
         if missing:
             raise RuntimeError("缺少配置：" + ", ".join(missing))
-        _feishu(f"/bitable/v1/apps/{_bitable_app_token()}/tables/{MAIN_TABLE_ID}/records",
+        table_id = cfg.get("MAIN_TABLE_ID") or cfg.get("main_table_id", "")
+        _feishu(f"/bitable/v1/apps/{_bitable_app_token()}/tables/{table_id}/records",
                 payload={"page_size": 1})
         return True
     finally:
@@ -232,8 +250,10 @@ def test_config(cfg: dict) -> bool:
 
 # ── 飞书 API 封装 ────────────────────────────────────
 def _token():
+    app_id = _cfg("APP_ID")
+    app_secret = _cfg("APP_SECRET")
     r = requests.post(f"{API}/auth/v3/tenant_access_token/internal",
-                      json={"app_id": APP_ID, "app_secret": APP_SECRET}, timeout=20)
+                      json={"app_id": app_id, "app_secret": app_secret}, timeout=20)
     r.raise_for_status()
     d = r.json()
     if d.get("code") != 0:
@@ -247,7 +267,6 @@ def _feishu(path, method="GET", payload=None):
         r = requests.get(f"{API}{path}", headers=h, params=payload or {}, timeout=30)
     else:
         r = requests.post(f"{API}{path}", headers=h, json=payload, timeout=30)
-    # 先解析飞书业务 code（比 HTTP 状态码更有诊断价值）
     d = {}
     try:
         d = r.json()
@@ -255,32 +274,22 @@ def _feishu(path, method="GET", payload=None):
         pass
     if d.get("code") != 0:
         raise _FeishuError(d)
-    # 飞书没给业务 code 但 HTTP 状态异常 → 让 requests 抛出，由 friendly_error 兜底
     r.raise_for_status()
     return d.get("data", {})
 
 
 def _bitable_app_token():
-    """把配置里的 APP_TOKEN 解析成真正的多维表格 app_token。
-
-    支持两种来源：
-    - 独立多维表格链接 /base/xxx：xxx 本身就是 app_token，直接用。
-    - 知识库链接 /wiki/xxx：xxx 是 wiki 节点 token，需要用 wiki 接口换成
-      节点挂载的多维表格 obj_token 才能调 bitable API。
-    """
-    token = APP_TOKEN or ""
+    token = _cfg("APP_TOKEN")
     if not token:
         return token
     if token in _APP_TOKEN_CACHE:
         return _APP_TOKEN_CACHE[token]
-    # 尝试用 wiki 接口解析
     try:
         node = _feishu("/wiki/v2/spaces/get_node", payload={"token": token}).get("node") or {}
         if node.get("obj_type") == "bitable" and node.get("obj_token"):
             _APP_TOKEN_CACHE[token] = node["obj_token"]
             return node["obj_token"]
     except Exception:
-        # wiki 解析失败 → 不是 wiki 节点 token → 回退：原样当普通 app_token 用
         pass
     _APP_TOKEN_CACHE[token] = token
     return token
@@ -317,8 +326,8 @@ def create_application(fields: dict) -> dict:
     company = (fields.get("公司名称") or "").strip()
     if not company:
         raise ValueError("公司名称不能为空")
-
-    path = f"/bitable/v1/apps/{_bitable_app_token()}/tables/{MAIN_TABLE_ID}/records"
+    table_id = _cfg("MAIN_TABLE_ID")
+    path = f"/bitable/v1/apps/{_bitable_app_token()}/tables/{table_id}/records"
     data = _feishu(path, method="POST", payload={"fields": fields})
     record = data.get("record") or {}
     return {"record_id": record.get("record_id", "")}
@@ -326,7 +335,8 @@ def create_application(fields: dict) -> dict:
 
 def update_record(record_id: str, fields: dict) -> None:
     """按飞书记录 ID 精确更新主表中的指定字段。"""
-    path = f"/bitable/v1/apps/{_bitable_app_token()}/tables/{MAIN_TABLE_ID}/records/batch_update"
+    table_id = _cfg("MAIN_TABLE_ID")
+    path = f"/bitable/v1/apps/{_bitable_app_token()}/tables/{table_id}/records/batch_update"
     _feishu(
         path,
         method="POST",
@@ -336,7 +346,8 @@ def update_record(record_id: str, fields: dict) -> None:
 
 def delete_record(record_id: str) -> None:
     """按飞书记录 ID 删除主表记录。"""
-    path = f"/bitable/v1/apps/{_bitable_app_token()}/tables/{MAIN_TABLE_ID}/records/batch_delete"
+    table_id = _cfg("MAIN_TABLE_ID")
+    path = f"/bitable/v1/apps/{_bitable_app_token()}/tables/{table_id}/records/batch_delete"
     _feishu(path, method="POST", payload={"records": [record_id]})
 
 
@@ -349,7 +360,7 @@ def _unwrap_url(val):
 
 
 def get_main_stats():
-    recs = list_records(MAIN_TABLE_ID)
+    recs = list_records(_cfg("MAIN_TABLE_ID"))
     rows = [
         {**r["fields"], "_record_id": r.get("record_id", "")}
         for r in recs if r.get("fields", {}).get("公司名称")

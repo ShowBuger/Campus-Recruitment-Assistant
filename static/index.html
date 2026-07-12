@@ -142,6 +142,17 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
 kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);border-radius:6px;padding:2px 6px;color:var(--muted)}
 @media(max-width:1080px){.app{grid-template-columns:1fr}.sidebar{position:static;height:auto;flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line)}.kpis{grid-template-columns:repeat(3,1fr)}.funnel{grid-template-columns:repeat(2,1fr)}.grid-2,.grid-3,.grid-mini,.resume-layout,.calendar-layout{grid-template-columns:1fr}.resume-side{border-right:0;border-bottom:1px solid var(--line)}.resume-preview iframe{height:70vh}.countdown-list{max-height:360px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.card:hover,.kpi:hover,.funnel-step:hover{transform:none!important}.bg-orbits{display:none}}
+/* login */
+.login-overlay{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:20px}
+.login-card{width:min(400px,100%);padding:36px 30px;border:1px solid var(--line);border-radius:22px;background:var(--panel);box-shadow:var(--shadow2);text-align:center}
+.login-card h2{font-size:22px;letter-spacing:-.02em;margin-bottom:6px}
+.login-card p{color:var(--muted);font-size:13px;margin-bottom:22px}
+.login-card input{width:100%;height:42px;margin-bottom:12px;padding:0 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);font:14px var(--font);outline:none;transition:border-color .16s var(--ease)}
+.login-card input:focus{border-color:var(--blue)}
+.login-card .btn{width:100%;height:42px;margin-top:4px}
+.login-card .toggle{display:block;margin-top:14px;font-size:12px;color:var(--blue);background:none;border:0;cursor:pointer;font:inherit}
+.login-card .toggle:hover{color:var(--blue2)}
+.login-card .error{color:var(--red);font-size:12px;margin-bottom:10px;min-height:18px}
 </style>
 </head>
 <body>
@@ -151,6 +162,19 @@ kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);b
   <circle class="orb-dot" cx="260" cy="156" r="3"/><circle class="orb-dot" cx="1030" cy="205" r="4"/><circle class="orb-dot" cx="820" cy="635" r="3"/>
 </svg>
 <div class="toast hidden" id="toast"><span id="toast-msg"></span></div>
+<!-- 登录/注册 -->
+<div class="login-overlay" id="login-overlay">
+  <div class="login-card">
+    <div class="mark" style="margin:0 auto 16px;width:44px;height:44px"></div>
+    <h2 id="login-title">登录看板</h2>
+    <p id="login-desc">校招信息看板 · 多用户版</p>
+    <div class="error" id="login-error"></div>
+    <input id="login-username" placeholder="用户名" autocomplete="username" maxlength="20">
+    <input id="login-password" type="password" placeholder="密码" autocomplete="current-password" maxlength="100">
+    <button class="btn btn-primary" id="login-submit" onclick="handleAuth()">登 录</button>
+    <button class="toggle" id="login-toggle" onclick="toggleAuthMode()">没有账号？点击注册</button>
+  </div>
+</div>
 <div class="modal-mask" id="error-modal" onclick="if(event.target===this)closeErrorModal()">
   <div class="modal"><div class="modal-hd"><div><h2 id="error-title">发生错误</h2><p>错误信息已保留</p></div><button class="icon-btn" onclick="closeErrorModal()">&times;</button></div>
   <div class="modal-body"><pre class="error-pre" id="error-detail"></pre></div>
@@ -247,11 +271,15 @@ kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);b
     <a data-page="page-ai-analysis" onclick="navTo(this)">简历分析</a>
     <a data-page="page-config" onclick="navTo(this)">飞书配置</a>
     <div class="sidebar-foot">
+      <div id="user-menu" style="display:none;align-items:center;gap:8px;margin-bottom:8px;padding:4px 0">
+        <span style="font-weight:800;font-size:13px" id="user-name">—</span>
+        <button class="btn" style="height:28px;padding:0 10px;font-size:11px" onclick="logout()">退出</button>
+      </div>
       <div class="conn" id="conn-state"><span class="pulse" id="conn-pulse"></span><span id="conn-text">检查配置…</span></div>
       <div style="margin-top:6px">按 <kbd>&#8984;</kbd><kbd>K</kbd> 打开命令面板</div>
     </div>
   </aside>
-  <main class="main">
+  <main class="main" id="app-main" style="display:none">
     <div class="topbar"><h1 id="page-title">看板总览</h1><div class="spacer"></div><span class="muted" id="last-updated" style="font-size:12px">—</span><button class="icon-btn" onclick="openPalette()" title="Cmd+K">&#8984;</button><button class="icon-btn" onclick="toggleTheme()" id="theme-btn" title="主题">🌙</button><button class="btn" onclick="refreshData(event)">刷新</button></div>
 
     <!-- 看板总览 -->
@@ -357,6 +385,15 @@ kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);b
 
 <script>
 const $=id=>document.getElementById(id),DAY=864e5;
+/* ── 认证 ── */
+var _authMode='login',_token=localStorage.getItem('rb_token')||'',_username=localStorage.getItem('rb_user')||'';
+function saveAuth(token,username){_token=token;_username=username;localStorage.setItem('rb_token',token);localStorage.setItem('rb_user',username);updateAuthUI()}
+function clearAuth(){_token='';_username='';localStorage.removeItem('rb_token');localStorage.removeItem('rb_user');updateAuthUI()}
+function updateAuthUI(){if(_token){$('login-overlay').style.display='none';$('user-menu').style.display='flex';$('user-name').textContent=_username;$('app-main').style.display=''}else{$('login-overlay').style.display='flex';$('user-menu').style.display='none';$('app-main').style.display='none'}}
+function toggleAuthMode(){_authMode=_authMode==='login'?'register':'login';$('login-title').textContent=_authMode==='login'?'登录看板':'注册账号';$('login-desc').textContent=_authMode==='login'?'校招信息看板 · 多用户版':'创建新账号，独立配置与数据';$('login-submit').textContent=_authMode==='login'?'登 录':'注 册';$('login-toggle').textContent=_authMode==='login'?'没有账号？点击注册':'已有账号？点击登录';$('login-error').textContent=''}
+async function handleAuth(){var u=$('login-username').value.trim(),p=$('login-password').value;if(!u||!p){$('login-error').textContent='请填写用户名和密码';return}var btn=$('login-submit');btn.disabled=true;btn.classList.add('loading');try{var ep=_authMode==='login'?'/api/auth/login':'/api/auth/register';var r=await api('POST',ep,{username:u,password:p},{noauth:true});saveAuth(r.token,r.user.username);$('login-error').textContent='';$('login-overlay').style.display='none';updateAuthUI();initApp()}catch(e){$('login-error').textContent=e.message}finally{btn.disabled=false;btn.classList.remove('loading')}}
+function logout(){if(confirm('确定退出登录？')){clearAuth();location.reload()}}
+document.addEventListener('keydown',function(e){if(e.key==='Enter'&&$('login-overlay').style.display!=='none')handleAuth()});
 let _lastData=null,_lastErrorAt=0;
 function esc(s){return String(s||'').replace(/[&<>"]/g,function(m){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]})}
 function arr(v){return Array.isArray(v)?v:(v?[v]:[])}
@@ -366,7 +403,7 @@ function showErrorModal(title,detail){var now=Date.now();if(now-_lastErrorAt<180
 function closeErrorModal(){$('error-modal').classList.remove('show')}
 function copyErrorDetail(){navigator.clipboard&&navigator.clipboard.writeText($('error-detail').textContent);toast('错误信息已复制','success')}
 function animateNumber(id,value){var el=$(id);if(!el)return;var target=Number(value)||0,from=Number(el.dataset.val||0),start=performance.now(),dur=620;el.dataset.val=target;function tick(now){var p=Math.min(1,(now-start)/dur),e=1-Math.pow(1-p,3);el.textContent=Math.round(from+(target-from)*e);if(p<1)requestAnimationFrame(tick)}requestAnimationFrame(tick)}
-async function api(method,url,body,opt){opt=opt||{};var o={method:method,headers:{'Content-Type':'application/json'}};if(body!==undefined)o.body=JSON.stringify(body);var r,text;try{r=await fetch(url,o);text=await r.text()}catch(e){if(!opt.silent)showErrorModal('请求失败',url+'\n\n'+e.message);throw e}var data={};try{data=text?JSON.parse(text):{}}catch(e){var msg=(text||'HTTP '+r.status).slice(0,1200);if(!opt.silent)showErrorModal('接口返回不是 JSON',url+'\nHTTP '+r.status+'\n\n'+msg);throw new Error(msg.slice(0,180))}if(!r.ok){var detail=typeof data.detail==='string'?data.detail:(data.error||JSON.stringify(data.detail||data));if(!opt.silent)showErrorModal('接口请求失败',url+'\nHTTP '+r.status+'\n\n'+detail);throw new Error(detail||'HTTP '+r.status)}return data}
+async function api(method,url,body,opt){opt=opt||{};var o={method:method,headers:{'Content-Type':'application/json'}};if(!opt.noauth&&_token)o.headers['Authorization']='Bearer '+_token;if(body!==undefined)o.body=JSON.stringify(body);var r,text;try{r=await fetch(url,o);text=await r.text()}catch(e){if(!opt.silent)showErrorModal('请求失败',url+'\n\n'+e.message);throw e}if(r.status===401){clearAuth();location.reload();throw new Error('登录已过期')}var data={};try{data=text?JSON.parse(text):{}}catch(e){var msg=(text||'HTTP '+r.status).slice(0,1200);if(!opt.silent)showErrorModal('接口返回不是 JSON',url+'\nHTTP '+r.status+'\n\n'+msg);throw new Error(msg.slice(0,180))}if(!r.ok){var detail=typeof data.detail==='string'?data.detail:(data.error||JSON.stringify(data.detail||data));if(!opt.silent)showErrorModal('接口请求失败',url+'\nHTTP '+r.status+'\n\n'+detail);throw new Error(detail||'HTTP '+r.status)}return data}
 
 /* ---------- 路由 ---------- */
 var PAGES={'page-dashboard':'看板总览','page-total':'总表信息','page-calendar':'秋招日历','page-resume':'简历预览','page-ai-analysis':'简历分析','page-config':'飞书配置'};
@@ -492,11 +529,10 @@ function refreshData(e){var btn=e&&e.currentTarget;if(btn)btn.classList.add('loa
 
 /* ---------- 初始化 ---------- */
 applyTheme(localStorage.getItem('radar_theme')||'light');
-(function(){var saved=localStorage.getItem('radar_page')||'page-dashboard';var el=document.querySelector('.sidebar a[data-page="'+saved+'"]');el?navTo(el):navTo('page-dashboard')})();
-loadConfigStatus(true);
-document.addEventListener('mousemove',function(e){var c=e.target.closest('.card');if(!c)return;var r=c.getBoundingClientRect();c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px')});
-load().catch(function(e){toast('加载失败：'+e.message,'error',5000)});
-setInterval(function(){if($('page-dashboard').classList.contains('active'))load().catch(function(){})},60000);
+updateAuthUI();
+if(_token){(async function(){try{var me=await api('GET','/api/auth/me',undefined,{noauth:false,silent:true});if(me.success)initApp();else clearAuth()}catch(e){clearAuth()}})()}
+function initApp(){$('app-main').style.display='';(function(){var saved=localStorage.getItem('radar_page')||'page-dashboard';var el=document.querySelector('.sidebar a[data-page="'+saved+'"]');el?navTo(el):navTo('page-dashboard')})();loadConfigStatus(true);document.addEventListener('mousemove',function(e){var c=e.target.closest('.card');if(!c)return;var r=c.getBoundingClientRect();c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px')});load().catch(function(e){toast('加载失败：'+e.message,'error',5000)});setInterval(function(){if($('page-dashboard').classList.contains('active'))load().catch(function(){})},60000)}
+</script>
 </script>
 </body>
 </html>

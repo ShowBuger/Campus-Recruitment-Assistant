@@ -45,7 +45,7 @@ python -m pip install -r requirements.txt
 
 echo
 echo "[4/5] 验证全部运行依赖..."
-python -c "import fastapi, uvicorn, requests, dotenv, multipart, docx, pypdf, markdown, bleach"
+python -c "import fastapi, uvicorn, requests, dotenv, multipart, docx, pypdf, markdown, bleach, bcrypt, jwt"
 echo "[完成] 全部运行依赖可正常导入。"
 
 echo
@@ -61,6 +61,10 @@ echo
 echo "========================================"
 echo "  依赖安装完成！"
 echo "========================================"
-echo "下一步：运行 ./start-dashboard.sh 启动看板。"
-echo "第一次打开网页时，会弹窗引导你填写飞书配置。"
+echo
+echo "[附加] 修复脚本可执行权限..."
+chmod +x install-deps.sh start-dashboard.sh 2>/dev/null || true
+echo "下一步：运行 bash start-dashboard.sh 启动看板。"
+echo "打开浏览器访问 http://<服务器IP>:8765"
+echo "首次使用需注册账号，登录后配置飞书连接。"
 echo

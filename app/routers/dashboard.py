@@ -1,40 +1,55 @@
-"""看板数据接口：GET /api/dashboard 返回主表统计。
-"""
-import json
+"""看板数据接口：per-user 读写飞书 + 本地日程。"""
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, HttpUrl
 
-from app import feishu, state
+from app import auth as auth_module, database, feishu, state
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
-LOCAL_EVENTS_FILE = Path(__file__).parent.parent.parent / "data" / "calendar_events.json"
+
+# ── 事件类型映射 ────────────────────────────────────────
+EVENT_TYPE_FIELD_MAP = {
+    "apply": "投递时间",
+    "exam": "机考时间",
+    "interview1": "一面",
+    "interview2": "二面",
+    "interview3": "三面",
+    "warm": "保温",
+    "result": "结果",
+    "deadline": "投递截止时间",
+}
+
+EVENT_TYPE_PROGRESS_MAP = {
+    "apply": "已投递",
+    "exam": "机考",
+    "interview1": "面试",
+    "interview2": "面试",
+    "interview3": "面试",
+    "warm": "面试",
+}
 
 
-def _load_local_events() -> list[dict]:
-    """加载本地日程文件，不存在或格式错误时返回空列表。"""
-    if not LOCAL_EVENTS_FILE.exists():
-        return []
-    try:
-        with open(LOCAL_EVENTS_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except (json.JSONDecodeError, OSError):
-        return []
+# ── 请求级配置注入 ──────────────────────────────────────
+def _use_feishu(user: dict = Depends(auth_module.get_current_user)):
+    """依赖：为当前请求设置用户专属飞书配置。"""
+    cfg = database.get_user_config(user["user_id"])
+    feishu.set_request_config({
+        "APP_ID": cfg.get("feishu_app_id", ""),
+        "APP_SECRET": cfg.get("feishu_app_secret", ""),
+        "APP_TOKEN": cfg.get("feishu_app_token", ""),
+        "MAIN_TABLE_ID": cfg.get("main_table_id", ""),
+        "DEEPSEEK_API_KEY": cfg.get("deepseek_api_key", ""),
+        "DEEPSEEK_MODEL": cfg.get("deepseek_model", "deepseek-v4-flash"),
+    })
+    return cfg
 
 
-def _save_local_events(events: list[dict]) -> None:
-    """将日程列表写入本地 JSON 文件。"""
-    LOCAL_EVENTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(LOCAL_EVENTS_FILE, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(events, f, ensure_ascii=False, indent=2)
-
-
+# ── Models ──────────────────────────────────────────────
 class ApplicationRecord(BaseModel):
     company: str
     job: str
@@ -68,6 +83,18 @@ class TotalRecordUpdate(BaseModel):
     url: str = ""
 
 
+class CalendarEventCreate(BaseModel):
+    record_id: str
+    event_type: Literal["apply", "exam", "interview1", "interview2", "interview3", "warm", "result", "deadline"]
+    date: date
+
+
+class LocalEventCreate(BaseModel):
+    date: date
+    label: str
+
+
+# ── Helpers ─────────────────────────────────────────────
 def _application_fields(record: ApplicationRecord) -> dict:
     def date_ms(value: date | None):
         if value is None:
@@ -94,7 +121,6 @@ def _application_fields(record: ApplicationRecord) -> dict:
 
 
 def _empty(error: str) -> dict:
-    """飞书不可达时的降级空数据，结构与正常返回一致，附带 error 供前端提示。"""
     return {
         "main": {
             "total_companies": 0,
@@ -106,58 +132,70 @@ def _empty(error: str) -> dict:
     }
 
 
+# ── Dashboard ───────────────────────────────────────────
 @router.get("")
-def get_dashboard():
-    # 30 秒缓存，减少飞书 API 压力
-    cached = state.get_cache(max_age=30.0)
+def get_dashboard(
+    user: dict = Depends(auth_module.get_current_user),
+    _cfg=Depends(_use_feishu),
+):
+    user_id = user["user_id"]
+    cached = state.get_cache(user_id, max_age=30.0)
     if cached:
         return cached
     try:
         data = feishu.get_dashboard_data()
-        state.set_cache(data)
+        state.set_cache(user_id, data)
         return data
     except Exception as e:
-        # 有旧缓存就返回旧缓存 + 提示；否则返回空结构 + 提示。
-        stale = state.get_cache(max_age=1e9)
+        stale = state.get_cache(user_id, max_age=1e9)
         if stale:
             return {**stale, "error": feishu.friendly_error(e), "stale": True}
         return _empty(feishu.friendly_error(e))
 
 
 @router.post("/refresh")
-def refresh_dashboard():
+def refresh_dashboard(
+    user: dict = Depends(auth_module.get_current_user),
+    _cfg=Depends(_use_feishu),
+):
+    user_id = user["user_id"]
     try:
         data = feishu.get_dashboard_data()
-        state.set_cache(data)
+        state.set_cache(user_id, data)
         return data
     except Exception as e:
-        stale = state.get_cache(max_age=1e9)
+        stale = state.get_cache(user_id, max_age=1e9)
         if stale:
             return {**stale, "error": feishu.friendly_error(e), "stale": True}
         return _empty(feishu.friendly_error(e))
 
 
+# ── Records CRUD ────────────────────────────────────────
 @router.post("/records")
-def save_application(record: ApplicationRecord):
+def save_application(
+    record: ApplicationRecord,
+    user: dict = Depends(auth_module.get_current_user),
+    _cfg=Depends(_use_feishu),
+):
     if not record.company.strip() or not record.job.strip() or not record.city.strip():
         raise HTTPException(status_code=422, detail="公司、目标岗位和城市不能为空")
     fields = _application_fields(record)
     try:
         result = feishu.create_application(fields)
         data = feishu.get_dashboard_data()
-        state.set_cache(data)
+        state.set_cache(user["user_id"], data)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=feishu.friendly_error(exc)) from exc
-    return {
-        "success": True,
-        "action": "created",
-        "message": "已新增主表记录",
-        "dashboard": data,
-    }
+    return {"success": True, "action": "created", "message": "已新增主表记录", "dashboard": data}
 
 
 @router.put("/records/{record_id}")
-def edit_application(record_id: str, record: ApplicationRecord):
+def edit_application(
+    record_id: str,
+    record: ApplicationRecord,
+    user: dict = Depends(auth_module.get_current_user),
+    _cfg=Depends(_use_feishu),
+):
     if not record_id.startswith("rec"):
         raise HTTPException(status_code=422, detail="无效的飞书记录 ID")
     if not record.company.strip() or not record.job.strip() or not record.city.strip():
@@ -165,52 +203,56 @@ def edit_application(record_id: str, record: ApplicationRecord):
     try:
         feishu.update_record(record_id, _application_fields(record))
         data = feishu.get_dashboard_data()
-        state.set_cache(data)
+        state.set_cache(user["user_id"], data)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=feishu.friendly_error(exc)) from exc
     return {"success": True, "message": "投递记录已更新", "dashboard": data}
 
 
 @router.delete("/records/{record_id}")
-def remove_application(record_id: str):
+def remove_application(
+    record_id: str,
+    user: dict = Depends(auth_module.get_current_user),
+    _cfg=Depends(_use_feishu),
+):
     if not record_id.startswith("rec"):
         raise HTTPException(status_code=422, detail="无效的飞书记录 ID")
     try:
-        feishu.update_record(
-            record_id,
-            {
-                "进展": ["未投递"],
-                "投递时间": None,
-                "机考时间": None,
-                "一面": None,
-                "二面": None,
-                "三面": None,
-                "保温": None,
-                "结果": None,
-            },
-        )
+        feishu.update_record(record_id, {
+            "进展": ["未投递"], "投递时间": None, "机考时间": None,
+            "一面": None, "二面": None, "三面": None, "保温": None, "结果": None,
+        })
         data = feishu.get_dashboard_data()
-        state.set_cache(data)
+        state.set_cache(user["user_id"], data)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=feishu.friendly_error(exc)) from exc
     return {"success": True, "message": "已移出投递记录并重置投递流程", "dashboard": data}
 
 
 @router.delete("/records/{record_id}/permanent")
-def permanently_delete_record(record_id: str):
+def permanently_delete_record(
+    record_id: str,
+    user: dict = Depends(auth_module.get_current_user),
+    _cfg=Depends(_use_feishu),
+):
     if not record_id.startswith("rec"):
         raise HTTPException(status_code=422, detail="无效的飞书记录 ID")
     try:
         feishu.delete_record(record_id)
         data = feishu.get_dashboard_data()
-        state.set_cache(data)
+        state.set_cache(user["user_id"], data)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=feishu.friendly_error(exc)) from exc
     return {"success": True, "message": "总表记录已永久删除", "dashboard": data}
 
 
 @router.put("/records/{record_id}/master")
-def edit_total_record(record_id: str, record: TotalRecordUpdate):
+def edit_total_record(
+    record_id: str,
+    record: TotalRecordUpdate,
+    user: dict = Depends(auth_module.get_current_user),
+    _cfg=Depends(_use_feishu),
+):
     if not record_id.startswith("rec"):
         raise HTTPException(status_code=422, detail="无效的飞书记录 ID")
     if not record.company.strip() or not record.job.strip():
@@ -233,37 +275,39 @@ def edit_total_record(record_id: str, record: TotalRecordUpdate):
     try:
         feishu.update_record(record_id, fields)
         data = feishu.get_dashboard_data()
-        state.set_cache(data)
+        state.set_cache(user["user_id"], data)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=feishu.friendly_error(exc)) from exc
     return {"success": True, "message": "总表记录已更新", "dashboard": data}
 
 
 @router.post("/records/{record_id}/apply")
-def add_to_applications(record_id: str):
+def add_to_applications(
+    record_id: str,
+    user: dict = Depends(auth_module.get_current_user),
+    _cfg=Depends(_use_feishu),
+):
     if not record_id.startswith("rec"):
         raise HTTPException(status_code=422, detail="无效的飞书记录 ID")
     try:
         record = next(
-            (item for item in feishu.list_records(feishu.MAIN_TABLE_ID) if item.get("record_id") == record_id),
+            (item for item in feishu.list_records(database.get_user_config(user["user_id"]).get("main_table_id", ""))
+             if item.get("record_id") == record_id),
             None,
         )
         if not record:
             raise HTTPException(status_code=404, detail="未找到对应的总表记录")
         current_fields = record.get("fields") or {}
         if not current_fields.get("投递时间"):
-            feishu.update_record(
-                record_id,
-                {
-                    "进展": ["已投递"],
-                    "投递时间": int(datetime.now(timezone.utc).timestamp() * 1000),
-                },
-            )
+            feishu.update_record(record_id, {
+                "进展": ["已投递"],
+                "投递时间": int(datetime.now(timezone.utc).timestamp() * 1000),
+            })
             message = "已加入投递记录"
         else:
             message = "该记录已在投递记录中"
         data = feishu.get_dashboard_data()
-        state.set_cache(data)
+        state.set_cache(user["user_id"], data)
     except HTTPException:
         raise
     except Exception as exc:
@@ -271,58 +315,51 @@ def add_to_applications(record_id: str):
     return {"success": True, "message": message, "dashboard": data}
 
 
-# ── 日历日程管理 ────────────────────────────────────────
-EVENT_TYPE_FIELD_MAP = {
-    "apply": "投递时间",
-    "exam": "机考时间",
-    "interview1": "一面",
-    "interview2": "二面",
-    "interview3": "三面",
-    "warm": "保温",
-    "result": "结果",
-    "deadline": "投递截止时间",
-}
-
-EVENT_TYPE_PROGRESS_MAP = {
-    "apply": "已投递",
-    "exam": "机考",
-    "interview1": "面试",
-    "interview2": "面试",
-    "interview3": "面试",
-    "warm": "面试",
-}
-
-
-class CalendarEventCreate(BaseModel):
-    record_id: str
-    event_type: Literal["apply", "exam", "interview1", "interview2", "interview3", "warm", "result", "deadline"]
-    date: date
+@router.post("/records/{record_id}/details")
+def save_company_details(
+    record_id: str,
+    details: CompanyDetails,
+    user: dict = Depends(auth_module.get_current_user),
+    _cfg=Depends(_use_feishu),
+):
+    if not record_id.startswith("rec"):
+        raise HTTPException(status_code=422, detail="无效的飞书记录 ID")
+    try:
+        feishu.update_record(record_id, {
+            "优先级": details.priority,
+            "备注": details.note.strip(),
+            "岗位JD": details.job_jd.strip(),
+        })
+        data = feishu.get_dashboard_data()
+        state.set_cache(user["user_id"], data)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=feishu.friendly_error(exc)) from exc
+    return {"success": True, "message": "公司信息已更新", "dashboard": data}
 
 
+# ── 日历日程（飞书字段）──────────────────────────────────
 @router.post("/calendar/event")
-def create_calendar_event(event: CalendarEventCreate):
-    """在日历上为已有总表记录新建/更新日程日期。
-
-    根据 event_type 将日期写入对应的飞书字段，并自动推进进展状态。
-    """
+def create_calendar_event(
+    event: CalendarEventCreate,
+    user: dict = Depends(auth_module.get_current_user),
+    _cfg=Depends(_use_feishu),
+):
     if not event.record_id.startswith("rec"):
         raise HTTPException(status_code=422, detail="无效的飞书记录 ID")
 
     china_tz = timezone(timedelta(hours=8))
     ts = int(datetime.combine(event.date, time.min, china_tz).timestamp() * 1000)
-
     field_name = EVENT_TYPE_FIELD_MAP.get(event.event_type)
     if not field_name:
         raise HTTPException(status_code=422, detail=f"未知事件类型: {event.event_type}")
 
     fields: dict = {field_name: ts}
-
-    # 自动推进进展状态（仅当当前进展较低时）
     progress_label = EVENT_TYPE_PROGRESS_MAP.get(event.event_type)
     if progress_label:
         try:
+            table_id = database.get_user_config(user["user_id"]).get("main_table_id", "")
             record = next(
-                (item for item in feishu.list_records(feishu.MAIN_TABLE_ID)
+                (item for item in feishu.list_records(table_id)
                  if item.get("record_id") == event.record_id),
                 None,
             )
@@ -337,88 +374,46 @@ def create_calendar_event(event: CalendarEventCreate):
                 if new_idx > current_idx:
                     fields["进展"] = [progress_label]
         except Exception:
-            pass  # 进展推进失败不影响日期写入
+            pass
 
     try:
         feishu.update_record(event.record_id, fields)
         data = feishu.get_dashboard_data()
-        state.set_cache(data)
+        state.set_cache(user["user_id"], data)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=feishu.friendly_error(exc)) from exc
-
-    return {
-        "success": True,
-        "message": f"已为记录添加「{field_name}」日程",
-        "dashboard": data,
-    }
+    return {"success": True, "message": f"已为记录添加「{field_name}」日程", "dashboard": data}
 
 
-# ── 本地日程管理（"其他"类型，无需绑定公司）──────────────
-class LocalEventCreate(BaseModel):
-    date: date
-    label: str
-
-
-class LocalEvent(BaseModel):
-    id: str
-    date: date
-    label: str
-
-
+# ── 本地日程（per-user）─────────────────────────────────
 @router.post("/calendar/local-event")
-def create_local_event(event: LocalEventCreate):
-    """新建本地日程，不写入飞书，无需关联公司。"""
+def create_local_event(
+    event: LocalEventCreate,
+    user: dict = Depends(auth_module.get_current_user),
+):
     label = (event.label or "").strip()
     if not label:
         raise HTTPException(status_code=422, detail="日程内容不能为空")
-    events = _load_local_events()
-    new_event = {
-        "id": uuid.uuid4().hex[:12],
-        "date": event.date.isoformat(),
-        "label": label,
-    }
-    events.append(new_event)
-    _save_local_events(events)
+    event_id = uuid.uuid4().hex[:12]
+    database.add_local_event(user["user_id"], event_id, event.date.isoformat(), label)
     return {
         "success": True,
         "message": f"已添加本地日程「{label}」",
-        "event": new_event,
+        "event": {"id": event_id, "date": event.date.isoformat(), "label": label},
     }
 
 
 @router.get("/calendar/local-events")
-def list_local_events():
-    """返回所有本地日程。"""
-    return {"events": _load_local_events()}
+def list_local_events(user: dict = Depends(auth_module.get_current_user)):
+    return {"events": database.get_local_events(user["user_id"])}
 
 
 @router.delete("/calendar/local-event/{event_id}")
-def delete_local_event(event_id: str):
-    """删除指定本地日程。"""
-    events = _load_local_events()
-    before = len(events)
-    events = [e for e in events if e.get("id") != event_id]
-    if len(events) == before:
+def delete_local_event(
+    event_id: str,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    ok = database.delete_local_event(user["user_id"], event_id)
+    if not ok:
         raise HTTPException(status_code=404, detail="未找到该本地日程")
-    _save_local_events(events)
     return {"success": True, "message": "本地日程已删除"}
-
-
-@router.post("/records/{record_id}/details")
-def save_company_details(record_id: str, details: CompanyDetails):
-    if not record_id.startswith("rec"):
-        raise HTTPException(status_code=422, detail="无效的飞书记录 ID")
-    try:
-        feishu.update_record(
-            record_id,
-            {
-                "优先级": details.priority,
-                "备注": details.note.strip(),
-                "岗位JD": details.job_jd.strip(),
-            },
-        )
-        data = feishu.get_dashboard_data()
-        state.set_cache(data)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=feishu.friendly_error(exc)) from exc
-    return {"success": True, "message": "公司信息已更新", "dashboard": data}

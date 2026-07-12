@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import bus
-from app.routers import dashboard, status, config, resume, ai
+from app.routers import dashboard, status, config, resume, ai, auth
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 PROJECT_DIR = os.path.join(os.path.dirname(__file__), "..")
@@ -22,8 +22,9 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="校招信息看板", version="0.2", lifespan=lifespan)
+app = FastAPI(title="校招信息看板", version="0.4", lifespan=lifespan)
 
+app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(status.router)
 app.include_router(config.router)

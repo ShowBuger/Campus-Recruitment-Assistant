@@ -29,7 +29,7 @@ if errorlevel 1 goto :fail
 
 echo.
 echo [3/4] 验证全部运行依赖...
-py -c "import fastapi, uvicorn, requests, dotenv, multipart, docx, pypdf, markdown, bleach"
+py -c "import fastapi, uvicorn, requests, dotenv, multipart, docx, pypdf, markdown, bleach, bcrypt, jwt"
 if errorlevel 1 (
   echo [错误] 运行依赖验证失败。
   goto :fail
