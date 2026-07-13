@@ -82,7 +82,15 @@ async def get_current_user(
     payload = verify_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
-    return {"user_id": payload["user_id"], "username": payload["username"]}
+    db_user = database.get_user_by_id(payload["user_id"])
+    if not db_user or db_user["username"] != payload["username"]:
+        raise HTTPException(status_code=401, detail="账号不存在或已被删除")
+    return {
+        "user_id": db_user["id"],
+        "username": db_user["username"],
+        "is_admin": bool(db_user.get("is_admin")),
+        "is_root": db_user["username"] == "root",
+    }
 
 
 def get_optional_user(
@@ -98,4 +106,14 @@ def get_optional_user(
     if not token:
         return None
     payload = verify_token(token)
-    return {"user_id": payload["user_id"], "username": payload["username"]} if payload else None
+    if not payload:
+        return None
+    db_user = database.get_user_by_id(payload["user_id"])
+    if not db_user or db_user["username"] != payload["username"]:
+        return None
+    return {
+        "user_id": db_user["id"],
+        "username": db_user["username"],
+        "is_admin": bool(db_user.get("is_admin")),
+        "is_root": db_user["username"] == "root",
+    }

@@ -49,6 +49,7 @@ a{color:var(--blue);text-decoration:none;font-weight:700}a:hover{color:var(--blu
 .icon-btn{width:38px;height:38px;border-radius:11px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;font-size:16px;display:grid;place-items:center;transition:.16s var(--ease)}
 .icon-btn:hover{border-color:var(--line2);transform:translateY(-2px);box-shadow:var(--shadow)}
 .btn{height:38px;padding:0 16px;border-radius:11px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:800 13px var(--font);cursor:pointer;transition:.16s var(--ease)}
+.btn-danger{color:var(--red);border-color:rgba(225,29,72,.3);background:var(--redS)}
 .btn:hover{transform:translateY(-2px);border-color:var(--line2);box-shadow:var(--shadow)}
 .btn.loading{position:relative;color:transparent}.btn.loading:after{content:"";position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:2px solid var(--line2);border-top-color:var(--blue);animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(1turn)}}
 .btn-primary{background:linear-gradient(135deg,var(--blue),var(--blue2));border-color:transparent;color:#fff}
@@ -153,6 +154,25 @@ kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);b
 .login-card .toggle{display:block;margin-top:14px;font-size:12px;color:var(--blue);background:none;border:0;cursor:pointer;font:inherit}
 .login-card .toggle:hover{color:var(--blue2)}
 .login-card .error{color:var(--red);font-size:12px;margin-bottom:10px;min-height:18px}
+.notification-wrap{position:relative}
+.notification-btn{position:relative}
+.notification-btn.has-unread{color:var(--blue);border-color:rgba(37,99,235,.45);background:var(--blueS)}
+.notification-dot{display:none;position:absolute;right:6px;top:5px;width:8px;height:8px;border:2px solid var(--panel);border-radius:50%;background:var(--red)}
+.notification-btn.has-unread .notification-dot{display:block}
+.notification-panel{display:none;position:absolute;right:0;top:46px;z-index:80;width:min(380px,calc(100vw - 36px));max-height:480px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel);box-shadow:var(--shadow2)}
+.notification-panel.show{display:block}
+.notification-head{position:sticky;top:0;z-index:1;padding:13px 16px;border-bottom:1px solid var(--line);background:var(--panel);font-weight:800}
+.notification-item{padding:14px 16px;border-bottom:1px solid var(--line)}
+.notification-item:last-child{border-bottom:0}.notification-item.unread{background:var(--blueS)}
+.notification-item h3{font-size:14px;margin-bottom:4px}.notification-item p{white-space:pre-wrap;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.notification-time{display:block;margin-top:7px;color:var(--sub);font-size:11px}
+.admin-user-row{display:grid;grid-template-columns:minmax(120px,1.2fr) minmax(150px,1fr) 130px 220px;gap:14px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line)}
+.admin-user-row:last-child{border-bottom:0}.admin-user-row.header{color:var(--sub);font-size:11px;font-weight:800;background:var(--bg)}
+.admin-user-name{font-weight:800}.admin-user-meta{font-size:11px;color:var(--sub)}
+.admin-password{display:flex;gap:8px}.admin-password input{min-width:0}
+.role-toggle{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.role-toggle input{width:16px;height:16px;accent-color:var(--blue)}
+@media(max-width:760px){.admin-user-row{grid-template-columns:1fr}.admin-user-row.header{display:none}.admin-password{max-width:360px}}
 </style>
 </head>
 <body>
@@ -274,6 +294,7 @@ kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);b
     <a data-page="page-resume" onclick="navTo(this)">简历预览</a>
     <a data-page="page-ai-analysis" onclick="navTo(this)">简历分析</a>
     <a data-page="page-config" onclick="navTo(this)">飞书配置</a>
+    <a data-page="page-admin" id="admin-nav" onclick="navTo(this)" style="display:none">账号管理</a>
     <div class="sidebar-foot">
       <div id="user-menu" style="display:none;align-items:center;gap:8px;margin-bottom:8px;padding:4px 0">
         <span style="font-weight:800;font-size:13px" id="user-name">—</span>
@@ -284,7 +305,7 @@ kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);b
     </div>
   </aside>
   <main class="main" id="app-main" style="display:none">
-    <div class="topbar"><h1 id="page-title">看板总览</h1><div class="spacer"></div><span class="muted" id="last-updated" style="font-size:12px">—</span><button class="icon-btn" onclick="openPalette()" title="Cmd+K">&#8984;</button><button class="icon-btn" onclick="toggleTheme()" id="theme-btn" title="主题">🌙</button><button class="btn" onclick="refreshData(event)">刷新</button></div>
+    <div class="topbar"><h1 id="page-title">看板总览</h1><div class="spacer"></div><span class="muted" id="last-updated" style="font-size:12px">—</span><div class="notification-wrap"><button class="icon-btn notification-btn" id="notification-btn" onclick="toggleNotifications(event)" title="通知" aria-label="通知">&#128276;<span class="notification-dot"></span></button><div class="notification-panel" id="notification-panel"><div class="notification-head">最新通知</div><div id="notification-list"><div class="center">暂无通知</div></div></div></div><button class="icon-btn" onclick="openPalette()" title="Cmd+K">&#8984;</button><button class="icon-btn" onclick="toggleTheme()" id="theme-btn" title="主题">🌙</button><button class="btn" onclick="refreshData(event)">刷新</button></div>
 
     <!-- 看板总览 -->
     <section class="page active" id="page-dashboard">
@@ -362,6 +383,18 @@ kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);b
       <div class="card"><div class="card-hd"><span class="dot"></span><div class="card-title">分析结果</div><div class="card-sub" id="ai-result-meta">—</div></div><div class="card-body"><div class="ai-result" id="ai-result">选择简历和岗位后开始分析。</div></div></div>
     </section>
 
+    <!-- Root 管理 -->
+    <section class="page" id="page-admin">
+      <div class="card"><div class="card-hd"><span class="dot"></span><div class="card-title">用户账号</div><div class="card-sub" id="admin-user-count">0 个用户</div></div>
+        <div id="admin-user-list"><div class="center">加载中…</div></div>
+      </div>
+      <div class="card"><div class="card-hd"><span class="dot a"></span><div class="card-title">发布通知</div></div><div class="card-body">
+        <div class="form-group"><label for="notice-title">通知标题</label><input id="notice-title" maxlength="100" placeholder="例如：系统维护通知"></div>
+        <div class="form-group"><label for="notice-content">通知内容</label><textarea id="notice-content" maxlength="5000" rows="6" placeholder="填写需要通知所有用户的内容"></textarea></div>
+        <button class="btn btn-primary" id="notice-submit" onclick="publishNotification()">发布通知</button>
+      </div></div>
+    </section>
+
     <!-- 飞书配置 -->
     <section class="page" id="page-config">
       <div class="card"><div class="card-hd"><span class="dot"></span><div class="card-title">飞书配置</div></div>
@@ -389,9 +422,9 @@ kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);b
 <script>
 const $=id=>document.getElementById(id),DAY=864e5;
 /* ── 认证 ── */
-var _authMode='login',_token=localStorage.getItem('rb_token')||'',_username=localStorage.getItem('rb_user')||'';
+var _authMode='login',_token=localStorage.getItem('rb_token')||'',_username=localStorage.getItem('rb_user')||'',_currentUser=null;
 function saveAuth(token,username){_token=token;_username=username;localStorage.setItem('rb_token',token);localStorage.setItem('rb_user',username);updateAuthUI()}
-function clearAuth(){_token='';_username='';localStorage.removeItem('rb_token');localStorage.removeItem('rb_user');updateAuthUI()}
+function clearAuth(){_token='';_username='';_currentUser=null;localStorage.removeItem('rb_token');localStorage.removeItem('rb_user');updateAuthUI()}
 function updateAuthUI(){if(_token){$('login-overlay').style.display='none';$('user-menu').style.display='flex';$('user-name').textContent=_username;$('app-main').style.display=''}else{$('login-overlay').style.display='flex';$('user-menu').style.display='none';$('app-main').style.display='none'}}
 function toggleAuthMode(){_authMode=_authMode==='login'?'register':'login';$('login-title').textContent=_authMode==='login'?'登录看板':'注册账号';$('login-desc').textContent=_authMode==='login'?'校招信息看板 · 多用户版':'创建新账号，独立配置与数据';$('login-submit').textContent=_authMode==='login'?'登 录':'注 册';$('login-toggle').textContent=_authMode==='login'?'没有账号？点击注册':'已有账号？点击登录';$('login-error').textContent=''}
 async function handleAuth(){var u=$('login-username').value.trim(),p=$('login-password').value;if(!u||!p){$('login-error').textContent='请填写用户名和密码';return}var btn=$('login-submit');btn.disabled=true;btn.classList.add('loading');try{var ep=_authMode==='login'?'/api/auth/login':'/api/auth/register';var r=await api('POST',ep,{username:u,password:p},{noauth:true});saveAuth(r.token,r.user.username);$('login-error').textContent='';$('login-overlay').style.display='none';updateAuthUI();initApp()}catch(e){$('login-error').textContent=e.message}finally{btn.disabled=false;btn.classList.remove('loading')}}
@@ -409,8 +442,8 @@ function animateNumber(id,value){var el=$(id);if(!el)return;var target=Number(va
 async function api(method,url,body,opt){opt=opt||{};var o={method:method,headers:{'Content-Type':'application/json'}};if(!opt.noauth&&_token)o.headers['Authorization']='Bearer '+_token;if(body!==undefined)o.body=JSON.stringify(body);var r,text;try{r=await fetch(url,o);text=await r.text()}catch(e){if(!opt.silent)showErrorModal('请求失败',url+'\n\n'+e.message);throw e}if(r.status===401){clearAuth();location.reload();throw new Error('登录已过期')}var data={};try{data=text?JSON.parse(text):{}}catch(e){var msg=(text||'HTTP '+r.status).slice(0,1200);if(!opt.silent)showErrorModal('接口返回不是 JSON',url+'\nHTTP '+r.status+'\n\n'+msg);throw new Error(msg.slice(0,180))}if(!r.ok){var detail=typeof data.detail==='string'?data.detail:(data.error||JSON.stringify(data.detail||data));if(!opt.silent)showErrorModal('接口请求失败',url+'\nHTTP '+r.status+'\n\n'+detail);throw new Error(detail||'HTTP '+r.status)}return data}
 
 /* ---------- 路由 ---------- */
-var PAGES={'page-dashboard':'看板总览','page-total':'总表信息','page-calendar':'秋招日历','page-resume':'简历预览','page-ai-analysis':'简历分析','page-config':'飞书配置'};
-function navTo(el){var id=typeof el==='string'?el:el.dataset.page;document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.toggle('active',a.dataset.page===id)});document.querySelectorAll('.page').forEach(function(p){p.classList.toggle('active',p.id===id)});$('page-title').textContent=PAGES[id]||'';localStorage.setItem('radar_page',id);if(id==='page-dashboard'&&!_lastData)load();if(id==='page-calendar'){if(_lastData){renderCalendar()}else{load().then(renderCalendar)}loadLocalEvents().then(renderCalendar)}if(id==='page-resume')loadResumes();if(id==='page-ai-analysis')loadAIOptions();if(id==='page-config')loadConfigStatus(false)}
+var PAGES={'page-dashboard':'看板总览','page-total':'总表信息','page-calendar':'秋招日历','page-resume':'简历预览','page-ai-analysis':'简历分析','page-config':'飞书配置','page-admin':'账号管理'};
+function navTo(el){var id=typeof el==='string'?el:el.dataset.page;if(id==='page-admin'&&!(_currentUser&&_currentUser.is_root))id='page-dashboard';document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.toggle('active',a.dataset.page===id)});document.querySelectorAll('.page').forEach(function(p){p.classList.toggle('active',p.id===id)});$('page-title').textContent=PAGES[id]||'';localStorage.setItem('radar_page',id);if(id==='page-dashboard'&&!_lastData)load();if(id==='page-calendar'){if(_lastData){renderCalendar()}else{load().then(renderCalendar)}loadLocalEvents().then(renderCalendar)}if(id==='page-resume')loadResumes();if(id==='page-ai-analysis')loadAIOptions();if(id==='page-config')loadConfigStatus(false);if(id==='page-admin')loadAdminUsers()}
 function applyTheme(t){document.documentElement.dataset.theme=t;$('theme-btn').textContent=t==='dark'?'☀️':'🌙';localStorage.setItem('radar_theme',t)}
 function toggleTheme(){applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark')}
 
@@ -530,15 +563,45 @@ async function loadConfigStatus(openWhenMissing){if(openWhenMissing===undefined)
 async function testConfig(prefix){prefix=prefix||'cfg';try{var r=await api('POST','/api/config/test',configPayload(prefix));if(r.success){toast(r.message||'连接成功','success')}else{showErrorModal('连接测试失败',r.error||'未知错误');toast('连接测试失败','error')}}catch(e){toast('连接测试失败：'+e.message,'error')}}
 async function saveConfig(prefix){prefix=prefix||'cfg';try{var r=await api('POST','/api/config',configPayload(prefix));toast(r.message||'已保存配置','success');$('config-modal').classList.remove('show');await loadConfigStatus(false);refreshData()}catch(e){toast('保存失败：'+e.message,'error')}}
 
+/* ---------- 通知 ---------- */
+function formatSystemTime(value){if(!value)return'';var date=new Date(value.replace(' ','T')+'Z');return isNaN(date)?value:date.toLocaleString('zh-CN',{hour12:false})}
+async function loadNotifications(markRead){
+  try{
+    var data=await api('GET','/api/notifications',undefined,{silent:true}),items=data.notifications||[];
+    $('notification-btn').classList.toggle('has-unread',data.unread_count>0);
+    $('notification-list').innerHTML=items.length?items.map(function(item){return'<article class="notification-item '+(item.is_read?'':'unread')+'"><h3>'+esc(item.title)+'</h3><p>'+esc(item.content)+'</p><span class="notification-time">'+esc(formatSystemTime(item.created_at))+'</span></article>'}).join(''):'<div class="center">暂无通知</div>';
+    if(markRead){var ids=items.filter(function(item){return!item.is_read}).map(function(item){return item.id});if(ids.length){await api('POST','/api/notifications/read',{ids:ids},{silent:true});$('notification-btn').classList.toggle('has-unread',data.unread_count>ids.length);document.querySelectorAll('.notification-item.unread').forEach(function(el){el.classList.remove('unread')})}}
+  }catch(e){}
+}
+function toggleNotifications(event){event.stopPropagation();var panel=$('notification-panel'),opening=!panel.classList.contains('show');panel.classList.toggle('show');if(opening)loadNotifications(true)}
+document.addEventListener('click',function(e){if(!e.target.closest('.notification-wrap'))$('notification-panel').classList.remove('show')});
+
+/* ---------- Root 管理 ---------- */
+function renderAdminUsers(users){
+  $('admin-user-count').textContent=users.length+' 个用户';
+  var head='<div class="admin-user-row header"><span>账号</span><span>权限</span><span>注册时间</span><span>操作</span></div>';
+  $('admin-user-list').innerHTML=head+users.map(function(user){
+    var role=user.is_root?'Root 管理员':(user.is_admin?'管理员':'普通用户');
+    return'<div class="admin-user-row"><div><div class="admin-user-name">'+esc(user.username)+'</div><div class="admin-user-meta">ID '+user.id+'</div></div>'+
+      '<label class="role-toggle"><input type="checkbox" '+(user.is_admin?'checked ':'')+(user.is_root?'disabled ':'')+'onchange="setUserAdmin('+user.id+',this.checked)"><span>'+role+'</span></label>'+
+      '<span class="admin-user-meta">'+esc(formatSystemTime(user.created_at))+'</span>'+
+      '<div class="admin-password"><input type="password" id="admin-password-'+user.id+'" minlength="4" maxlength="100" placeholder="输入新密码"><button class="btn" onclick="changeUserPassword('+user.id+')">改密</button>'+(user.is_root?'':'<button class="btn btn-danger" onclick="deleteManagedUser('+user.id+',\''+esc(user.username).replace(/&#39;/g,"\\'")+'\')">删除</button>')+'</div></div>'
+  }).join('')
+}
+async function loadAdminUsers(){if(!(_currentUser&&_currentUser.is_root))return;try{var data=await api('GET','/api/admin/users');renderAdminUsers(data.users||[])}catch(e){toast('用户列表加载失败：'+e.message,'error')}}
+async function changeUserPassword(userId){var input=$('admin-password-'+userId),password=input.value;if(password.length<4){toast('密码至少 4 个字符','error');return}try{await api('PATCH','/api/admin/users/'+userId+'/password',{password:password});input.value='';toast('密码已更新','success')}catch(e){toast('修改密码失败：'+e.message,'error')}}
+async function setUserAdmin(userId,isAdmin){try{await api('PATCH','/api/admin/users/'+userId+'/admin',{is_admin:isAdmin});toast('管理员权限已更新','success');loadAdminUsers()}catch(e){toast('权限修改失败：'+e.message,'error');loadAdminUsers()}}
+async function deleteManagedUser(userId,username){if(!confirm('确定删除用户“'+username+'”？该用户的配置、日程、简历和分析历史也会删除。'))return;try{await api('DELETE','/api/admin/users/'+userId);toast('用户已删除','success');loadAdminUsers()}catch(e){toast('删除失败：'+e.message,'error')}}
+async function publishNotification(){var title=$('notice-title').value.trim(),content=$('notice-content').value.trim();if(!title||!content){toast('请填写通知标题和内容','error');return}var btn=$('notice-submit');btn.disabled=true;btn.classList.add('loading');try{await api('POST','/api/admin/notifications',{title:title,content:content});$('notice-title').value='';$('notice-content').value='';toast('通知已发布','success');loadNotifications(false)}catch(e){toast('发布失败：'+e.message,'error')}finally{btn.disabled=false;btn.classList.remove('loading')}}
+
 /* ---------- 刷新 ---------- */
 function refreshData(e){var btn=e&&e.currentTarget;if(btn)btn.classList.add('loading');toast('正在刷新…');api('POST','/api/dashboard/refresh').then(function(d){renderDashboard(d);if(d.error)showErrorModal('飞书数据刷新失败',d.error);else toast('已刷新','success')}).catch(function(e){toast('刷新失败：'+e.message,'error',5600)}).then(function(){if(btn)btn.classList.remove('loading')})}
 
 /* ---------- 初始化 ---------- */
 applyTheme(localStorage.getItem('radar_theme')||'light');
 updateAuthUI();
-if(_token){(async function(){try{var me=await api('GET','/api/auth/me',undefined,{noauth:false,silent:true});if(me.success)initApp();else clearAuth()}catch(e){clearAuth()}})()}
-function initApp(){$('app-main').style.display='';(function(){var saved=localStorage.getItem('radar_page')||'page-dashboard';var el=document.querySelector('.sidebar a[data-page="'+saved+'"]');el?navTo(el):navTo('page-dashboard')})();loadConfigStatus(true);document.addEventListener('mousemove',function(e){var c=e.target.closest('.card');if(!c)return;var r=c.getBoundingClientRect();c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px')});load().catch(function(e){toast('加载失败：'+e.message,'error',5000)});setInterval(function(){if($('page-dashboard').classList.contains('active'))load().catch(function(){})},60000)}
-</script>
+if(_token)initApp();
+async function initApp(){try{var me=await api('GET','/api/auth/me',undefined,{silent:true});_currentUser=me.user;$('admin-nav').style.display=_currentUser.is_root?'flex':'none'}catch(e){clearAuth();return}$('app-main').style.display='';(function(){var saved=localStorage.getItem('radar_page')||'page-dashboard';var el=document.querySelector('.sidebar a[data-page="'+saved+'"]');el?navTo(el):navTo('page-dashboard')})();loadConfigStatus(true);loadNotifications(false);document.addEventListener('mousemove',function(e){var c=e.target.closest('.card');if(!c)return;var r=c.getBoundingClientRect();c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px')});load().catch(function(e){toast('加载失败：'+e.message,'error',5000)});setInterval(function(){if($('page-dashboard').classList.contains('active'))load().catch(function(){});loadNotifications(false)},60000)}
 </script>
 </body>
 </html>

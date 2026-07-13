@@ -79,5 +79,7 @@ def get_me(user: dict = __import__("fastapi").Depends(auth_module.get_current_us
             "id": user["user_id"],
             "username": user["username"],
             "created_at": (db_user or {}).get("created_at", ""),
+            "is_admin": bool((db_user or {}).get("is_admin")),
+            "is_root": user["username"] == "root",
         },
     }

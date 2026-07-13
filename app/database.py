@@ -53,7 +53,29 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             label TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_by INTEGER,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS notification_reads (
+            user_id INTEGER NOT NULL,
+            notification_id INTEGER NOT NULL,
+            read_at TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (user_id, notification_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE
+        );
     """)
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+    if "is_admin" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+    conn.execute("UPDATE users SET is_admin = 1 WHERE username = 'root'")
     conn.commit()
 
 
@@ -87,6 +109,101 @@ def get_user_by_id(user_id: int) -> dict | None:
     db = get_db()
     row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     return dict(row) if row else None
+
+
+def list_users() -> list[dict]:
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, username, is_admin, created_at FROM users ORDER BY id"
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def update_user_password(user_id: int, password_hash: str) -> bool:
+    with _write_lock:
+        db = get_db()
+        cur = db.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (password_hash, user_id),
+        )
+        db.commit()
+        return cur.rowcount > 0
+
+
+def set_user_admin(user_id: int, is_admin: bool) -> bool:
+    with _write_lock:
+        db = get_db()
+        cur = db.execute(
+            "UPDATE users SET is_admin = ? WHERE id = ? AND username <> 'root'",
+            (1 if is_admin else 0, user_id),
+        )
+        db.commit()
+        return cur.rowcount > 0
+
+
+def delete_user(user_id: int) -> bool:
+    with _write_lock:
+        db = get_db()
+        cur = db.execute(
+            "DELETE FROM users WHERE id = ? AND username <> 'root'", (user_id,)
+        )
+        db.commit()
+        return cur.rowcount > 0
+
+
+# ── 全局通知 ─────────────────────────────────────────
+
+def create_notification(title: str, content: str, created_by: int) -> dict:
+    with _write_lock:
+        db = get_db()
+        cur = db.execute(
+            "INSERT INTO notifications (title, content, created_by) VALUES (?, ?, ?)",
+            (title, content, created_by),
+        )
+        db.commit()
+        row = db.execute(
+            "SELECT id, title, content, created_at FROM notifications WHERE id = ?",
+            (cur.lastrowid,),
+        ).fetchone()
+        return dict(row)
+
+
+def list_notifications(user_id: int, limit: int = 20) -> list[dict]:
+    db = get_db()
+    rows = db.execute(
+        """SELECT n.id, n.title, n.content, n.created_at,
+                  CASE WHEN r.user_id IS NULL THEN 0 ELSE 1 END AS is_read
+           FROM notifications n
+           LEFT JOIN notification_reads r
+             ON r.notification_id = n.id AND r.user_id = ?
+           ORDER BY n.id DESC LIMIT ?""",
+        (user_id, limit),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def count_unread_notifications(user_id: int) -> int:
+    db = get_db()
+    row = db.execute(
+        """SELECT COUNT(*) AS total FROM notifications n
+           LEFT JOIN notification_reads r
+             ON r.notification_id = n.id AND r.user_id = ?
+           WHERE r.user_id IS NULL""",
+        (user_id,),
+    ).fetchone()
+    return int(row["total"])
+
+
+def mark_notifications_read(user_id: int, notification_ids: list[int]) -> None:
+    if not notification_ids:
+        return
+    with _write_lock:
+        db = get_db()
+        db.executemany(
+            "INSERT OR IGNORE INTO notification_reads (user_id, notification_id) VALUES (?, ?)",
+            [(user_id, notification_id) for notification_id in notification_ids],
+        )
+        db.commit()
 
 
 # ── 用户配置（独立 Feishu / DeepSeek 连接）──────────
