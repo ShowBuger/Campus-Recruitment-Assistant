@@ -37,10 +37,6 @@ def _init_tables(conn: sqlite3.Connection) -> None:
 
         CREATE TABLE IF NOT EXISTS user_configs (
             user_id INTEGER PRIMARY KEY,
-            feishu_app_id TEXT DEFAULT '',
-            feishu_app_secret TEXT DEFAULT '',
-            feishu_app_token TEXT DEFAULT '',
-            main_table_id TEXT DEFAULT '',
             deepseek_api_key TEXT DEFAULT '',
             deepseek_model TEXT DEFAULT 'deepseek-v4-flash',
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -53,6 +49,36 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             label TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS job_records (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            company TEXT NOT NULL DEFAULT '',
+            company_type TEXT NOT NULL DEFAULT '',
+            directions TEXT NOT NULL DEFAULT '[]',
+            progress TEXT NOT NULL DEFAULT '[]',
+            job TEXT NOT NULL DEFAULT '',
+            city TEXT NOT NULL DEFAULT '',
+            batch TEXT NOT NULL DEFAULT '',
+            priority TEXT NOT NULL DEFAULT '',
+            note TEXT NOT NULL DEFAULT '',
+            job_jd TEXT NOT NULL DEFAULT '',
+            url TEXT NOT NULL DEFAULT '',
+            deadline INTEGER,
+            apply_date INTEGER,
+            exam_date INTEGER,
+            interview1 INTEGER,
+            interview2 INTEGER,
+            interview3 INTEGER,
+            warm INTEGER,
+            result INTEGER,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_job_records_user
+            ON job_records(user_id, created_at);
 
         CREATE TABLE IF NOT EXISTS notifications (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -206,7 +232,7 @@ def mark_notifications_read(user_id: int, notification_ids: list[int]) -> None:
         db.commit()
 
 
-# ── 用户配置（独立 Feishu / DeepSeek 连接）──────────
+# ── 用户配置 ─────────────────────────────────────────
 
 def get_user_config(user_id: int) -> dict:
     db = get_db()
@@ -217,46 +243,26 @@ def get_user_config(user_id: int) -> dict:
         db.execute("INSERT INTO user_configs (user_id) VALUES (?)", (user_id,))
         db.commit()
         return {
-            "FEISHU_APP_ID": "",
-            "FEISHU_APP_SECRET": "",
-            "FEISHU_APP_TOKEN": "",
-            "MAIN_TABLE_ID": "",
-            "DEEPSEEK_API_KEY": "",
-            "DEEPSEEK_MODEL": "deepseek-v4-flash",
+            "deepseek_api_key": "",
+            "deepseek_model": "deepseek-v4-flash",
             "configured": False,
         }
     d = dict(row)
     d.pop("user_id", None)
-    d["configured"] = bool(
-        d.get("feishu_app_id") and d.get("feishu_app_secret")
-        and d.get("feishu_app_token") and d.get("main_table_id")
-    )
+    d["configured"] = bool(d.get("deepseek_api_key"))
     return d
 
 
-def save_user_config(user_id: int, config: dict) -> None:
+def save_ai_config(user_id: int, api_key: str, model: str) -> None:
     with _write_lock:
         db = get_db()
         db.execute(
-            """INSERT INTO user_configs (user_id, feishu_app_id, feishu_app_secret,
-               feishu_app_token, main_table_id, deepseek_api_key, deepseek_model)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
+            """INSERT INTO user_configs (user_id, deepseek_api_key, deepseek_model)
+               VALUES (?, ?, ?)
                ON CONFLICT(user_id) DO UPDATE SET
-               feishu_app_id=excluded.feishu_app_id,
-               feishu_app_secret=excluded.feishu_app_secret,
-               feishu_app_token=excluded.feishu_app_token,
-               main_table_id=excluded.main_table_id,
                deepseek_api_key=excluded.deepseek_api_key,
                deepseek_model=excluded.deepseek_model""",
-            (
-                user_id,
-                config.get("FEISHU_APP_ID", ""),
-                config.get("FEISHU_APP_SECRET", ""),
-                config.get("FEISHU_APP_TOKEN", ""),
-                config.get("MAIN_TABLE_ID", ""),
-                config.get("DEEPSEEK_API_KEY", ""),
-                config.get("DEEPSEEK_MODEL", "deepseek-v4-flash"),
-            ),
+            (user_id, api_key, model),
         )
         db.commit()
 

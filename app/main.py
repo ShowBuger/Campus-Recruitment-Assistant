@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="校招信息看板", version="0.4", lifespan=lifespan)
+app = FastAPI(title="校招信息看板", version="0.5", lifespan=lifespan)
 
 app.include_router(auth.router)
 app.include_router(admin.router)

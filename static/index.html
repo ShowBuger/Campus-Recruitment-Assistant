@@ -200,20 +200,8 @@ kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);b
   <div class="modal-body"><pre class="error-pre" id="error-detail"></pre></div>
   <div class="modal-ft"><button class="btn" onclick="copyErrorDetail()">复制错误</button><button class="btn btn-primary" onclick="closeErrorModal()">知道了</button></div></div>
 </div>
-<div class="modal-mask" id="config-modal">
-  <div class="modal"><div class="modal-hd"><div><h2>配置飞书连接</h2><p>填写自建应用的密钥和多维表格信息。</p></div></div>
-  <div class="modal-body">
-    <div class="grid-2">
-      <div class="form-group"><label>App ID</label><input id="first-app-id" placeholder="cli_xxxxx"></div>
-      <div class="form-group"><label>App Secret</label><input id="first-app-secret" type="password" placeholder="留空不修改"></div>
-      <div class="form-group"><label>表格链接</label><input id="first-app-token" placeholder="https://.../base/xxxx?table=tblxxx"><div class="help">粘贴完整链接，需包含 ?table=tblxxx 参数</div></div>
-    </div>
-    <span class="secret-note">密钥留存本机 .env，不回显</span>
-  </div>
-  <div class="modal-ft"><button class="btn" onclick="testConfig('first')">测试连接</button><button class="btn btn-primary" onclick="saveConfig('first')">保存并进入看板</button></div></div>
-</div>
 <div class="modal-mask" id="record-modal" onclick="if(event.target===this)closeRecordModal()">
-  <div class="modal"><div class="modal-hd"><div><h2 id="record-modal-title">新增投递记录</h2><p id="record-modal-description">在飞书主表中新建记录，公司名称可以重复。</p></div><button class="icon-btn" onclick="closeRecordModal()" title="关闭">&times;</button></div>
+  <div class="modal"><div class="modal-hd"><div><h2 id="record-modal-title">新增投递记录</h2><p id="record-modal-description">在本地总表中新建记录，公司名称可以重复。</p></div><button class="icon-btn" onclick="closeRecordModal()" title="关闭">&times;</button></div>
   <form id="record-form" onsubmit="submitRecord(event)">
     <div class="modal-body"><div class="grid-2">
       <input id="record-edit-id" type="hidden">
@@ -236,7 +224,7 @@ kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);b
   </form></div>
 </div>
 <div class="modal-mask" id="company-modal" onclick="if(event.target===this)closeCompanyModal()">
-  <div class="modal"><div class="modal-hd"><div><h2 id="company-modal-title">公司信息</h2><p>修改后将同步回写飞书主表。</p></div><button class="icon-btn" onclick="closeCompanyModal()" title="关闭">&times;</button></div>
+  <div class="modal"><div class="modal-hd"><div><h2 id="company-modal-title">公司信息</h2><p>修改后将保存到当前用户的本地总表。</p></div><button class="icon-btn" onclick="closeCompanyModal()" title="关闭">&times;</button></div>
   <form id="company-form" onsubmit="submitCompanyDetails(event)">
     <div class="modal-body">
       <input id="company-record-id" type="hidden">
@@ -286,21 +274,21 @@ kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);b
 </div>
 <div class="app">
   <aside class="sidebar">
-    <div class="brand"><div class="mark"></div><div><b>校招信息看板</b><span>飞书投递进度驾驶舱</span></div></div>
+    <div class="brand"><div class="mark"></div><div><b>校招信息看板</b><span>本地投递进度工作台</span></div></div>
     <div class="nav-sec">工作台</div>
     <a data-page="page-dashboard" onclick="navTo(this)" class="active">看板总览</a>
     <a data-page="page-total" onclick="navTo(this)">总表信息</a>
     <a data-page="page-calendar" onclick="navTo(this)">秋招日历</a>
     <a data-page="page-resume" onclick="navTo(this)">简历预览</a>
     <a data-page="page-ai-analysis" onclick="navTo(this)">简历分析</a>
-    <a data-page="page-config" onclick="navTo(this)">飞书配置</a>
+    <a data-page="page-config" onclick="navTo(this)">AI 配置</a>
     <a data-page="page-admin" id="admin-nav" onclick="navTo(this)" style="display:none">账号管理</a>
     <div class="sidebar-foot">
       <div id="user-menu" style="display:none;align-items:center;gap:8px;margin-bottom:8px;padding:4px 0">
         <span style="font-weight:800;font-size:13px" id="user-name">—</span>
         <button class="btn" style="height:28px;padding:0 10px;font-size:11px" onclick="logout()">退出</button>
       </div>
-      <div class="conn" id="conn-state"><span class="pulse" id="conn-pulse"></span><span id="conn-text">检查配置…</span></div>
+      <div class="conn" id="conn-state"><span class="pulse" id="conn-pulse"></span><span id="conn-text">本地存储</span></div>
       <div style="margin-top:6px">按 <kbd>&#8984;</kbd><kbd>K</kbd> 打开命令面板</div>
     </div>
   </aside>
@@ -310,7 +298,7 @@ kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);b
     <!-- 看板总览 -->
     <section class="page active" id="page-dashboard">
       <div class="hero"><div>
-        <h2>校招信息看板</h2><p>飞书主表实时统计：投递漏斗、截止风险、方向分布一目了然。</p>
+        <h2>校招信息看板</h2><p>本地职位表实时统计：投递漏斗、截止风险、方向分布一目了然。</p>
         <div class="hero-metrics">
           <span class="hero-chip"><i></i><span id="hero-health">—</span></span>
           <span class="hero-chip"><span id="hero-focus">—</span></span>
@@ -395,24 +383,20 @@ kbd{font:11px var(--mono);background:var(--line);border:1px solid var(--line2);b
       </div></div>
     </section>
 
-    <!-- 飞书配置 -->
+    <!-- AI 配置 -->
     <section class="page" id="page-config">
-      <div class="card"><div class="card-hd"><span class="dot"></span><div class="card-title">飞书配置</div></div>
+      <div class="card"><div class="card-hd"><span class="dot"></span><div class="card-title">AI 配置</div></div>
         <div class="card-body">
-          <p class="muted" style="margin-bottom:14px">填写飞书自建应用的 App ID / App Secret 和多维表格 Token。配置写入本地 .env，密钥不回显。</p>
+          <p class="muted" style="margin-bottom:14px">职位与投递记录保存在本地 SQLite。此处仅配置简历分析使用的 DeepSeek API。</p>
           <div class="grid-2">
-            <div class="form-group"><label>App ID</label><input id="cfg-app-id" placeholder="cli_xxxxx"></div>
-            <div class="form-group"><label>App Secret</label><input id="cfg-app-secret" type="password" placeholder="留空不修改"><div class="help" id="cfg-secret-help"></div></div>
-            <div class="form-group"><label>表格链接</label><input id="cfg-app-token" placeholder="https://.../base/xxxx?table=tblxxx"><div class="help">粘贴完整链接，需包含 ?table=tblxxx 参数</div></div>
-            <div class="form-group"><label>DeepSeek API Key</label><input id="cfg-deepseek-key" type="password" placeholder="sk-..."><div class="help" id="cfg-deepseek-key-help">密钥仅保存在本机 .env</div></div>
+            <div class="form-group"><label>DeepSeek API Key</label><input id="cfg-deepseek-key" type="password" placeholder="sk-..."><div class="help" id="cfg-deepseek-key-help">密钥仅保存在本地数据库</div></div>
             <div class="form-group"><label>DeepSeek 模型</label><select id="cfg-deepseek-model"><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option></select></div>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
-            <button class="btn" onclick="testConfig('cfg')">测试连接</button>
             <button class="btn btn-primary" onclick="saveConfig('cfg')">保存配置</button>
             <button class="btn" onclick="loadConfigStatus(false)">重新读取</button>
           </div>
-          <div class="help" style="margin-top:12px">常见错误：App Secret 填错、飞书应用未发布、bitable 权限未开通、IP 白名单、网络连不上 open.feishu.cn。</div>
+          <div class="help" style="margin-top:12px">API Key 按用户独立保存，不会在页面中明文回显。</div>
         </div>
       </div>
     </section>
@@ -442,13 +426,13 @@ function animateNumber(id,value){var el=$(id);if(!el)return;var target=Number(va
 async function api(method,url,body,opt){opt=opt||{};var o={method:method,headers:{'Content-Type':'application/json'}};if(!opt.noauth&&_token)o.headers['Authorization']='Bearer '+_token;if(body!==undefined)o.body=JSON.stringify(body);var r,text;try{r=await fetch(url,o);text=await r.text()}catch(e){if(!opt.silent)showErrorModal('请求失败',url+'\n\n'+e.message);throw e}if(r.status===401){clearAuth();location.reload();throw new Error('登录已过期')}var data={};try{data=text?JSON.parse(text):{}}catch(e){var msg=(text||'HTTP '+r.status).slice(0,1200);if(!opt.silent)showErrorModal('接口返回不是 JSON',url+'\nHTTP '+r.status+'\n\n'+msg);throw new Error(msg.slice(0,180))}if(!r.ok){var detail=typeof data.detail==='string'?data.detail:(data.error||JSON.stringify(data.detail||data));if(!opt.silent)showErrorModal('接口请求失败',url+'\nHTTP '+r.status+'\n\n'+detail);throw new Error(detail||'HTTP '+r.status)}return data}
 
 /* ---------- 路由 ---------- */
-var PAGES={'page-dashboard':'看板总览','page-total':'总表信息','page-calendar':'秋招日历','page-resume':'简历预览','page-ai-analysis':'简历分析','page-config':'飞书配置','page-admin':'账号管理'};
+var PAGES={'page-dashboard':'看板总览','page-total':'总表信息','page-calendar':'秋招日历','page-resume':'简历预览','page-ai-analysis':'简历分析','page-config':'AI 配置','page-admin':'账号管理'};
 function navTo(el){var id=typeof el==='string'?el:el.dataset.page;if(id==='page-admin'&&!(_currentUser&&_currentUser.is_root))id='page-dashboard';document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.toggle('active',a.dataset.page===id)});document.querySelectorAll('.page').forEach(function(p){p.classList.toggle('active',p.id===id)});$('page-title').textContent=PAGES[id]||'';localStorage.setItem('radar_page',id);if(id==='page-dashboard'&&!_lastData)load();if(id==='page-calendar'){if(_lastData){renderCalendar()}else{load().then(renderCalendar)}loadLocalEvents().then(renderCalendar)}if(id==='page-resume')loadResumes();if(id==='page-ai-analysis')loadAIOptions();if(id==='page-config')loadConfigStatus(false);if(id==='page-admin')loadAdminUsers()}
 function applyTheme(t){document.documentElement.dataset.theme=t;$('theme-btn').textContent=t==='dark'?'☀️':'🌙';localStorage.setItem('radar_theme',t)}
 function toggleTheme(){applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark')}
 
 /* ---------- Cmd+K ---------- */
-var CMDS=[{label:'看板总览',k:'g d',run:function(){navTo('page-dashboard')}},{label:'飞书配置',k:'g s',run:function(){navTo('page-config')}},{label:'刷新数据',k:'r',run:function(){refreshData()}},{label:'切换主题',k:'',run:function(){toggleTheme()}}];
+var CMDS=[{label:'看板总览',k:'g d',run:function(){navTo('page-dashboard')}},{label:'AI 配置',k:'g s',run:function(){navTo('page-config')}},{label:'刷新数据',k:'r',run:function(){refreshData()}},{label:'切换主题',k:'',run:function(){toggleTheme()}}];
 var _palSel=0,_palFiltered=CMDS;
 function openPalette(){$('palette-mask').classList.add('show');$('palette-input').value='';_palSel=0;renderPalette();setTimeout(function(){$('palette-input').focus()},30)}
 function closePalette(){$('palette-mask').classList.remove('show')}
@@ -469,30 +453,30 @@ function renderBars(data,el,cls){if(!cls)cls='';var rows=arr(data),max=Math.max.
 
 /* ---------- 新增投递记录 ---------- */
 function inputDate(v){if(!v)return'';var d=new Date(v);if(isNaN(d))return String(v).slice(0,10);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
-function openRecordModal(){$('record-form').reset();$('record-edit-id').value='';$('record-modal-title').textContent='新增投递记录';$('record-modal-description').textContent='在飞书主表中新建记录，公司名称可以重复。';$('record-submit').textContent='保存记录';$('record-date').value=inputDate(new Date());$('record-modal').classList.add('show');setTimeout(function(){$('record-company').focus()},30)}
-function editRecord(i){var r=arr(_lastData&&_lastData.main&&_lastData.main.recent)[i];if(!r||!r.record_id){toast('缺少飞书记录 ID，无法编辑','error');return}closeRecordManager();$('record-edit-id').value=r.record_id;$('record-company').value=r.company||'';$('record-job').value=r.job||'';$('record-city').value=r.city||'';$('record-batch').value=r.batch||'秋招';$('record-date').value=inputDate(r.apply_date);$('record-exam').value=inputDate(r.exam_date);$('record-interview1').value=inputDate(r.interview1);$('record-interview2').value=inputDate(r.interview2);$('record-interview3').value=inputDate(r.interview3);$('record-warm').value=inputDate(r.warm);$('record-result').value=inputDate(r.result);$('record-deadline').value=inputDate(r.deadline);$('record-progress').value=arr(r.progress)[0]||'已投递';$('record-url').value=r.url||'';$('record-modal-title').textContent='编辑投递记录';$('record-modal-description').textContent='修改后将同步回写飞书主表。';$('record-submit').textContent='保存修改';$('record-modal').classList.add('show');setTimeout(function(){$('record-company').focus()},30)}
+function openRecordModal(){$('record-form').reset();$('record-edit-id').value='';$('record-modal-title').textContent='新增投递记录';$('record-modal-description').textContent='在本地总表中新建记录，公司名称可以重复。';$('record-submit').textContent='保存记录';$('record-date').value=inputDate(new Date());$('record-modal').classList.add('show');setTimeout(function(){$('record-company').focus()},30)}
+function editRecord(i){var r=arr(_lastData&&_lastData.main&&_lastData.main.recent)[i];if(!r||!r.record_id){toast('缺少本地记录 ID，无法编辑','error');return}closeRecordManager();$('record-edit-id').value=r.record_id;$('record-company').value=r.company||'';$('record-job').value=r.job||'';$('record-city').value=r.city||'';$('record-batch').value=r.batch||'秋招';$('record-date').value=inputDate(r.apply_date);$('record-exam').value=inputDate(r.exam_date);$('record-interview1').value=inputDate(r.interview1);$('record-interview2').value=inputDate(r.interview2);$('record-interview3').value=inputDate(r.interview3);$('record-warm').value=inputDate(r.warm);$('record-result').value=inputDate(r.result);$('record-deadline').value=inputDate(r.deadline);$('record-progress').value=arr(r.progress)[0]||'已投递';$('record-url').value=r.url||'';$('record-modal-title').textContent='编辑投递记录';$('record-modal-description').textContent='修改后将保存到本地总表。';$('record-submit').textContent='保存修改';$('record-modal').classList.add('show');setTimeout(function(){$('record-company').focus()},30)}
 function closeRecordModal(){$('record-modal').classList.remove('show')}
 async function submitRecord(e){e.preventDefault();var btn=$('record-submit'),id=$('record-edit-id').value;btn.disabled=true;btn.classList.add('loading');try{var payload={company:$('record-company').value.trim(),job:$('record-job').value.trim(),city:$('record-city').value.trim(),batch:$('record-batch').value,apply_date:$('record-date').value,exam_date:$('record-exam').value||null,interview1:$('record-interview1').value||null,interview2:$('record-interview2').value||null,interview3:$('record-interview3').value||null,warm:$('record-warm').value||null,result_date:$('record-result').value||null,deadline:$('record-deadline').value||null,progress:$('record-progress').value,url:$('record-url').value.trim()};var r=await api(id?'PUT':'POST',id?'/api/dashboard/records/'+encodeURIComponent(id):'/api/dashboard/records',payload);renderDashboard(r.dashboard||{});toast(r.message||'记录已保存','success');$('record-form').reset();closeRecordModal()}catch(err){toast('保存失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}}
-async function deleteRecord(i){var r=arr(_lastData&&_lastData.main&&_lastData.main.recent)[i];if(!r||!r.record_id){toast('缺少飞书记录 ID，无法移出','error');return}if(!confirm('确定将“'+(r.company||'该公司')+'”移出投递记录吗？主表记录会保留，投递流程时间将被清空。'))return;try{var result=await api('DELETE','/api/dashboard/records/'+encodeURIComponent(r.record_id));renderDashboard(result.dashboard||{});renderRecordManager('recent');toast(result.message||'已移出投递记录','success')}catch(err){toast('操作失败：'+err.message,'error',5600)}}
-async function deleteTotalRecord(i){var r=arr(_lastData&&_lastData.main&&_lastData.main.records)[i];if(!r||!r.record_id){toast('缺少飞书记录 ID，无法删除','error');return}if(!confirm('确定永久删除“'+(r.company||'该公司')+'”吗？这会删除飞书主表中的整行数据，且不可撤销。'))return;try{var result=await api('DELETE','/api/dashboard/records/'+encodeURIComponent(r.record_id)+'/permanent');renderDashboard(result.dashboard||{});renderRecordManager('records');toast(result.message||'总表记录已删除','success')}catch(err){toast('删除失败：'+err.message,'error',5600)}}
+async function deleteRecord(i){var r=arr(_lastData&&_lastData.main&&_lastData.main.recent)[i];if(!r||!r.record_id){toast('缺少本地记录 ID，无法移出','error');return}if(!confirm('确定将“'+(r.company||'该公司')+'”移出投递记录吗？主表记录会保留，投递流程时间将被清空。'))return;try{var result=await api('DELETE','/api/dashboard/records/'+encodeURIComponent(r.record_id));renderDashboard(result.dashboard||{});renderRecordManager('recent');toast(result.message||'已移出投递记录','success')}catch(err){toast('操作失败：'+err.message,'error',5600)}}
+async function deleteTotalRecord(i){var r=arr(_lastData&&_lastData.main&&_lastData.main.records)[i];if(!r||!r.record_id){toast('缺少本地记录 ID，无法删除','error');return}if(!confirm('确定永久删除“'+(r.company||'该公司')+'”吗？这会删除本地总表中的整行数据，且不可撤销。'))return;try{var result=await api('DELETE','/api/dashboard/records/'+encodeURIComponent(r.record_id)+'/permanent');renderDashboard(result.dashboard||{});renderRecordManager('records');toast(result.message||'总表记录已删除','success')}catch(err){toast('删除失败：'+err.message,'error',5600)}}
 
 var _recordManagerSource='recent';
-function renderRecordManager(source){_recordManagerSource=source||_recordManagerSource||'recent';var isTotal=_recordManagerSource==='records',records=arr(_lastData&&_lastData.main&&_lastData.main[_recordManagerSource]);$('record-manager-title').textContent=isTotal?'编辑总表记录':'编辑投递记录';$('record-manager-description').textContent=isTotal?'总表删除会永久删除飞书主表对应行。':'投递记录删除仅改为未投递并清空流程时间。';$('record-manager-tbody').innerHTML=records.map(function(r,i){var editFn=isTotal?'editTotalRecord('+i+')':'editRecord('+i+')',deleteFn=isTotal?'deleteTotalRecord('+i+')':'deleteRecord('+i+')';return'<tr><td class="company">'+esc(r.company||'—')+'</td><td class="job">'+esc(r.job||'—')+'</td><td>'+esc(r.city||'—')+'</td><td>'+fmtDate(r.apply_date)+'</td><td><div style="display:flex;gap:6px"><button class="btn" onclick="'+editFn+'">编辑</button><button class="btn" onclick="'+deleteFn+'">删除</button></div></td></tr>'}).join('')||'<tr><td colspan="5" class="center">暂无记录</td></tr>'}
+function renderRecordManager(source){_recordManagerSource=source||_recordManagerSource||'recent';var isTotal=_recordManagerSource==='records',records=arr(_lastData&&_lastData.main&&_lastData.main[_recordManagerSource]);$('record-manager-title').textContent=isTotal?'编辑总表记录':'编辑投递记录';$('record-manager-description').textContent=isTotal?'总表删除会永久删除本地总表对应行。':'投递记录删除仅改为未投递并清空流程时间。';$('record-manager-tbody').innerHTML=records.map(function(r,i){var editFn=isTotal?'editTotalRecord('+i+')':'editRecord('+i+')',deleteFn=isTotal?'deleteTotalRecord('+i+')':'deleteRecord('+i+')';return'<tr><td class="company">'+esc(r.company||'—')+'</td><td class="job">'+esc(r.job||'—')+'</td><td>'+esc(r.city||'—')+'</td><td>'+fmtDate(r.apply_date)+'</td><td><div style="display:flex;gap:6px"><button class="btn" onclick="'+editFn+'">编辑</button><button class="btn" onclick="'+deleteFn+'">删除</button></div></td></tr>'}).join('')||'<tr><td colspan="5" class="center">暂无记录</td></tr>'}
 function openRecordManager(source){renderRecordManager(source||'recent');$('record-manager-modal').classList.add('show')}
 function closeRecordManager(){$('record-manager-modal').classList.remove('show')}
 
-function editTotalRecord(i){var r=arr(_lastData&&_lastData.main&&_lastData.main.records)[i];if(!r||!r.record_id){toast('缺少飞书记录 ID，无法编辑','error');return}closeRecordManager();$('total-edit-id').value=r.record_id;$('total-edit-company').value=r.company||'';$('total-edit-job').value=r.job||'';$('total-edit-city').value=r.city||'';$('total-edit-batch').value=r.batch||'秋招';$('total-edit-progress').value=arr(r.progress)[0]||'未投递';$('total-edit-deadline').value=inputDate(r.deadline);$('total-edit-url').value=r.url||'';$('total-edit-modal').classList.add('show');setTimeout(function(){$('total-edit-company').focus()},30)}
+function editTotalRecord(i){var r=arr(_lastData&&_lastData.main&&_lastData.main.records)[i];if(!r||!r.record_id){toast('缺少本地记录 ID，无法编辑','error');return}closeRecordManager();$('total-edit-id').value=r.record_id;$('total-edit-company').value=r.company||'';$('total-edit-job').value=r.job||'';$('total-edit-city').value=r.city||'';$('total-edit-batch').value=r.batch||'秋招';$('total-edit-progress').value=arr(r.progress)[0]||'未投递';$('total-edit-deadline').value=inputDate(r.deadline);$('total-edit-url').value=r.url||'';$('total-edit-modal').classList.add('show');setTimeout(function(){$('total-edit-company').focus()},30)}
 function closeTotalEditModal(){$('total-edit-modal').classList.remove('show')}
 async function submitTotalEdit(e){e.preventDefault();var btn=$('total-edit-submit'),id=$('total-edit-id').value;btn.disabled=true;btn.classList.add('loading');try{var payload={company:$('total-edit-company').value.trim(),job:$('total-edit-job').value.trim(),city:$('total-edit-city').value.trim(),batch:$('total-edit-batch').value,progress:$('total-edit-progress').value,deadline:$('total-edit-deadline').value||null,url:$('total-edit-url').value.trim()};var result=await api('PUT','/api/dashboard/records/'+encodeURIComponent(id)+'/master',payload);renderDashboard(result.dashboard||{});toast(result.message||'总表记录已更新','success');closeTotalEditModal()}catch(err){toast('保存失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}}
 
 /* ---------- 公司信息 ---------- */
-function openCompanyModal(source,i){var r=arr(_lastData&&_lastData.main&&_lastData.main[source])[i];if(!r||!r.record_id){toast('缺少飞书记录 ID，无法编辑','error');return}$('company-record-id').value=r.record_id;$('company-modal-title').textContent=r.company||'公司信息';$('company-priority').value=r.priority||'⭐⭐⭐';$('company-job-jd').value=r.job_jd||'';$('company-note').value=r.note||'';$('company-modal').classList.add('show');setTimeout(function(){$('company-priority').focus()},30)}
+function openCompanyModal(source,i){var r=arr(_lastData&&_lastData.main&&_lastData.main[source])[i];if(!r||!r.record_id){toast('缺少本地记录 ID，无法编辑','error');return}$('company-record-id').value=r.record_id;$('company-modal-title').textContent=r.company||'公司信息';$('company-priority').value=r.priority||'⭐⭐⭐';$('company-job-jd').value=r.job_jd||'';$('company-note').value=r.note||'';$('company-modal').classList.add('show');setTimeout(function(){$('company-priority').focus()},30)}
 function closeCompanyModal(){$('company-modal').classList.remove('show')}
 async function submitCompanyDetails(e){e.preventDefault();var btn=$('company-submit'),id=$('company-record-id').value;btn.disabled=true;btn.classList.add('loading');try{var r=await api('POST','/api/dashboard/records/'+encodeURIComponent(id)+'/details',{priority:$('company-priority').value,job_jd:$('company-job-jd').value,note:$('company-note').value});renderDashboard(r.dashboard||{});toast(r.message||'公司信息已更新','success');closeCompanyModal()}catch(err){toast('保存失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}}
 
 function renderRecordRows(records,source){return records.map(function(r,i){return'<tr><td class="company"><button class="company-link" onclick="openCompanyModal(\''+source+'\','+i+')">'+esc(r.company||'—')+'</button></td><td class="job" title="'+esc(r.job||'')+'">'+esc(r.job||'—')+'</td><td>'+esc(r.city||'—')+'</td><td><span class="badge bdg-b">'+esc(r.batch||'—')+'</span></td><td>'+fmtDate(r.apply_date)+'</td><td>'+fmtDate(r.exam_date)+'</td><td>'+fmtDate(r.interview1)+'</td><td>'+fmtDate(r.interview2)+'</td><td>'+fmtDate(r.interview3)+'</td><td>'+fmtDate(r.warm)+'</td><td>'+esc(r.result||'—')+'</td><td>'+arr(r.progress).map(progressBadge).join(' ')+'</td><td>'+(typeof r.deadline==='number'?fmtDate(r.deadline):badge(analyze({deadline:r.deadline})))+'</td><td>'+link(r.url)+'</td></tr>'}).join('')||'<tr><td colspan="14" class="center">暂无记录</td></tr>'}
 function renderTotalRows(records){return records.map(function(r,i){var applied=!!r.apply_date;return'<tr><td class="company"><button class="company-link" onclick="openCompanyModal(\'records\','+i+')">'+esc(r.company||'—')+'</button></td><td class="job" title="'+esc(r.job||'')+'">'+esc(r.job||'—')+'</td><td>'+arr(r.progress).map(progressBadge).join(' ')+'</td><td>'+(typeof r.deadline==='number'?fmtDate(r.deadline):badge(analyze({deadline:r.deadline})))+'</td><td>'+link(r.url)+'</td><td class="total-action"><button class="btn" '+(applied?'disabled':'onclick="addToApplications('+i+')"')+'>'+(applied?'已投递':'加入投递')+'</button></td></tr>'}).join('')||'<tr><td colspan="6" class="center">暂无记录</td></tr>'}
-async function addToApplications(i){var r=arr(_lastData&&_lastData.main&&_lastData.main.records)[i];if(!r||!r.record_id){toast('缺少飞书记录 ID，无法加入投递','error');return}try{var result=await api('POST','/api/dashboard/records/'+encodeURIComponent(r.record_id)+'/apply');renderDashboard(result.dashboard||{});toast(result.message||'已加入投递记录','success')}catch(err){toast('加入投递失败：'+err.message,'error',5600)}}
+async function addToApplications(i){var r=arr(_lastData&&_lastData.main&&_lastData.main.records)[i];if(!r||!r.record_id){toast('缺少本地记录 ID，无法加入投递','error');return}try{var result=await api('POST','/api/dashboard/records/'+encodeURIComponent(r.record_id)+'/apply');renderDashboard(result.dashboard||{});toast(result.message||'已加入投递记录','success')}catch(err){toast('加入投递失败：'+err.message,'error',5600)}}
 
 /* ---------- 秋招日历 ---------- */
 var _calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
@@ -540,9 +524,9 @@ function renderDashboard(d){
   dated.sort(function(a,b){return a.window.rank-b.window.rank});
   $('last-updated').textContent=(d.now||'')+(d.stale?' · 缓存':'');
   animateNumber('kpi-total',d.main.total_companies||0);animateNumber('kpi-a',(d.main.directions||[]).length+(d.main.ctypes||[]).length);animateNumber('kpi-dated',dated.length);animateNumber('kpi-closed',0);animateNumber('kpi-applied',recent.length);animateNumber('kpi-interview',d.main.interview_count||0);
-  if($('hero-health'))$('hero-health').textContent=d.stale?'使用缓存':'飞书数据已连接';
+  if($('hero-health'))$('hero-health').textContent=d.stale?'使用缓存':'本地数据正常';
   if($('hero-focus'))$('hero-focus').textContent=(d.main.directions||[]).length+' 类方向 · '+(d.main.ctypes||[]).length+' 类公司';
-  if($('hero-action'))$('hero-action').textContent=recent.length?'继续跟进 '+recent.length+' 条投递':'在飞书表格里填入公司';
+  if($('hero-action'))$('hero-action').textContent=recent.length?'继续跟进 '+recent.length+' 条投递':'在总表信息中新增公司';
   $('funnel').innerHTML=[['监控公司',d.main.total_companies||0,'主表公司'],['已投递',recent.length,'有投递时间'],['机考',d.main.exam_count||0,'测评/机考'],['面试',d.main.interview_count||0,'一至三面'],['Offer',d.main.offer_count||0,'OC/录用']].map(function(x){return'<div class="funnel-step"><b>'+x[1]+'</b><span>'+x[0]+' · '+x[2]+'</span></div>'}).join('');
   $('deadline-timeline').innerHTML=dated.length?dated.slice(0,12).map(function(r){var dt=r.window.date?r.window.date.toISOString().slice(5,10):'--';return'<div class="tl-item"><div class="tl-date">'+dt+'</div><div class="tl-main"><b>'+esc(r.company)+'</b><span>'+esc(r.job||'—')+'</span></div><div>'+badge(r.window)+'</div></div>'}).join(''):'<div class="center">暂无明确截止</div>';
   renderBars(d.main.directions,$('chart-dir'));renderBars(d.main.ctypes,$('chart-type'),'g');
@@ -551,17 +535,13 @@ function renderDashboard(d){
   $('total-record-count').textContent=records.length+' 条记录';
   if($('page-calendar').classList.contains('active'))renderCalendar();
 }
-async function load(){var d=await api('GET','/api/dashboard');renderDashboard(d);if(d.error)showErrorModal('飞书数据读取失败',d.error)}
+async function load(){var d=await api('GET','/api/dashboard');renderDashboard(d);if(d.error)showErrorModal('本地数据读取失败',d.error)}
 
-/* ---------- 飞书配置 ---------- */
-function extractAppToken(v){v=String(v||'').trim();var m=v.match(/\/(?:base|wiki)\/([^/?#]+)/);return m?m[1]:v}
-function extractTableId(v){v=String(v||'').trim();var m=v.match(/[?&]table=([^&#]+)/);return m?decodeURIComponent(m[1]):''}
-function formIds(prefix){return prefix==='first'?{app:'first-app-id',secret:'first-app-secret',token:'first-app-token'}:{app:'cfg-app-id',secret:'cfg-app-secret',token:'cfg-app-token'}}
-function configPayload(prefix){var ids=formIds(prefix);var raw=$(ids.token).value;return{feishu_app_id:$(ids.app).value.trim(),feishu_app_secret:$(ids.secret).value.trim(),feishu_app_token:raw.trim(),main_table_id:extractTableId(raw),deepseek_api_key:$('cfg-deepseek-key')&&prefix==='cfg'?$('cfg-deepseek-key').value.trim():'',deepseek_model:$('cfg-deepseek-model')&&prefix==='cfg'?$('cfg-deepseek-model').value:''}}
-function fillConfigForm(prefix,values){var ids=formIds(prefix);if($(ids.app))$(ids.app).value=values.feishu_app_id||'';if($(ids.token))$(ids.token).value=values.feishu_app_token||'';if($(ids.secret)){$(ids.secret).value='';$(ids.secret).placeholder=values.feishu_app_secret_masked?'已保存：'+values.feishu_app_secret_masked:'飞书 App Secret'}if(prefix==='cfg'&&$('cfg-deepseek-key')){$('cfg-deepseek-key').value='';$('cfg-deepseek-key').placeholder=values.deepseek_api_key_masked?'已保存：'+values.deepseek_api_key_masked:'sk-...';$('cfg-deepseek-model').value=values.deepseek_model||'deepseek-v4-flash';$('cfg-deepseek-key-help').textContent=values.deepseek_api_key_masked?'已保存密钥：'+values.deepseek_api_key_masked:'密钥仅保存在本机 .env'}}
-async function loadConfigStatus(openWhenMissing){if(openWhenMissing===undefined)openWhenMissing=true;try{var d=await api('GET','/api/config',undefined,{silent:true});fillConfigForm('cfg',d.values||{});fillConfigForm('first',d.values||{});if($('cfg-secret-help'))$('cfg-secret-help').textContent=d.values&&d.values.feishu_app_secret_masked?'已保存密钥：'+d.values.feishu_app_secret_masked:'尚未保存密钥';$('conn-text').textContent=d.configured?'飞书已连接':'待配置';$('conn-pulse').style.background=d.configured?'var(--green)':'var(--amber)';if(!d.configured&&openWhenMissing)$('config-modal').classList.add('show');return d}catch(e){$('conn-text').textContent='接口异常';showErrorModal('配置接口异常',e.message)}}
-async function testConfig(prefix){prefix=prefix||'cfg';try{var r=await api('POST','/api/config/test',configPayload(prefix));if(r.success){toast(r.message||'连接成功','success')}else{showErrorModal('连接测试失败',r.error||'未知错误');toast('连接测试失败','error')}}catch(e){toast('连接测试失败：'+e.message,'error')}}
-async function saveConfig(prefix){prefix=prefix||'cfg';try{var r=await api('POST','/api/config',configPayload(prefix));toast(r.message||'已保存配置','success');$('config-modal').classList.remove('show');await loadConfigStatus(false);refreshData()}catch(e){toast('保存失败：'+e.message,'error')}}
+/* ---------- AI 配置 ---------- */
+function configPayload(){return{deepseek_api_key:$('cfg-deepseek-key').value.trim(),deepseek_model:$('cfg-deepseek-model').value}}
+function fillConfigForm(values){$('cfg-deepseek-key').value='';$('cfg-deepseek-key').placeholder=values.deepseek_api_key_masked?'已保存：'+values.deepseek_api_key_masked:'sk-...';$('cfg-deepseek-model').value=values.deepseek_model||'deepseek-v4-flash';$('cfg-deepseek-key-help').textContent=values.deepseek_api_key_masked?'已保存密钥：'+values.deepseek_api_key_masked:'密钥仅保存在本地数据库'}
+async function loadConfigStatus(){try{var d=await api('GET','/api/config',undefined,{silent:true});fillConfigForm(d.values||{});$('conn-text').textContent='本地存储';$('conn-pulse').style.background='var(--green)';return d}catch(e){$('conn-text').textContent='接口异常';showErrorModal('配置接口异常',e.message)}}
+async function saveConfig(){try{var r=await api('POST','/api/config',configPayload());toast(r.message||'已保存配置','success');await loadConfigStatus()}catch(e){toast('保存失败：'+e.message,'error')}}
 
 /* ---------- 通知 ---------- */
 function formatSystemTime(value){if(!value)return'';var date=new Date(value.replace(' ','T')+'Z');return isNaN(date)?value:date.toLocaleString('zh-CN',{hour12:false})}
@@ -595,7 +575,7 @@ async function deleteManagedUser(userId,username){if(!confirm('确定删除用�
 async function publishNotification(){var title=$('notice-title').value.trim(),content=$('notice-content').value.trim();if(!title||!content){toast('请填写通知标题和内容','error');return}var btn=$('notice-submit');btn.disabled=true;btn.classList.add('loading');try{await api('POST','/api/admin/notifications',{title:title,content:content});$('notice-title').value='';$('notice-content').value='';toast('通知已发布','success');loadNotifications(false)}catch(e){toast('发布失败：'+e.message,'error')}finally{btn.disabled=false;btn.classList.remove('loading')}}
 
 /* ---------- 刷新 ---------- */
-function refreshData(e){var btn=e&&e.currentTarget;if(btn)btn.classList.add('loading');toast('正在刷新…');api('POST','/api/dashboard/refresh').then(function(d){renderDashboard(d);if(d.error)showErrorModal('飞书数据刷新失败',d.error);else toast('已刷新','success')}).catch(function(e){toast('刷新失败：'+e.message,'error',5600)}).then(function(){if(btn)btn.classList.remove('loading')})}
+function refreshData(e){var btn=e&&e.currentTarget;if(btn)btn.classList.add('loading');toast('正在刷新…');api('POST','/api/dashboard/refresh').then(function(d){renderDashboard(d);if(d.error)showErrorModal('本地数据刷新失败',d.error);else toast('已刷新','success')}).catch(function(e){toast('刷新失败：'+e.message,'error',5600)}).then(function(){if(btn)btn.classList.remove('loading')})}
 
 /* ---------- 初始化 ---------- */
 applyTheme(localStorage.getItem('radar_theme')||'light');

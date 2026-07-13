@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
-from app import auth as auth_module, database, feishu
+from app import auth as auth_module, database, local_records
 
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
@@ -210,23 +210,8 @@ def _extract_resume_text(path: Path) -> str:
 
 def _find_record(record_id: str, user_id: int) -> dict:
     if not record_id.startswith("rec"):
-        raise HTTPException(status_code=422, detail="无效的飞书记录 ID")
-    cfg = database.get_user_config(user_id)
-    table_id = cfg.get("main_table_id", "")
-    if not table_id:
-        raise HTTPException(status_code=400, detail="请先在飞书配置中填写表格信息")
-    feishu.set_request_config({
-        "APP_ID": cfg.get("feishu_app_id", ""),
-        "APP_SECRET": cfg.get("feishu_app_secret", ""),
-        "APP_TOKEN": cfg.get("feishu_app_token", ""),
-        "MAIN_TABLE_ID": table_id,
-        "DEEPSEEK_API_KEY": cfg.get("deepseek_api_key", ""),
-        "DEEPSEEK_MODEL": cfg.get("deepseek_model", "deepseek-v4-flash"),
-    })
-    record = next(
-        (item for item in feishu.list_records(table_id) if item.get("record_id") == record_id),
-        None,
-    )
+        raise HTTPException(status_code=422, detail="无效的本地记录 ID")
+    record = local_records.get_record(user_id, record_id)
     if not record:
         raise HTTPException(status_code=404, detail="未找到所选总表记录")
     return record.get("fields") or {}
@@ -240,7 +225,7 @@ def analyze_resume(
     cfg = database.get_user_config(user["user_id"])
     api_key = cfg.get("deepseek_api_key", "")
     if not api_key:
-        raise HTTPException(status_code=400, detail="请先在飞书配置中填写 DeepSeek API Key")
+        raise HTTPException(status_code=400, detail="请先在 AI 配置中填写 DeepSeek API Key")
     model = cfg.get("deepseek_model", "") or "deepseek-v4-flash"
 
     resume_path = _user_resume_path(user["user_id"], request.resume_filename)

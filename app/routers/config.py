@@ -1,25 +1,17 @@
-"""飞书配置接口：per-user 读取/保存、测试连接。"""
+"""Per-user DeepSeek API configuration."""
 from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from app import auth as auth_module, database, feishu, state
+from app import auth as auth_module, database
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
 
-class FeishuConfig(BaseModel):
-    feishu_app_id: str = ""
-    feishu_app_secret: str = ""
-    feishu_app_token: str = ""
-    main_table_id: str = ""
+class AIConfig(BaseModel):
     deepseek_api_key: str = ""
     deepseek_model: str = ""
-
-
-class TestConfig(FeishuConfig):
-    pass
 
 
 def _masked(value: Optional[str], left: int = 6, right: int = 4) -> str:
@@ -34,57 +26,30 @@ def _masked(value: Optional[str], left: int = 6, right: int = 4) -> str:
 @router.get("")
 def get_config(user: dict = Depends(auth_module.get_current_user)):
     cfg = database.get_user_config(user["user_id"])
-    required = ["feishu_app_id", "feishu_app_secret", "feishu_app_token", "main_table_id"]
-    missing = [k for k in required if not cfg.get(k)]
+    configured = bool(cfg.get("deepseek_api_key"))
     return {
-        "configured": not missing,
-        "missing": missing,
+        "configured": configured,
+        "missing": [] if configured else ["deepseek_api_key"],
         "values": {
-            "feishu_app_id": cfg.get("feishu_app_id", ""),
-            "feishu_app_secret_masked": _masked(cfg.get("feishu_app_secret", "")),
-            "feishu_app_token": cfg.get("feishu_app_token", ""),
-            "main_table_id": cfg.get("main_table_id", ""),
             "deepseek_api_key_masked": _masked(cfg.get("deepseek_api_key", "")),
             "deepseek_model": cfg.get("deepseek_model", "") or "deepseek-v4-flash",
         },
     }
 
 
-def _build_payload(cfg: FeishuConfig, user_id: int) -> dict:
+def _config_values(cfg: AIConfig, user_id: int) -> tuple[str, str]:
     current = database.get_user_config(user_id)
-    raw = cfg.feishu_app_token.strip()
-
-    # 从链接统一解析 Base Token 和 Table ID
-    app_token = feishu.parse_app_token(raw) or current.get("feishu_app_token", "")
-    table_id = feishu.parse_table_id(raw) or current.get("main_table_id", "")
-
-    return {
-        "FEISHU_APP_ID": cfg.feishu_app_id.strip() or current.get("feishu_app_id", ""),
-        "FEISHU_APP_SECRET": cfg.feishu_app_secret.strip() or current.get("feishu_app_secret", ""),
-        "FEISHU_APP_TOKEN": app_token,
-        "MAIN_TABLE_ID": table_id,
-        "DEEPSEEK_API_KEY": cfg.deepseek_api_key.strip() or current.get("deepseek_api_key", ""),
-        "DEEPSEEK_MODEL": (
-            cfg.deepseek_model.strip()
-            if cfg.deepseek_model.strip() in {"deepseek-v4-flash", "deepseek-v4-pro"}
-            else current.get("deepseek_model", "") or "deepseek-v4-flash"
-        ),
-    }
+    api_key = cfg.deepseek_api_key.strip() or current.get("deepseek_api_key", "")
+    model = (
+        cfg.deepseek_model.strip()
+        if cfg.deepseek_model.strip() in {"deepseek-v4-flash", "deepseek-v4-pro"}
+        else current.get("deepseek_model", "") or "deepseek-v4-flash"
+    )
+    return api_key, model
 
 
 @router.post("")
-def save_config(cfg: FeishuConfig, user: dict = Depends(auth_module.get_current_user)):
-    payload = _build_payload(cfg, user["user_id"])
-    database.save_user_config(user["user_id"], payload)
-    state.set_cache(user["user_id"], {})
-    return {"success": True, "message": "飞书配置已保存"}
-
-
-@router.post("/test")
-def test_config(cfg: TestConfig, user: dict = Depends(auth_module.get_current_user)):
-    payload = _build_payload(cfg, user["user_id"])
-    try:
-        feishu.test_config(payload)
-        return {"success": True, "message": "连接成功：已能读取飞书主表"}
-    except Exception as e:
-        return {"success": False, "error": feishu.friendly_error(e)}
+def save_config(cfg: AIConfig, user: dict = Depends(auth_module.get_current_user)):
+    api_key, model = _config_values(cfg, user["user_id"])
+    database.save_ai_config(user["user_id"], api_key, model)
+    return {"success": True, "message": "AI 配置已保存"}

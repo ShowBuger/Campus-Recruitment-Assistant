@@ -1,28 +1,27 @@
 # 校招信息看板
 
-本地运行的校招投递管理工具。项目通过飞书 OpenAPI 读写多维表格，在浏览器中展示投递进度、维护记录、预览简历，并使用 DeepSeek 分析简历与岗位的匹配情况。
+本地运行的校招投递管理工具。职位、投递进度和用户数据保存在本地 SQLite，在浏览器中维护记录、预览简历，并使用 DeepSeek 分析简历与岗位的匹配情况。
 
-**当前版本：v0.4**
+**当前版本：v0.5**
 
 ## 功能
 
-- 多用户支持：注册/登录，每人独立飞书配置和数据，适合 10 人左右团队共用
+- 多用户支持：注册/登录，每人拥有独立的本地总表、简历、日程与 AI 配置
 - 看板总览：公司数量、投递漏斗、截止时间、方向与公司类型分布
 - 投递记录：新增和编辑记录；移出投递时保留主表行并重置投递流程
-- 总表信息：浏览、编辑和永久删除飞书主表记录，维护优先级、备注和岗位 JD
+- 总表信息：浏览、编辑和永久删除本地记录，维护优先级、备注和岗位 JD
 - 秋招日历：按月查看投递、机考/笔试、面试、保温、结果和截止事件；点击"新建日程"可直接在日历上为已有记录添加日期，或创建无需绑定公司的自定义本地日程
 - 简历预览：上传 PDF/DOCX 到本地 `resume/`，直接在网页中预览
 - 简历分析：选择简历和总表岗位，调用 DeepSeek 输出 Markdown 分析报告
 - 分析历史：分析结果以 JSON 保存在本地 `analysis_history/`，可随时二次预览
-- 本地配置：管理飞书凭证、DeepSeek API Key 和模型
+- AI 配置：按用户管理 DeepSeek API Key 和模型
 - 亮色/暗色主题
 
 ## 环境要求
 
 - Python 3.11 或更高版本
 - Windows 10/11 推荐使用 `.bat` 脚本，Linux/macOS 使用 `.sh` 脚本
-- 可访问 `open.feishu.cn` 和 `api.deepseek.com` 的网络
-- 一个已发布的飞书企业自建应用
+- 使用 AI 分析时需要能够访问 `api.deepseek.com`
 
 ## 快速安装
 
@@ -31,8 +30,8 @@
 1. 克隆项目：
 
 ```powershell
-git clone https://github.com/kaoya-123/embeded_qiuzhao_kanban.git
-cd embeded_qiuzhao_kanban
+git clone https://github.com/ShowBuger/Campus-Recruitment-Assistant.git
+cd Campus-Recruitment-Assistant
 ```
 
 2. 双击 `install-deps.bat`，脚本会安装 `requirements.txt` 中的全部依赖。
@@ -44,8 +43,8 @@ cd embeded_qiuzhao_kanban
 1. 克隆项目：
 
 ```bash
-git clone https://github.com/kaoya-123/embeded_qiuzhao_kanban.git
-cd embeded_qiuzhao_kanban
+git clone https://github.com/ShowBuger/Campus-Recruitment-Assistant.git
+cd Campus-Recruitment-Assistant
 ```
 
 2. 给脚本添加执行权限并安装依赖：
@@ -84,55 +83,20 @@ python3 start-dashboard.py
 python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 ```
 
-## 复制飞书表格模板
-
-项目推荐使用已经适配字段结构的多维表格模板：
-
-**[打开并复制“校招信息看板”飞书多维表格](https://my.feishu.cn/base/FQjJbI4yUaQXzts7cGEcx6dIn2d?from=from_copylink)**
-
-打开链接后，将表格复制到自己的飞书空间，再使用复制后表格的链接、Base Token 和主表 ID 配置看板。不要直接把模板原表作为个人投递表使用。
-
-复制后还需要：
-
-1. 将自己的飞书自建应用添加为该多维表格的协作者。
-2. 为应用开通多维表格读写权限并发布应用版本。
-3. 在看板“飞书配置”页面粘贴复制后的表格链接和应用凭证。
-
 ## 配置
 
-首次打开网页后进入“飞书配置”，填写：
+职位总表无需外部配置。注册账号后即可使用一张空的本地总表。需要简历分析时，进入“AI 配置”填写：
 
 | 配置项 | 说明 |
 |---|---|
-| App ID | 飞书自建应用 App ID |
-| App Secret | 飞书自建应用密钥 |
-| Base Token | 多维表格链接或 App Token |
-| 主表 ID | 目标数据表的 `table_id` |
-| DeepSeek API Key | DeepSeek 开放平台密钥，仅保存在本机 |
+| DeepSeek API Key | DeepSeek 开放平台密钥，按用户保存在本地数据库 |
 | DeepSeek 模型 | `deepseek-v4-flash` 或 `deepseek-v4-pro` |
 
-也可以复制配置模板：
+API Key 不写入 `.env`，只保存在当前用户的数据库配置中。接口仅返回掩码，不会回显完整密钥。
 
-```powershell
-Copy-Item .env.example .env
-```
+## 本地数据
 
-```dotenv
-FEISHU_APP_ID=cli_xxx
-FEISHU_APP_SECRET=xxx
-FEISHU_APP_TOKEN=你的多维表格_token
-MAIN_TABLE_ID=tblxxxxxxxx
-DEEPSEEK_API_KEY=sk-xxx
-DEEPSEEK_MODEL=deepseek-v4-flash
-```
-
-`.env` 已被 Git 忽略。不要提交、截图或分享真实密钥。
-
-## 飞书权限与字段
-
-飞书应用至少需要多维表格读写权限，并需要被添加为目标多维表格的协作者。修改权限后需创建并发布新版本。
-
-看板使用以下主表字段：
+每个用户使用独立的本地总表，包含以下字段：
 
 ```text
 公司名称、秋招岗位、岗位JD、城市、批次、优先级、备注、投递链接、
@@ -140,13 +104,13 @@ DEEPSEEK_MODEL=deepseek-v4-flash
 进展、嵌入式方向、公司/行业类型
 ```
 
-字段类型应与看板匹配：日期列使用日期时间字段，`进展`使用多选，`批次`和`优先级`使用单选，`岗位JD`和`备注`使用文本。
+账号、配置、通知和职位记录保存在 `data/app.db`；简历与分析历史保存在 `data/users/<用户ID>/`。部署服务器时必须持久化并备份这些路径。
 
 ## 简历文件
 
 - 支持 `.pdf` 和 `.docx`
 - 单文件最大 20 MB
-- 文件保存在项目的 `resume/` 目录
+- 文件保存在 `data/users/<用户ID>/resumes/`
 - 实际简历文件默认被 Git 忽略
 - DOCX 预览提取文本、标题和表格；复杂排版可能与 Word 略有差异
 - 扫描版 PDF 若无文本层，AI 分析前需要先执行 OCR
@@ -164,7 +128,7 @@ AI 分析会将以下内容发送到配置的 DeepSeek API：
 
 分析工具提供五种模式：综合匹配分析、技术面试训练、HR 面试训练、完整面试流程、简历定向优化。还可以填写特别关注点，要求模型重点分析指定项目、技能或风险。
 
-每次成功分析都会保存到本地 `analysis_history/`。历史记录包含公司、岗位、简历文件名、模型、分析时间和原始 Markdown；分析历史默认被 Git 忽略。
+每次成功分析都会保存到 `data/users/<用户ID>/analysis_history/`。历史记录包含公司、岗位、简历文件名、模型、分析时间和原始 Markdown；分析历史默认被 Git 忽略。
 
 项目内置分析 skill 参考 `jennifer88huang/interview-skills` 的 JD 解析、简历解析、匹配分析和面试题设计流程，并以本项目所需的固定输出结构封装在 `app/prompts/interview_analysis.md` 中。网页后端直接加载该文件，而不是依赖用户目录中的 Codex/OpenClaw skill。
 
@@ -181,18 +145,19 @@ AI 分析会将以下内容发送到配置的 DeepSeek API：
 
 ## 安全说明
 
-- 浏览器不会读取或保存飞书 App Secret 与 DeepSeek API Key 原文
-- 密钥只保存在本机 `.env`，接口仅返回掩码
+- 浏览器不会读取或保存 DeepSeek API Key 原文
+- DeepSeek API Key 按用户保存在本地数据库，接口仅返回掩码
 - AI 分析会把所选简历文本发送给 DeepSeek，请确认内容符合你的隐私要求
 - 投递记录的删除只会改为“未投递”并清空投递后产生的流程时间
-- 只有总表信息中的删除会永久删除飞书主表对应行，操作前会二次确认
+- 只有总表信息中的删除会永久删除当前用户的本地记录，操作前会二次确认
+- 服务器部署需要备份并持久化 `data/app.db` 和 `data/users/`
 
 ## 技术栈
 
 | 组件 | 技术 |
 |---|---|
 | 后端 | FastAPI / Uvicorn |
-| 数据源 | 飞书多维表格 Bitable |
+| 数据源 | SQLite（按用户隔离） |
 | AI | DeepSeek Chat Completions API |
 | 前端 | 原生 HTML / CSS / JavaScript |
 | 文档解析 | python-docx / pypdf |
@@ -235,3 +200,12 @@ MIT License。
 - 侧边栏显示当前用户名和退出按钮
 - 服务监听 `0.0.0.0`，支持外网多用户同时访问
 - 新增依赖：bcrypt、PyJWT
+
+### v0.5
+
+- 职位总表和投递记录从飞书迁移为本地 SQLite 存储
+- 每个用户自动获得独立的空总表，记录按 `user_id` 强制隔离
+- 新增、编辑、删除、加入投递、公司详情和记录日历全部改为本地读写
+- AI 分析直接读取当前用户的本地岗位与岗位 JD
+- 移除飞书配置、应用权限和表格模板依赖，仅保留 DeepSeek AI 配置
+- 服务器部署只需持久化 `data/app.db` 与 `data/users/`
