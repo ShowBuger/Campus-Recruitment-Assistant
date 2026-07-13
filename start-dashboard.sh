@@ -11,4 +11,4 @@ else
   exit 1
 fi
 
-python start-dashboard.py
+python start-dashboard.py "$@"

@@ -83,6 +83,36 @@ python3 start-dashboard.py
 python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 ```
 
+## 服务管理
+
+启动脚本支持 `start`、`status`、`stop` 三种指令。服务以后台进程运行，PID 保存在 `data/dashboard.pid`，日志写入 `data/dashboard.log`。
+
+Windows：
+
+```powershell
+start-dashboard.bat start
+start-dashboard.bat status
+start-dashboard.bat stop
+```
+
+Linux / macOS：
+
+```bash
+./start-dashboard.sh start
+./start-dashboard.sh status
+./start-dashboard.sh stop
+```
+
+也可以直接使用 Python：
+
+```bash
+python start-dashboard.py start
+python start-dashboard.py status
+python start-dashboard.py stop
+```
+
+不传指令时默认执行 `start`。重复执行 `start` 不会创建第二个服务进程。
+
 ## 配置
 
 职位总表无需外部配置。注册账号后即可使用一张空的本地总表。需要简历分析时，进入“AI 配置”填写：
