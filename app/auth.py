@@ -85,6 +85,7 @@ async def get_current_user(
     db_user = database.get_user_by_id(payload["user_id"])
     if not db_user or db_user["username"] != payload["username"]:
         raise HTTPException(status_code=401, detail="账号不存在或已被删除")
+    database.touch_user_last_seen(db_user["id"])
     return {
         "user_id": db_user["id"],
         "username": db_user["username"],
@@ -111,6 +112,7 @@ def get_optional_user(
     db_user = database.get_user_by_id(payload["user_id"])
     if not db_user or db_user["username"] != payload["username"]:
         return None
+    database.touch_user_last_seen(db_user["id"])
     return {
         "user_id": db_user["id"],
         "username": db_user["username"],

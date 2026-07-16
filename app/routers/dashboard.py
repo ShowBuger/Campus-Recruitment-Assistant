@@ -1,13 +1,15 @@
 """看板数据接口：per-user SQLite 职位记录与本地日程。"""
 import uuid
+from io import BytesIO
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, HttpUrl
 
-from app import auth as auth_module, database, local_records, state
+from app import auth as auth_module, database, local_records, record_excel, state
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -40,7 +42,7 @@ class ApplicationRecord(BaseModel):
     job: str
     city: str
     batch: Literal["秋招", "提前批"]
-    apply_date: date
+    apply_date: date | None = None
     exam_date: date | None = None
     interview1: date | None = None
     interview2: date | None = None
@@ -49,7 +51,7 @@ class ApplicationRecord(BaseModel):
     result_date: date | None = None
     deadline: date | None = None
     progress: Literal["已投递", "机考", "面试", "OC", "已挂", "放弃"]
-    url: HttpUrl
+    url: HttpUrl | None = None
 
 
 class CompanyDetails(BaseModel):
@@ -60,10 +62,12 @@ class CompanyDetails(BaseModel):
 
 class TotalRecordUpdate(BaseModel):
     company: str
-    job: str
+    job: str = ""
     city: str = ""
     batch: Literal["秋招", "提前批"]
     progress: Literal["未投递", "已投递", "机考", "面试", "OC", "已挂", "放弃"]
+    directions: list[str] = []
+    company_type: str = ""
     deadline: date | None = None
     url: str = ""
 
@@ -101,7 +105,31 @@ def _application_fields(record: ApplicationRecord) -> dict:
         "结果": record.result_date.isoformat() if record.result_date else None,
         "投递截止时间": date_ms(record.deadline),
         "进展": [record.progress],
-        "投递链接": {"link": str(record.url), "text": str(record.url)},
+        "投递链接": (
+            {"link": str(record.url), "text": str(record.url)}
+            if record.url else None
+        ),
+    }
+
+
+def _total_record_fields(record: TotalRecordUpdate) -> dict:
+    china_tz = timezone(timedelta(hours=8))
+    deadline = (
+        int(datetime.combine(record.deadline, time.min, china_tz).timestamp() * 1000)
+        if record.deadline else None
+    )
+    url = record.url.strip()
+    directions = list(dict.fromkeys(item.strip() for item in record.directions if item.strip()))
+    return {
+        "公司名称": record.company.strip(),
+        "秋招岗位": record.job.strip(),
+        "城市": record.city.strip(),
+        "批次": record.batch,
+        "进展": [record.progress],
+        "嵌入式方向": directions,
+        "公司/行业类型": record.company_type.strip(),
+        "投递截止时间": deadline,
+        "投递链接": {"link": url, "text": url} if url else None,
     }
 
 
@@ -171,7 +199,181 @@ def save_application(
     return {"success": True, "action": "created", "message": "已新增主表记录", "dashboard": data}
 
 
+@router.post("/records/master")
+def create_total_record(
+    record: TotalRecordUpdate,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    if not record.company.strip():
+        raise HTTPException(status_code=422, detail="公司不能为空")
+    try:
+        local_records.create_record(user["user_id"], _total_record_fields(record))
+        data = local_records.get_dashboard_data(user["user_id"])
+        state.set_cache(user["user_id"], data)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"总表记录保存失败：{exc}") from exc
+    return {"success": True, "message": "已新增总表记录", "dashboard": data}
+
+
+def _xlsx_response(content: bytes, filename: str) -> StreamingResponse:
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/records/template")
+def download_total_record_template(
+    user: dict = Depends(auth_module.get_current_user),
+):
+    return _xlsx_response(record_excel.build_template(), "total-records-template.xlsx")
+
+
+@router.get("/records/export")
+def export_total_records(
+    user: dict = Depends(auth_module.get_current_user),
+):
+    records = local_records.list_records(user["user_id"])
+    filename = f"total-records-{datetime.now(record_excel.CHINA_TZ).strftime('%Y%m%d-%H%M%S')}.xlsx"
+    return _xlsx_response(record_excel.build_export(records), filename)
+
+
+@router.post("/records/import")
+async def import_total_records(
+    file: UploadFile = File(...),
+    user: dict = Depends(auth_module.get_current_user),
+):
+    filename = (file.filename or "").lower()
+    if not filename.endswith(".xlsx"):
+        raise HTTPException(status_code=422, detail="仅支持 .xlsx 格式的 Excel 文件")
+    try:
+        content = await file.read(record_excel.MAX_FILE_BYTES + 1)
+        records = record_excel.parse_import(content)
+        local_records.create_records(user["user_id"], records)
+        data = local_records.get_dashboard_data(user["user_id"])
+        state.set_cache(user["user_id"], data)
+    except record_excel.ImportValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Excel 导入失败：{exc}") from exc
+    finally:
+        await file.close()
+    return {
+        "success": True,
+        "imported_count": len(records),
+        "message": f"成功导入 {len(records)} 条总表记录",
+        "dashboard": data,
+    }
+
+
+# ── Shared total table ─────────────────────────────────
+@router.get("/shared/records")
+def get_shared_records(
+    user: dict = Depends(auth_module.get_current_user),
+):
+    return {
+        "records": local_records.list_shared_records(user["user_id"]),
+        "can_delete": bool(user.get("is_admin")),
+    }
+
+
+@router.post("/shared/records")
+def create_shared_record(
+    record: TotalRecordUpdate,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="普通用户无权直接新建共享记录")
+    try:
+        shared_record, created = local_records.create_shared_record(
+            user["user_id"], _total_record_fields(record)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"新建共享记录失败：{exc}") from exc
+    return {
+        "success": True,
+        "created": created,
+        "record": shared_record,
+        "message": "共享记录已新建" if created else "共享总表中已存在相同记录",
+    }
+
+
+@router.post("/shared/records/from-personal/{record_id}")
+def upload_record_to_shared(
+    record_id: str,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    if not record_id.startswith("rec"):
+        raise HTTPException(status_code=422, detail="无效的个人记录 ID")
+    try:
+        shared_record, created = local_records.publish_shared_record(
+            user["user_id"], record_id
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"上传共享总表失败：{exc}") from exc
+    return {
+        "success": True,
+        "created": created,
+        "record": shared_record,
+        "message": "已上传到共享总表" if created else "共享总表中已存在相同记录",
+    }
+
+
+@router.post("/shared/records/{shared_id}/copy")
+def copy_shared_to_personal(
+    shared_id: str,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    if not shared_id.startswith("shr"):
+        raise HTTPException(status_code=422, detail="无效的共享记录 ID")
+    try:
+        record_id, created = local_records.copy_shared_record(
+            user["user_id"], shared_id
+        )
+        data = local_records.get_dashboard_data(user["user_id"])
+        state.set_cache(user["user_id"], data)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"添加到个人总表失败：{exc}") from exc
+    return {
+        "success": True,
+        "created": created,
+        "record_id": record_id,
+        "message": "已添加到个人总表" if created else "个人总表中已存在该记录",
+        "dashboard": data,
+    }
+
+
+@router.delete("/shared/records/{shared_id}")
+@router.post("/shared/records/{shared_id}/delete")
+def remove_shared_record(
+    shared_id: str,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="普通用户无权删除共享总表记录")
+    if not shared_id.startswith("shr"):
+        raise HTTPException(status_code=422, detail="无效的共享记录 ID")
+    try:
+        if not local_records.delete_shared_record(shared_id):
+            raise HTTPException(status_code=404, detail="未找到对应的共享记录")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"删除共享记录失败：{exc}") from exc
+    return {"success": True, "message": "共享记录已删除"}
+
+
 @router.put("/records/{record_id}")
+@router.post("/records/{record_id}/update")
 def edit_application(
     record_id: str,
     record: ApplicationRecord,
@@ -194,6 +396,7 @@ def edit_application(
 
 
 @router.delete("/records/{record_id}")
+@router.post("/records/{record_id}/remove")
 def remove_application(
     record_id: str,
     user: dict = Depends(auth_module.get_current_user),
@@ -217,6 +420,7 @@ def remove_application(
 
 
 @router.delete("/records/{record_id}/permanent")
+@router.post("/records/{record_id}/permanent-delete")
 def permanently_delete_record(
     record_id: str,
     user: dict = Depends(auth_module.get_current_user),
@@ -236,6 +440,7 @@ def permanently_delete_record(
 
 
 @router.put("/records/{record_id}/master")
+@router.post("/records/{record_id}/master/update")
 def edit_total_record(
     record_id: str,
     record: TotalRecordUpdate,
@@ -243,25 +448,12 @@ def edit_total_record(
 ):
     if not record_id.startswith("rec"):
         raise HTTPException(status_code=422, detail="无效的本地记录 ID")
-    if not record.company.strip() or not record.job.strip():
-        raise HTTPException(status_code=422, detail="公司和目标岗位不能为空")
-    china_tz = timezone(timedelta(hours=8))
-    deadline = (
-        int(datetime.combine(record.deadline, time.min, china_tz).timestamp() * 1000)
-        if record.deadline else None
-    )
-    url = record.url.strip()
-    fields = {
-        "公司名称": record.company.strip(),
-        "秋招岗位": record.job.strip(),
-        "城市": record.city.strip(),
-        "批次": record.batch,
-        "进展": [record.progress],
-        "投递截止时间": deadline,
-        "投递链接": {"link": url, "text": url} if url else None,
-    }
+    if not record.company.strip():
+        raise HTTPException(status_code=422, detail="公司不能为空")
     try:
-        if not local_records.update_record(user["user_id"], record_id, fields):
+        if not local_records.update_record(
+            user["user_id"], record_id, _total_record_fields(record)
+        ):
             raise HTTPException(status_code=404, detail="未找到对应的本地记录")
         data = local_records.get_dashboard_data(user["user_id"])
         state.set_cache(user["user_id"], data)
@@ -395,6 +587,7 @@ def list_local_events(user: dict = Depends(auth_module.get_current_user)):
 
 
 @router.delete("/calendar/local-event/{event_id}")
+@router.post("/calendar/local-event/{event_id}/delete")
 def delete_local_event(
     event_id: str,
     user: dict = Depends(auth_module.get_current_user),
@@ -411,6 +604,7 @@ class CalendarEventDelete(BaseModel):
 
 
 @router.delete("/calendar/event")
+@router.post("/calendar/event/delete")
 def delete_calendar_event(
     body: CalendarEventDelete,
     user: dict = Depends(auth_module.get_current_user),

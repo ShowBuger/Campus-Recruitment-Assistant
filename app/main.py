@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import bus
-from app.routers import dashboard, status, config, resume, ai, auth, admin
+from app.routers import dashboard, status, config, resume, ai, auth, admin, chat
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 PROJECT_DIR = os.path.join(os.path.dirname(__file__), "..")
@@ -31,6 +31,7 @@ app.include_router(status.router)
 app.include_router(config.router)
 app.include_router(resume.router)
 app.include_router(ai.router)
+app.include_router(chat.router)
 
 
 @app.get("/")

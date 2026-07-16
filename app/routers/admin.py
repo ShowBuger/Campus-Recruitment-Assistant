@@ -36,6 +36,7 @@ class AdminUpdate(BaseModel):
 class NotificationCreate(BaseModel):
     title: str
     content: str
+    request_id: str = ""
 
     @field_validator("title")
     @classmethod
@@ -53,6 +54,14 @@ class NotificationCreate(BaseModel):
             raise ValueError("通知内容需为 1-5000 个字符")
         return value
 
+    @field_validator("request_id")
+    @classmethod
+    def validate_request_id(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) > 100:
+            raise ValueError("请求 ID 不能超过 100 个字符")
+        return value
+
 
 class NotificationRead(BaseModel):
     ids: list[int]
@@ -63,11 +72,31 @@ def get_users(_: dict = Depends(require_root)):
     users = database.list_users()
     for user in users:
         user["is_admin"] = bool(user["is_admin"])
+        user["is_online"] = bool(user["is_online"])
         user["is_root"] = user["username"] == "root"
     return {"success": True, "users": users}
 
 
+@router.get("/admin/invite-codes")
+def get_invite_codes(_: dict = Depends(require_root)):
+    return {"success": True, "invite_codes": database.list_invite_codes()}
+
+
+@router.post("/admin/invite-codes")
+def generate_invite_code(user: dict = Depends(require_root)):
+    invite = database.create_invite_code(user["user_id"])
+    return {"success": True, "message": "邀请码已生成", "invite_code": invite}
+
+
+@router.post("/admin/invite-codes/{code}/revoke")
+def revoke_invite_code(code: str, _: dict = Depends(require_root)):
+    if not database.revoke_invite_code(code):
+        raise HTTPException(status_code=409, detail="邀请码不存在、已使用或已作废")
+    return {"success": True, "message": "邀请码已作废"}
+
+
 @router.patch("/admin/users/{user_id}/password")
+@router.post("/admin/users/{user_id}/password/update")
 def change_password(
     user_id: int,
     body: PasswordUpdate,
@@ -79,6 +108,7 @@ def change_password(
 
 
 @router.patch("/admin/users/{user_id}/admin")
+@router.post("/admin/users/{user_id}/admin/update")
 def change_admin(
     user_id: int,
     body: AdminUpdate,
@@ -93,8 +123,7 @@ def change_admin(
     return {"success": True, "message": "管理员权限已更新"}
 
 
-@router.delete("/admin/users/{user_id}")
-def remove_user(user_id: int, _: dict = Depends(require_root)):
+def _remove_user(user_id: int) -> dict:
     target = database.get_user_by_id(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
@@ -110,12 +139,28 @@ def remove_user(user_id: int, _: dict = Depends(require_root)):
     return {"success": True, "message": "用户账号及本地数据已删除"}
 
 
+@router.delete("/admin/users/{user_id}")
+def remove_user(user_id: int, _: dict = Depends(require_root)):
+    return _remove_user(user_id)
+
+
+@router.post("/admin/users/{user_id}/delete")
+def remove_user_compat(user_id: int, _: dict = Depends(require_root)):
+    """兼容部分入口代理不转发 DELETE 方法的部署环境。"""
+    return _remove_user(user_id)
+
+
 @router.post("/admin/notifications")
 def publish_notification(
     body: NotificationCreate,
     user: dict = Depends(require_root),
 ):
-    notification = database.create_notification(body.title, body.content, user["user_id"])
+    notification = database.create_notification(
+        body.title,
+        body.content,
+        user["user_id"],
+        body.request_id,
+    )
     return {"success": True, "message": "通知已发布", "notification": notification}
 
 

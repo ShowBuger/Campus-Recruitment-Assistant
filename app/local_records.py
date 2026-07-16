@@ -1,5 +1,6 @@
 """Per-user local job records and dashboard aggregation."""
 import json
+import hashlib
 import uuid
 from collections import Counter
 from datetime import datetime
@@ -114,6 +115,209 @@ def create_record(user_id: int, fields: dict) -> dict:
         )
         db.commit()
     return {"record_id": record_id}
+
+
+def create_records(user_id: int, records: list[dict]) -> list[str]:
+    """Atomically insert several records and return their generated IDs."""
+    prepared: list[tuple[list[str], list]] = []
+    record_ids: list[str] = []
+    for fields in records:
+        record_id = "rec" + uuid.uuid4().hex
+        values = {
+            FIELD_COLUMNS[key]: _db_value(key, value)
+            for key, value in fields.items()
+            if key in FIELD_COLUMNS
+        }
+        columns = ["id", "user_id", *values.keys()]
+        params = [record_id, user_id, *values.values()]
+        prepared.append((columns, params))
+        record_ids.append(record_id)
+
+    with database._write_lock:
+        db = database.get_db()
+        try:
+            for columns, params in prepared:
+                placeholders = ", ".join("?" for _ in columns)
+                db.execute(
+                    f"INSERT INTO job_records ({', '.join(columns)}) VALUES ({placeholders})",
+                    params,
+                )
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+    return record_ids
+
+
+def _shared_values(fields: dict) -> dict:
+    company_types = fields.get("公司/行业类型") or []
+    company_type = company_types[0] if isinstance(company_types, list) and company_types else company_types
+    directions = list(dict.fromkeys(
+        str(item).strip() for item in (fields.get("嵌入式方向") or []) if str(item).strip()
+    ))
+    return {
+        "company": str(fields.get("公司名称") or "").strip(),
+        "company_type": str(company_type or "").strip(),
+        "directions": directions,
+        "job": str(fields.get("秋招岗位") or "").strip(),
+        "city": str(fields.get("城市") or "").strip(),
+        "batch": str(fields.get("批次") or "秋招").strip() or "秋招",
+        "url": _url_value(fields.get("投递链接")).strip(),
+        "deadline": fields.get("投递截止时间"),
+    }
+
+
+def shared_missing_fields(fields: dict) -> list[str]:
+    values = _shared_values(fields)
+    required = [
+        ("公司名称", values["company"]),
+        ("公司类型", values["company_type"]),
+        ("岗位", values["job"]),
+        ("方向", values["directions"]),
+        ("入口", values["url"]),
+    ]
+    return [label for label, value in required if not value]
+
+
+def publish_shared_record(user_id: int, record_id: str) -> tuple[dict, bool]:
+    record = get_record(user_id, record_id)
+    if not record:
+        raise LookupError("未找到对应的个人总表记录")
+    fields = record["fields"]
+    missing = shared_missing_fields(fields)
+    if missing:
+        raise ValueError("缺少共享必填项：" + "、".join(missing))
+    return create_shared_record(user_id, fields)
+
+
+def create_shared_record(user_id: int, fields: dict) -> tuple[dict, bool]:
+    missing = shared_missing_fields(fields)
+    if missing:
+        raise ValueError("缺少共享必填项：" + "、".join(missing))
+    values = _shared_values(fields)
+    canonical = json.dumps({
+        "company": values["company"].casefold(),
+        "company_type": values["company_type"].casefold(),
+        "job": values["job"].casefold(),
+        "directions": sorted(item.casefold() for item in values["directions"]),
+        "url": values["url"].casefold(),
+    }, ensure_ascii=False, sort_keys=True)
+    fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    shared_id = "shr" + uuid.uuid4().hex
+    with database._write_lock:
+        db = database.get_db()
+        cur = db.execute(
+            """INSERT OR IGNORE INTO shared_job_records
+               (id, company, company_type, directions, job, city, batch, url,
+                deadline, fingerprint, created_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                shared_id, values["company"], values["company_type"],
+                json.dumps(values["directions"], ensure_ascii=False), values["job"],
+                values["city"], values["batch"], values["url"], values["deadline"],
+                fingerprint, user_id,
+            ),
+        )
+        created = cur.rowcount > 0
+        db.commit()
+        row = db.execute(
+            """SELECT s.*, u.username AS contributor
+               FROM shared_job_records s LEFT JOIN users u ON u.id = s.created_by
+               WHERE s.fingerprint = ?""",
+            (fingerprint,),
+        ).fetchone()
+    return _serialize_shared(dict(row), False), created
+
+
+def _serialize_shared(row: dict, is_added: bool) -> dict:
+    return {
+        "record_id": row["id"],
+        "company": row["company"],
+        "type": row["company_type"],
+        "dir": _json_list(row["directions"]),
+        "job": row["job"],
+        "city": row["city"],
+        "batch": row["batch"],
+        "url": row["url"],
+        "deadline": row["deadline"],
+        "priority": "",
+        "progress": [],
+        "contributor": row.get("contributor") or "已注销用户",
+        "created_at": row.get("created_at") or "",
+        "is_added": bool(is_added),
+    }
+
+
+def list_shared_records(user_id: int) -> list[dict]:
+    db = database.get_db()
+    rows = db.execute(
+        """SELECT s.*, u.username AS contributor,
+                  EXISTS(
+                      SELECT 1 FROM job_records j
+                      WHERE j.user_id = ? AND j.source_shared_id = s.id
+                  ) AS is_added
+           FROM shared_job_records s
+           LEFT JOIN users u ON u.id = s.created_by
+           ORDER BY s.created_at DESC, s.id DESC""",
+        (user_id,),
+    ).fetchall()
+    return [_serialize_shared(dict(row), bool(row["is_added"])) for row in rows]
+
+
+def copy_shared_record(user_id: int, shared_id: str) -> tuple[str, bool]:
+    with database._write_lock:
+        db = database.get_db()
+        shared = db.execute(
+            "SELECT * FROM shared_job_records WHERE id = ?", (shared_id,)
+        ).fetchone()
+        if not shared:
+            raise LookupError("未找到对应的共享记录")
+        existing = db.execute(
+            """SELECT id, source_shared_id FROM job_records
+               WHERE user_id = ? AND (
+                   source_shared_id = ? OR
+                   (company = ? AND company_type = ? AND directions = ? AND job = ? AND url = ?)
+               ) LIMIT 1""",
+            (
+                user_id, shared_id, shared["company"], shared["company_type"],
+                shared["directions"], shared["job"], shared["url"],
+            ),
+        ).fetchone()
+        if existing:
+            if not existing["source_shared_id"]:
+                db.execute(
+                    "UPDATE job_records SET source_shared_id = ? WHERE id = ?",
+                    (shared_id, existing["id"]),
+                )
+                db.commit()
+            return existing["id"], False
+        record_id = "rec" + uuid.uuid4().hex
+        db.execute(
+            """INSERT INTO job_records
+               (id, user_id, company, company_type, directions, progress, job,
+                city, batch, url, deadline, source_shared_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                record_id, user_id, shared["company"], shared["company_type"],
+                shared["directions"], json.dumps(["未投递"], ensure_ascii=False),
+                shared["job"], shared["city"], shared["batch"], shared["url"],
+                shared["deadline"], shared_id,
+            ),
+        )
+        db.commit()
+        return record_id, True
+
+
+def delete_shared_record(shared_id: str) -> bool:
+    with database._write_lock:
+        db = database.get_db()
+        db.execute(
+            "UPDATE job_records SET source_shared_id = NULL WHERE source_shared_id = ?",
+            (shared_id,),
+        )
+        cur = db.execute("DELETE FROM shared_job_records WHERE id = ?", (shared_id,))
+        db.commit()
+        return cur.rowcount > 0
 
 
 def update_record(user_id: int, record_id: str, fields: dict) -> bool:

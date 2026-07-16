@@ -1,6 +1,7 @@
 """SQLite 数据库：用户账号、独立配置、本地日程持久化。"""
 import sqlite3
 import os
+import secrets
 import threading
 from pathlib import Path
 
@@ -42,6 +43,56 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS invite_codes (
+            code TEXT PRIMARY KEY,
+            created_by INTEGER,
+            created_at TEXT DEFAULT (datetime('now')),
+            used_by INTEGER,
+            used_at TEXT,
+            revoked INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY (used_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id INTEGER NOT NULL,
+            receiver_id INTEGER NOT NULL,
+            kind TEXT NOT NULL CHECK(kind IN ('text', 'image', 'job')),
+            content TEXT NOT NULL DEFAULT '',
+            payload TEXT NOT NULL DEFAULT '{}',
+            image_path TEXT NOT NULL DEFAULT '',
+            image_mime TEXT NOT NULL DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_chat_messages_pair
+            ON chat_messages(sender_id, receiver_id, id);
+        CREATE INDEX IF NOT EXISTS idx_chat_messages_receiver
+            ON chat_messages(receiver_id, id);
+
+        CREATE TABLE IF NOT EXISTS chat_reads (
+            user_id INTEGER NOT NULL,
+            peer_id INTEGER NOT NULL,
+            last_read_id INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (user_id, peer_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (peer_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS chat_job_copies (
+            message_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            record_id TEXT NOT NULL,
+            copied_at TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (message_id, user_id),
+            FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (record_id) REFERENCES job_records(id) ON DELETE CASCADE
+        );
+
         CREATE TABLE IF NOT EXISTS local_events (
             id TEXT PRIMARY KEY,
             user_id INTEGER NOT NULL,
@@ -80,6 +131,25 @@ def _init_tables(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_job_records_user
             ON job_records(user_id, created_at);
 
+        CREATE TABLE IF NOT EXISTS shared_job_records (
+            id TEXT PRIMARY KEY,
+            company TEXT NOT NULL,
+            company_type TEXT NOT NULL,
+            directions TEXT NOT NULL,
+            job TEXT NOT NULL,
+            city TEXT NOT NULL DEFAULT '',
+            batch TEXT NOT NULL DEFAULT '秋招',
+            url TEXT NOT NULL,
+            deadline INTEGER,
+            fingerprint TEXT NOT NULL UNIQUE,
+            created_by INTEGER,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_shared_job_records_created
+            ON shared_job_records(created_at DESC);
+
         CREATE TABLE IF NOT EXISTS notifications (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
@@ -101,6 +171,27 @@ def _init_tables(conn: sqlite3.Connection) -> None:
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
     if "is_admin" not in columns:
         conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+    if "last_seen_at" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN last_seen_at TEXT")
+    record_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(job_records)")
+    }
+    if "source_shared_id" not in record_columns:
+        conn.execute("ALTER TABLE job_records ADD COLUMN source_shared_id TEXT")
+    conn.execute(
+        """CREATE UNIQUE INDEX IF NOT EXISTS idx_job_records_shared_source
+           ON job_records(user_id, source_shared_id)
+           WHERE source_shared_id IS NOT NULL"""
+    )
+    notification_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(notifications)")
+    }
+    if "request_id" not in notification_columns:
+        conn.execute("ALTER TABLE notifications ADD COLUMN request_id TEXT")
+    conn.execute(
+        """CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_request_id
+           ON notifications(request_id) WHERE request_id IS NOT NULL"""
+    )
     conn.execute("UPDATE users SET is_admin = 1 WHERE username = 'root'")
     conn.commit()
 
@@ -125,6 +216,99 @@ def create_user(username: str, password_hash: str) -> dict | None:
             return None  # 用户名已存在
 
 
+def create_user_with_invite(
+    username: str, password_hash: str, invite_code: str
+) -> tuple[dict | None, str]:
+    """Atomically consume a one-time invite and create its user."""
+    code = invite_code.strip().upper()
+    with _write_lock:
+        db = get_db()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            invite = db.execute(
+                """SELECT code FROM invite_codes
+                   WHERE code = ? AND revoked = 0 AND used_at IS NULL""",
+                (code,),
+            ).fetchone()
+            if not invite:
+                db.rollback()
+                return None, "invalid_invite"
+            cur = db.execute(
+                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                (username, password_hash),
+            )
+            user_id = cur.lastrowid
+            db.execute("INSERT INTO user_configs (user_id) VALUES (?)", (user_id,))
+            consumed = db.execute(
+                """UPDATE invite_codes
+                   SET used_by = ?, used_at = datetime('now')
+                   WHERE code = ? AND revoked = 0 AND used_at IS NULL""",
+                (user_id, code),
+            )
+            if consumed.rowcount != 1:
+                db.rollback()
+                return None, "invalid_invite"
+            db.commit()
+            return {"id": user_id, "username": username}, "created"
+        except sqlite3.IntegrityError:
+            db.rollback()
+            return None, "username_exists"
+        except Exception:
+            db.rollback()
+            raise
+
+
+def create_invite_code(created_by: int) -> dict:
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    with _write_lock:
+        db = get_db()
+        for _ in range(10):
+            left = "".join(secrets.choice(alphabet) for _ in range(4))
+            right = "".join(secrets.choice(alphabet) for _ in range(4))
+            code = f"CRA-{left}-{right}"
+            try:
+                db.execute(
+                    "INSERT INTO invite_codes (code, created_by) VALUES (?, ?)",
+                    (code, created_by),
+                )
+                db.commit()
+                row = db.execute(
+                    "SELECT code, created_at FROM invite_codes WHERE code = ?",
+                    (code,),
+                ).fetchone()
+                return dict(row)
+            except sqlite3.IntegrityError:
+                db.rollback()
+        raise RuntimeError("邀请码生成冲突，请重试")
+
+
+def list_invite_codes(limit: int = 100) -> list[dict]:
+    db = get_db()
+    rows = db.execute(
+        """SELECT i.code, i.created_at, i.used_at, i.revoked,
+                  creator.username AS created_by_name,
+                  consumer.username AS used_by_name
+           FROM invite_codes i
+           LEFT JOIN users creator ON creator.id = i.created_by
+           LEFT JOIN users consumer ON consumer.id = i.used_by
+           ORDER BY i.created_at DESC, i.code DESC LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def revoke_invite_code(code: str) -> bool:
+    with _write_lock:
+        db = get_db()
+        cur = db.execute(
+            """UPDATE invite_codes SET revoked = 1
+               WHERE code = ? AND used_at IS NULL AND revoked = 0""",
+            (code.strip().upper(),),
+        )
+        db.commit()
+        return cur.rowcount > 0
+
+
 def get_user_by_username(username: str) -> dict | None:
     db = get_db()
     row = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
@@ -140,9 +324,27 @@ def get_user_by_id(user_id: int) -> dict | None:
 def list_users() -> list[dict]:
     db = get_db()
     rows = db.execute(
-        "SELECT id, username, is_admin, created_at FROM users ORDER BY id"
+        """SELECT id, username, is_admin, created_at, last_seen_at,
+                  CASE WHEN last_seen_at >= datetime('now', '-2 minutes')
+                       THEN 1 ELSE 0 END AS is_online
+           FROM users ORDER BY id"""
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def touch_user_last_seen(user_id: int) -> None:
+    """Record authenticated activity, throttled to at most one write per 30 seconds."""
+    with _write_lock:
+        db = get_db()
+        db.execute(
+            """UPDATE users SET last_seen_at = datetime('now')
+               WHERE id = ? AND (
+                   last_seen_at IS NULL OR
+                   last_seen_at < datetime('now', '-30 seconds')
+               )""",
+            (user_id,),
+        )
+        db.commit()
 
 
 def update_user_password(user_id: int, password_hash: str) -> bool:
@@ -179,18 +381,32 @@ def delete_user(user_id: int) -> bool:
 
 # ── 全局通知 ─────────────────────────────────────────
 
-def create_notification(title: str, content: str, created_by: int) -> dict:
+def create_notification(
+    title: str,
+    content: str,
+    created_by: int,
+    request_id: str = "",
+) -> dict:
+    request_id = request_id.strip() or None
     with _write_lock:
         db = get_db()
-        cur = db.execute(
-            "INSERT INTO notifications (title, content, created_by) VALUES (?, ?, ?)",
-            (title, content, created_by),
+        db.execute(
+            """INSERT OR IGNORE INTO notifications
+               (title, content, created_by, request_id) VALUES (?, ?, ?, ?)""",
+            (title, content, created_by, request_id),
         )
         db.commit()
-        row = db.execute(
-            "SELECT id, title, content, created_at FROM notifications WHERE id = ?",
-            (cur.lastrowid,),
-        ).fetchone()
+        if request_id:
+            row = db.execute(
+                """SELECT id, title, content, created_at FROM notifications
+                   WHERE request_id = ?""",
+                (request_id,),
+            ).fetchone()
+        else:
+            row = db.execute(
+                """SELECT id, title, content, created_at FROM notifications
+                   WHERE id = last_insert_rowid()"""
+            ).fetchone()
         return dict(row)
 
 

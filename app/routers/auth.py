@@ -12,6 +12,7 @@ USERNAME_PATTERN = r"^[a-zA-Z0-9_一-鿿]{2,20}$"
 class RegisterBody(BaseModel):
     username: str
     password: str
+    invite_code: str
 
     @field_validator("username")
     @classmethod
@@ -29,6 +30,14 @@ class RegisterBody(BaseModel):
             raise ValueError("密码需 4-100 个字符")
         return v
 
+    @field_validator("invite_code")
+    @classmethod
+    def check_invite_code(cls, v: str) -> str:
+        v = v.strip().upper()
+        if not v or len(v) > 32:
+            raise ValueError("请填写有效邀请码")
+        return v
+
 
 class LoginBody(BaseModel):
     username: str
@@ -38,11 +47,14 @@ class LoginBody(BaseModel):
 @router.post("/register")
 def register(body: RegisterBody):
     username = body.username.strip()
-    existing = database.get_user_by_username(username)
-    if existing:
-        raise HTTPException(status_code=409, detail="用户名已存在")
     pw_hash = auth_module.hash_password(body.password)
-    user = database.create_user(username, pw_hash)
+    user, status = database.create_user_with_invite(
+        username, pw_hash, body.invite_code
+    )
+    if status == "username_exists":
+        raise HTTPException(status_code=409, detail="用户名已存在")
+    if status == "invalid_invite":
+        raise HTTPException(status_code=422, detail="邀请码无效、已使用或已作废")
     if not user:
         raise HTTPException(status_code=500, detail="注册失败，请重试")
     token = auth_module.create_token(user["id"], user["username"])
