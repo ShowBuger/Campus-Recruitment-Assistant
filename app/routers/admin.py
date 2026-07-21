@@ -18,6 +18,12 @@ def require_root(user: dict = Depends(auth_module.get_current_user)) -> dict:
     return user
 
 
+def require_admin(user: dict = Depends(auth_module.get_current_user)) -> dict:
+    if not (user.get("is_root") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="仅管理员可以执行此操作")
+    return user
+
+
 class PasswordUpdate(BaseModel):
     password: str
 
@@ -78,7 +84,7 @@ def get_users(_: dict = Depends(require_root)):
 
 
 @router.get("/admin/invite-codes")
-def get_invite_codes(_: dict = Depends(require_root)):
+def get_invite_codes(_: dict = Depends(require_admin)):
     return {"success": True, "invite_codes": database.list_invite_codes()}
 
 

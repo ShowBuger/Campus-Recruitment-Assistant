@@ -1,15 +1,19 @@
 """看板数据接口：per-user SQLite 职位记录与本地日程。"""
+import re
+import time as _time_module
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
+import requests
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl
 
-from app import auth as auth_module, database, local_records, record_excel, state
+from app import auth as auth_module, bus, database, feishu_sync, local_records, record_excel, state
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -70,6 +74,16 @@ class TotalRecordUpdate(BaseModel):
     company_type: str = ""
     deadline: date | None = None
     url: str = ""
+    priority: Literal["⭐⭐⭐⭐⭐", "⭐⭐⭐⭐", "⭐⭐⭐", "⭐⭐", "⭐"] = "⭐⭐⭐"
+    note: str = Field(default="", max_length=5000)
+    job_jd: str = Field(default="", max_length=10000)
+    apply_date: date | None = None
+    exam_date: date | None = None
+    interview1: date | None = None
+    interview2: date | None = None
+    interview3: date | None = None
+    warm: date | None = None
+    result_date: date | None = None
 
 
 class CalendarEventCreate(BaseModel):
@@ -81,6 +95,10 @@ class CalendarEventCreate(BaseModel):
 class LocalEventCreate(BaseModel):
     date: date
     label: str
+
+
+class FeishuSyncRequest(BaseModel):
+    url: str = Field(min_length=10, max_length=2000)
 
 
 # ── Helpers ─────────────────────────────────────────────
@@ -114,10 +132,12 @@ def _application_fields(record: ApplicationRecord) -> dict:
 
 def _total_record_fields(record: TotalRecordUpdate) -> dict:
     china_tz = timezone(timedelta(hours=8))
-    deadline = (
-        int(datetime.combine(record.deadline, time.min, china_tz).timestamp() * 1000)
-        if record.deadline else None
-    )
+    def date_ms(value: date | None):
+        return (
+            int(datetime.combine(value, time.min, china_tz).timestamp() * 1000)
+            if value else None
+        )
+
     url = record.url.strip()
     directions = list(dict.fromkeys(item.strip() for item in record.directions if item.strip()))
     return {
@@ -128,8 +148,18 @@ def _total_record_fields(record: TotalRecordUpdate) -> dict:
         "进展": [record.progress],
         "嵌入式方向": directions,
         "公司/行业类型": record.company_type.strip(),
-        "投递截止时间": deadline,
+        "投递截止时间": date_ms(record.deadline),
         "投递链接": {"link": url, "text": url} if url else None,
+        "优先级": record.priority,
+        "备注": record.note.strip(),
+        "岗位JD": record.job_jd.strip(),
+        "投递时间": date_ms(record.apply_date),
+        "机考时间": date_ms(record.exam_date),
+        "一面": date_ms(record.interview1),
+        "二面": date_ms(record.interview2),
+        "三面": date_ms(record.interview3),
+        "保温": date_ms(record.warm),
+        "结果": date_ms(record.result_date),
     }
 
 
@@ -264,6 +294,379 @@ async def import_total_records(
         "imported_count": len(records),
         "message": f"成功导入 {len(records)} 条总表记录",
         "dashboard": data,
+    }
+
+
+@router.post("/records/feishu-sync")
+def sync_feishu_records(
+    body: FeishuSyncRequest,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    if not user.get("is_root"):
+        raise HTTPException(status_code=403, detail="仅 root 用户可以同步飞书表格")
+    try:
+        source_rows = feishu_sync.read_table(body.url)
+        existing = local_records.list_records(user["user_id"])
+        additions, skipped, invalid = feishu_sync.prepare_sync(source_rows, existing)
+        if additions:
+            local_records.create_records(user["user_id"], additions)
+        data = local_records.get_dashboard_data(user["user_id"])
+        state.set_cache(user["user_id"], data)
+    except feishu_sync.FeishuSyncError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"飞书同步失败：{exc}") from exc
+    return {
+        "success": True,
+        "source_count": len(additions) + len(skipped),
+        "scanned_count": len(source_rows),
+        "added_count": len(additions),
+        "skipped_count": len(skipped),
+        "invalid_count": invalid,
+        "skipped": skipped[:50],
+        "message": f"同步完成：新增 {len(additions)} 条，跳过重复 {len(skipped)} 条",
+        "dashboard": data,
+    }
+
+
+# ── GiveMeOC 同步 ──────────────────────────────────────
+
+GIVEMEOC_LIST_URL = "https://www.givemeoc.com/wp-json/givemeoc/v1/companies"
+GIVEMEOC_DETAIL_URL = "https://www.givemeoc.com/wp-json/givemeoc/v1/companies/{company_id}"
+GIVEMEOC_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Referer": "https://www.givemeoc.com/",
+}
+GIVEMEOC_MAX_WORKERS = 8
+
+DATE_PATTERN = re.compile(r"(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})")
+
+# In-memory sync progress store
+_sync_progress: "dict[str, dict]" = {}
+
+def _parse_givemeoc_deadline(deadline_str: str) -> int | None:
+    """Convert givemeoc deadline string to millisecond timestamp."""
+    if not deadline_str:
+        return None
+    text = str(deadline_str).strip()
+    match = DATE_PATTERN.search(text)
+    if not match:
+        return None  # "招满为止", "长期有效" etc → no deadline
+    try:
+        parsed = datetime(int(match[1]), int(match[2]), int(match[3]))
+        china_tz = timezone(timedelta(hours=8))
+        return int(datetime.combine(parsed.date(), time.min, china_tz).timestamp() * 1000)
+    except ValueError:
+        return None
+
+
+def _fetch_givemeoc_page(page: int) -> list[dict]:
+    """Fetch one page from givemeoc list API."""
+    resp = requests.get(
+        GIVEMEOC_LIST_URL,
+        params={"page": page, "per_page": 100, "order_by": "update_time", "order": "desc"},
+        headers=GIVEMEOC_HEADERS,
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json().get("data", [])
+
+
+def _fetch_givemeoc_detail(company_id: int) -> dict | None:
+    """Fetch single company detail from givemeoc."""
+    try:
+        url = GIVEMEOC_DETAIL_URL.format(company_id=company_id)
+        resp = requests.get(url, headers=GIVEMEOC_HEADERS, timeout=30)
+        if resp.status_code == 200:
+            return resp.json()
+        return None
+    except Exception:
+        return None
+
+
+def _to_shared_fields(givemeoc_detail: dict) -> dict:
+    """Transform givemeoc detail dict to shared record fields dict."""
+    locations = givemeoc_detail.get("locations") or []
+    city = "; ".join(locations) if isinstance(locations, list) else str(locations or "")
+
+    positions = givemeoc_detail.get("positions") or []
+    job = "; ".join(positions) if isinstance(positions, list) else str(positions or "")
+
+    related = givemeoc_detail.get("related_links") or []
+    if isinstance(related, list) and related:
+        url = related[0]
+    elif isinstance(related, str) and related:
+        url = related
+    else:
+        url = ""
+
+    company_type_val = givemeoc_detail.get("type") or "未分类"
+
+    directions = ["—"]
+
+    batch = givemeoc_detail.get("recruitment_type", "秋招").strip() or "秋招"
+    if "提前批" in batch:
+        batch = "提前批"
+
+    return {
+        "公司名称": givemeoc_detail.get("name", "").strip(),
+        "秋招岗位": job.strip(),
+        "城市": city.strip(),
+        "批次": batch,
+        "嵌入式方向": directions,
+        "公司/行业类型": (givemeoc_detail.get("industry") or "未分类").strip(),
+        "投递链接": url.strip(),
+        "投递截止时间": _parse_givemeoc_deadline(givemeoc_detail.get("deadline")),
+    }
+
+
+@router.post("/sync-from-givemeoc")
+def sync_from_givemeoc(user: dict = Depends(auth_module.get_current_user)):
+    """Root-only: start sync from givemeoc.com in background. Poll /progress for status."""
+    if not user.get("is_root"):
+        raise HTTPException(status_code=403, detail="仅 root 用户可以同步 GiveMeOC 数据")
+
+    import threading
+
+    sync_id = uuid.uuid4().hex[:12]
+    _sync_progress[sync_id] = {
+        "phase": "scanning",
+        "found": 0,
+        "done": 0,
+        "total": 0,
+        "added": 0,
+        "skipped": 0,
+        "errors": 0,
+        "finished": False,
+        "message": "正在扫描 givemeoc…",
+    }
+
+    def _run_sync():
+        pid = _sync_progress[sync_id]
+        bus.log("GiveMeOC 同步已启动", channel="sync", level="info")
+        try:
+            # Phase 1: collect IDs
+            ids: list[int] = []
+            page = 1
+            while True:
+                try:
+                    rows = _fetch_givemeoc_page(page)
+                except Exception:
+                    break
+                if not rows:
+                    break
+                for row in rows:
+                    target = str(row.get("target_candidates") or "")
+                    rec_type = str(row.get("recruitment_type") or "")
+                    if "2027届" in target and "秋招" in rec_type and "春招" not in rec_type and "实习" not in rec_type:
+                        ids.append(row["id"])
+                page += 1
+                pid["found"] = len(ids)
+                if page % 10 == 0:
+                    _time_module.sleep(0.2)
+
+            if not ids:
+                pid["finished"] = True
+                pid["message"] = "未找到匹配 2027届 的岗位"
+                return
+
+            pid["phase"] = "syncing"
+            pid["total"] = len(ids)
+            pid["message"] = f"找到 {len(ids)} 条，正在获取详情…"
+
+            # Phase 2: fetch details and insert
+            def _sync_one(cid: int) -> tuple[int, int, int]:
+                detail = _fetch_givemeoc_detail(cid)
+                if not detail:
+                    return 0, 0, 1
+                fields = _to_shared_fields(detail)
+                if not fields["公司名称"] or not fields["秋招岗位"] or not fields["投递链接"]:
+                    return 0, 0, 1
+                missing = local_records.shared_missing_fields(fields)
+                if missing:
+                    return 0, 0, 1
+                try:
+                    _, created = local_records.create_shared_record(user["user_id"], fields)
+                    return (1, 0, 0) if created else (0, 1, 0)
+                except Exception:
+                    return 0, 0, 1
+
+            with ThreadPoolExecutor(max_workers=GIVEMEOC_MAX_WORKERS) as executor:
+                futures_map = {executor.submit(_sync_one, cid): cid for cid in ids}
+                for future in as_completed(futures_map):
+                    a, s, e = future.result()
+                    pid["added"] += a
+                    pid["skipped"] += s
+                    pid["errors"] += e
+                    pid["done"] += 1
+                    if pid["done"] % 50 == 0:
+                        _time_module.sleep(0.15)
+
+            pid["finished"] = True
+            pid["message"] = f"同步完成：新增 {pid['added']} 条，跳过重复 {pid['skipped']} 条"
+            if pid["errors"]:
+                pid["message"] += f"，失败 {pid['errors']} 条"
+            bus.log(
+                f"GiveMeOC 同步完成：新增 {pid['added']} / 跳过 {pid['skipped']} / 失败 {pid['errors']}",
+                channel="sync", level="success" if pid["errors"] == 0 else "warn",
+            )
+        except Exception as exc:
+            pid["finished"] = True
+            pid["message"] = f"同步异常：{exc}"
+            bus.log(f"GiveMeOC 同步异常：{exc}", channel="sync", level="error")
+
+    threading.Thread(target=_run_sync, daemon=True).start()
+    return {"success": True, "sync_id": sync_id, "message": "同步已启动"}
+
+
+@router.get("/sync-from-givemeoc/progress")
+def sync_from_givemeoc_progress(
+    sync_id: str,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    """Poll sync progress."""
+    if not (user.get("is_root") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="仅管理员可以查看同步进度")
+    progress = _sync_progress.get(sync_id)
+    if not progress:
+        raise HTTPException(status_code=404, detail="未找到同步任务")
+    return {"success": True, **progress}
+
+
+# ── Auto-sync scheduler ──────────────────────────────
+
+_scheduler_started = False
+
+
+def _sync_scheduler_loop():
+    """Background thread: check every 60s if auto-sync should fire."""
+    import threading as _thr
+    while True:
+        _time_module.sleep(60)
+        try:
+            enabled = database.get_system_config("sync_enabled") or "0"
+            if enabled != "1":
+                continue
+            sync_time = database.get_system_config("sync_time") or "04:00"
+            now = datetime.now().strftime("%H:%M")
+            if now == sync_time:
+                # Run a full sync
+                sync_id = uuid.uuid4().hex[:12]
+                _sync_progress[sync_id] = {
+                    "phase": "scanning", "found": 0, "done": 0, "total": 0,
+                    "added": 0, "skipped": 0, "errors": 0,
+                    "finished": False, "message": "自动同步中…",
+                }
+                # Reuse the same sync logic inline
+                def _auto_sync():
+                    pid = _sync_progress[sync_id]
+                    bus.log("GiveMeOC 自动同步触发", channel="sync", level="info")
+                    try:
+                        ids = []
+                        page = 1
+                        while True:
+                            try:
+                                rows = _fetch_givemeoc_page(page)
+                            except Exception:
+                                break
+                            if not rows:
+                                break
+                            for row in rows:
+                                target = str(row.get("target_candidates") or "")
+                                rec_type = str(row.get("recruitment_type") or "")
+                                if "2027届" in target and "秋招" in rec_type and "春招" not in rec_type and "实习" not in rec_type:
+                                    ids.append(row["id"])
+                            page += 1
+                            pid["found"] = len(ids)
+                            if page % 10 == 0:
+                                _time_module.sleep(0.2)
+                        if not ids:
+                            pid["finished"] = True
+                            pid["message"] = "自动同步：未找到 2027届 岗位"
+                            return
+                        pid["phase"] = "syncing"
+                        pid["total"] = len(ids)
+                        def _sync_one(cid):
+                            detail = _fetch_givemeoc_detail(cid)
+                            if not detail:
+                                return 0, 0, 1
+                            fields = _to_shared_fields(detail)
+                            if not fields["公司名称"] or not fields["秋招岗位"] or not fields["投递链接"]:
+                                return 0, 0, 1
+                            missing = local_records.shared_missing_fields(fields)
+                            if missing:
+                                return 0, 0, 1
+                            try:
+                                _, created = local_records.create_shared_record(2, fields)
+                                return (1, 0, 0) if created else (0, 1, 0)
+                            except Exception:
+                                return 0, 0, 1
+                        with ThreadPoolExecutor(max_workers=GIVEMEOC_MAX_WORKERS) as executor:
+                            futures_map = {executor.submit(_sync_one, cid): cid for cid in ids}
+                            for future in as_completed(futures_map):
+                                a, s, e = future.result()
+                                pid["added"] += a
+                                pid["skipped"] += s
+                                pid["errors"] += e
+                                pid["done"] += 1
+                        pid["finished"] = True
+                        pid["message"] = f"自动同步完成：新增 {pid['added']} 条，跳过 {pid['skipped']} 条"
+                        bus.log(
+                            f"自动同步完成：新增 {pid['added']} / 跳过 {pid['skipped']} / 失败 {pid['errors']}",
+                            channel="sync", level="success" if pid["errors"] == 0 else "warn",
+                        )
+                    except Exception as exc:
+                        pid["finished"] = True
+                        pid["message"] = f"自动同步异常：{exc}"
+                        bus.log(f"自动同步异常：{exc}", channel="sync", level="error")
+                _thr.Thread(target=_auto_sync, daemon=True).start()
+        except Exception:
+            pass
+
+
+def start_sync_scheduler():
+    global _scheduler_started
+    if _scheduler_started:
+        return
+    _scheduler_started = True
+    import threading as _thr
+    _thr.Thread(target=_sync_scheduler_loop, daemon=True).start()
+
+
+@router.get("/admin/sync-schedule")
+def get_sync_schedule(user: dict = Depends(auth_module.get_current_user)):
+    """Get current auto-sync schedule settings."""
+    if not (user.get("is_root") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="仅管理员可以查看同步计划")
+    return {
+        "success": True,
+        "enabled": (database.get_system_config("sync_enabled") or "0") == "1",
+        "time": database.get_system_config("sync_time") or "04:00",
+    }
+
+
+class SyncScheduleBody(BaseModel):
+    enabled: bool = False
+    time: str = "04:00"
+
+
+@router.post("/admin/sync-schedule")
+def set_sync_schedule(
+    body: SyncScheduleBody,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    """Set auto-sync schedule."""
+    if not user.get("is_root"):
+        raise HTTPException(status_code=403, detail="仅 root 用户可以修改同步计划")
+    if not re.match(r"^\d{2}:\d{2}$", body.time):
+        raise HTTPException(status_code=422, detail="时间格式需为 HH:MM")
+    database.set_system_config("sync_enabled", "1" if body.enabled else "0")
+    database.set_system_config("sync_time", body.time)
+    return {
+        "success": True,
+        "message": f"自动同步{'已启用' if body.enabled else '已禁用'}，时间 {body.time}",
+        "enabled": body.enabled,
+        "time": body.time,
     }
 
 

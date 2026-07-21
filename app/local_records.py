@@ -187,7 +187,17 @@ def publish_shared_record(user_id: int, record_id: str) -> tuple[dict, bool]:
     missing = shared_missing_fields(fields)
     if missing:
         raise ValueError("缺少共享必填项：" + "、".join(missing))
-    return create_shared_record(user_id, fields)
+    shared_record, created = create_shared_record(user_id, fields)
+    with database._write_lock:
+        db = database.get_db()
+        db.execute(
+            """UPDATE job_records SET source_shared_id = ?, updated_at = datetime('now')
+               WHERE id = ? AND user_id = ?""",
+            (shared_record["record_id"], record_id, user_id),
+        )
+        db.commit()
+    shared_record["is_added"] = True
+    return shared_record, created
 
 
 def create_shared_record(user_id: int, fields: dict) -> tuple[dict, bool]:
@@ -254,7 +264,14 @@ def list_shared_records(user_id: int) -> list[dict]:
         """SELECT s.*, u.username AS contributor,
                   EXISTS(
                       SELECT 1 FROM job_records j
-                      WHERE j.user_id = ? AND j.source_shared_id = s.id
+                      WHERE j.user_id = ? AND (
+                          j.source_shared_id = s.id OR
+                          (j.company = s.company AND
+                           j.company_type = s.company_type AND
+                           j.directions = s.directions AND
+                           j.job = s.job AND
+                           j.url = s.url)
+                      )
                   ) AS is_added
            FROM shared_job_records s
            LEFT JOIN users u ON u.id = s.created_by

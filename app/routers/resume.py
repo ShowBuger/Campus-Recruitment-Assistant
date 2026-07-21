@@ -47,6 +47,18 @@ def list_resumes(user: dict = Depends(auth_module.get_current_user)):
     return {"files": [_file_info(path) for path in files]}
 
 
+@router.delete("/{filename}")
+def delete_resume(filename: str, user: dict = Depends(auth_module.get_current_user)):
+    path = _resume_path(user["user_id"], filename)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="简历文件不存在")
+    try:
+        path.unlink()
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="简历文件删除失败") from exc
+    return {"success": True, "message": "简历已删除"}
+
+
 @router.post("")
 async def upload_resume(
     file: UploadFile = File(...),

@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>校招信息看板</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=1">
+<link rel="shortcut icon" href="/static/favicon.svg?v=1">
+<meta name="theme-color" content="#2563eb">
 <style>
 :root{
   --bg:#f5f7fb;--panel:#fff;--ink:#111827;--muted:#667085;--sub:#98a2b3;--line:#e4e8f0;--line2:#cfd6e3;
@@ -70,22 +73,17 @@ a{color:var(--blue);text-decoration:none;font-weight:700}a:hover{color:var(--blu
 .dot.g{background:var(--green);box-shadow:0 0 0 5px var(--greenS)}.dot.a{background:var(--amber);box-shadow:0 0 0 5px var(--amberS)}.dot.r{background:var(--red);box-shadow:0 0 0 5px var(--redS)}.dot.c{background:var(--cyan);box-shadow:0 0 0 5px var(--cyanS)}
 .card-title{font-size:15px;font-weight:800}.card-sub{margin-left:auto;color:var(--sub);font-size:12px}
 .card-body{padding:16px 18px}
-.kpi,.funnel-step,.tl-item{transition:transform .22s var(--ease),box-shadow .22s var(--ease),border-color .22s var(--ease),background .22s var(--ease)}
+.kpi,.funnel-step{transition:transform .22s var(--ease),box-shadow .22s var(--ease),border-color .22s var(--ease),background .22s var(--ease)}
 .kpi:hover,.funnel-step:hover{transform:translateY(-3px);box-shadow:var(--shadow2);border-color:rgba(37,99,235,.32)}
 .kpi-value{transition:transform .24s var(--spring)}.kpi:hover .kpi-value{transform:translateY(-2px) scale(1.035)}
 /* ---- kpis ---- */
-.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
 .kpi{position:relative;overflow:hidden;padding:16px;border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:var(--shadow)}
 .kpi:after{content:"";position:absolute;right:-28px;top:-30px;width:90px;height:90px;border-radius:50%;background:var(--tint,var(--blueS))}
 .kpi-label{font-size:11px;color:var(--sub);font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 .kpi-value{position:relative;margin-top:8px;font-size:34px;line-height:1;font-weight:800;letter-spacing:-.04em}
 .kpi-sub{position:relative;margin-top:6px;color:var(--muted);font-size:12px}
 .b{--tint:var(--blueS)}.g{--tint:var(--greenS)}.a{--tint:var(--amberS)}.r{--tint:var(--redS)}.c{--tint:var(--cyanS)}
-/* ---- hero ---- */
-.hero{position:relative;display:block;margin-bottom:18px;padding:22px;border:1px solid rgba(37,99,235,.20);border-radius:24px;background:linear-gradient(135deg,rgba(37,99,235,.12),rgba(8,145,178,.08) 48%,rgba(124,58,237,.10)),var(--panel);box-shadow:var(--shadow);overflow:hidden}
-.hero:before{content:"";position:absolute;inset:-1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);transform:translateX(-120%);animation:heroSweep 6.5s ease-in-out infinite}.hero>*{position:relative}.hero h2{font-size:clamp(24px,3vw,36px);letter-spacing:-.045em;line-height:1.08}.hero p{margin-top:9px;color:var(--muted);max-width:100%}
-.hero-metrics{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.hero-chip{display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.58);backdrop-filter:blur(8px);font-weight:800;font-size:12px}.hero-chip i{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px var(--greenS)}
-@keyframes heroSweep{45%,100%{transform:translateX(120%)}}
 /* ---- table ---- */
 .tbl{max-height:440px;overflow:auto}.tbl::-webkit-scrollbar{width:6px;height:6px}.tbl::-webkit-scrollbar-thumb{background:var(--line2);border-radius:999px}
 table{width:100%;border-collapse:separate;border-spacing:0}
@@ -93,7 +91,7 @@ th,td{text-align:left;vertical-align:middle;white-space:nowrap;border-bottom:1px
 th{position:sticky;top:0;z-index:2;background:var(--panel);color:var(--sub);font-size:11px;letter-spacing:.05em;text-transform:uppercase;font-weight:800;padding:10px}
 td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blueS)}
 .data-table{table-layout:fixed}
-.records-table{min-width:1000px}.master-table{min-width:860px}
+.records-table{min-width:1000px}.master-table{min-width:880px}
 .data-table th{height:42px;padding:0 10px;background:var(--bg);border-bottom-color:var(--line2)}
 .data-table td{height:50px;padding:8px 10px;overflow:hidden;text-overflow:ellipsis}
 .data-table th:nth-child(n+3),.data-table td:nth-child(n+3){text-align:center}
@@ -102,14 +100,17 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
 .data-table tbody tr:hover td{background:var(--blueS)}
 .table-date{display:inline-block;min-width:38px;color:var(--muted);font:700 12px/1 var(--mono);letter-spacing:-.02em;text-align:center}
 .table-actions{display:flex;align-items:center;flex-wrap:wrap;gap:9px;padding:13px 16px;border-top:1px solid var(--line);background:linear-gradient(180deg,var(--panel),var(--bg))}
-.table-actions .btn{height:34px;padding:0 13px}
+.table-actions .btn{height:34px;padding:0 13px;white-space:nowrap}
 .manager-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px}.manager-actions .btn{height:30px;padding:0 9px;font-size:11px;white-space:nowrap}.manager-actions .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.record-manager-search{position:relative;margin-bottom:12px}.record-manager-search input{width:100%;height:40px;padding:0 13px 0 38px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);font:13px var(--font);outline:none}.record-manager-search:before{content:"⌕";position:absolute;left:13px;top:6px;color:var(--sub);font-size:20px}.record-manager-search input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueS)}
+.record-detail-modal{width:min(860px,96vw)}.detail-section{grid-column:1/-1;margin:3px 0 -2px;padding-top:13px;border-top:1px solid var(--line);color:var(--ink);font-size:13px;font-weight:900}.record-detail-textarea{grid-column:1/-1}.record-detail-textarea textarea{min-height:105px}.detail-actions{display:none;grid-template-columns:minmax(150px,1fr) auto;align-items:center;gap:14px;padding:12px 20px;border-top:1px solid var(--line);background:var(--bg)}.detail-actions-copy{display:flex;min-width:0;flex-direction:column;gap:2px}.detail-actions-copy b{font-size:12px}.detail-actions-copy span{overflow:hidden;color:var(--muted);font-size:10px;text-overflow:ellipsis;white-space:nowrap}.detail-action-buttons{display:grid;grid-template-columns:repeat(4,max-content);gap:8px}.detail-action-buttons .btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 11px;line-height:1;white-space:nowrap}.btn-ai-enrich{color:var(--blue);border-color:rgba(37,99,235,.3);background:var(--blueS)}.btn-remove-application{color:#b45309;border-color:rgba(217,119,6,.32);background:rgba(245,158,11,.1)}
 .total-tools{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--bg)}
 .total-view-switch{display:inline-flex;flex:0 0 auto;padding:3px;border:1px solid var(--line);border-radius:11px;background:var(--panel)}.total-view-switch button{height:28px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--muted);font:800 12px var(--font);cursor:pointer}.total-view-switch button.active{background:var(--blue);color:#fff;box-shadow:0 3px 9px rgba(37,99,235,.24)}
 .total-search{position:relative;flex:1;max-width:420px}.total-search:before{content:"⌕";position:absolute;left:12px;top:50%;transform:translateY(-52%);color:var(--sub);font-size:18px;pointer-events:none}
 .total-tools input,.total-tools select{height:36px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:13px var(--font);outline:none;transition:border-color .16s var(--ease),box-shadow .16s var(--ease)}
 .total-tools input{width:100%;padding:0 12px 0 36px}.total-tools select{min-width:176px;padding:0 32px 0 11px}
 .total-tools input:focus,.total-tools select:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueS)}
+.feishu-sync-note{display:flex;gap:9px;margin-top:12px;padding:11px 12px;border:1px solid rgba(37,99,235,.18);border-radius:12px;background:var(--blueS);color:var(--sub);font-size:11px;line-height:1.55}.feishu-sync-note:before{content:"i";display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--blue);color:#fff;font:900 11px var(--font)}.feishu-sync-result{display:none;margin-top:13px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);font-size:12px;line-height:1.65}.feishu-sync-result.show{display:block}.feishu-sync-result b{display:block;margin-bottom:3px;color:var(--ink)}
 .data-table .company-link{display:block;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .company{font-weight:800}.job{max-width:280px;overflow:hidden;text-overflow:ellipsis}.muted{color:var(--muted)}.center{padding:32px 12px;text-align:center;color:var(--sub)}
 .tag{display:inline-flex;align-items:center;padding:3px 8px;margin:2px 3px 2px 0;border-radius:999px;background:var(--blueS);color:var(--blue);font-size:11px;font-weight:800}
@@ -124,9 +125,9 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
 .track{height:9px;border-radius:999px;background:var(--line);overflow:hidden}.fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--blue),#60a5fa);transition:width .7s var(--spring);position:relative;overflow:hidden}.fill:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.48),transparent);animation:barFlow 2.2s ease-in-out infinite}.fill.g{background:linear-gradient(90deg,var(--green),#34d399)}@keyframes barFlow{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 .funnel{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
 .funnel-step{position:relative;padding:14px;border:1px solid var(--line);border-radius:16px;background:var(--panel);overflow:hidden}.funnel-step:after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,var(--blue),var(--cyan));transform-origin:left;animation:funnelPulse 3.2s ease-in-out infinite}.funnel-step b{display:block;font-size:24px;letter-spacing:-.03em}.funnel-step span{display:block;color:var(--muted);font-size:12px;margin-top:2px}@keyframes funnelPulse{50%{transform:scaleX(.55);opacity:.55}}
-.timeline{padding:4px 4px}.tl-item{position:relative;display:grid;grid-template-columns:64px 1fr auto;gap:12px;padding:0 0 16px 18px;border-left:2px solid var(--line);align-items:center}
-.tl-item:last-child{padding-bottom:0}.tl-item:before{content:"";position:absolute;left:-6px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 5px var(--blueS)}
-.tl-date{font-weight:800;color:var(--blue);font-size:12px}.tl-main b{display:block;font-size:13px}.tl-main span{display:block;color:var(--muted);font-size:12px;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.application-stats-modal{width:min(920px,96vw)}.stats-rate-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.stats-rate-card{display:flex;align-items:center;gap:15px;padding:15px;border:1px solid var(--line);border-radius:17px;background:var(--bg)}
+.stats-rate-ring{--rate:0;--chart-color:var(--blue);display:grid;flex:0 0 auto;width:94px;height:94px;place-items:center;border-radius:50%;background:conic-gradient(var(--chart-color) calc(var(--rate)*1%),var(--line) 0);box-shadow:inset 0 0 0 1px rgba(148,163,184,.08)}.stats-rate-ring>div{display:grid;width:70px;height:70px;place-items:center;align-content:center;border-radius:50%;background:var(--panel);box-shadow:0 2px 8px rgba(15,23,42,.08)}.stats-rate-ring b{font-size:21px;line-height:1;letter-spacing:-.04em}.stats-rate-ring span{margin-top:4px;color:var(--muted);font-size:10px}
+.stats-rate-copy b{display:block;font-size:14px}.stats-rate-copy span{display:block;margin-top:5px;color:var(--sub);font-size:11px;line-height:1.5}.stats-chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}.stats-chart{min-width:0;padding:15px;border:1px solid var(--line);border-radius:17px;background:var(--bg)}.stats-chart h3{margin:0 0 13px;font-size:13px}.stats-chart-body{max-height:235px;overflow:auto;padding-right:3px}.stats-chart-wide{grid-column:1/-1}.stats-empty{grid-column:1/-1;padding:36px 12px;text-align:center;color:var(--sub)}
 /* ---- forms ---- */
 .form-group{margin-bottom:14px}.form-group label{display:block;font-size:12px;font-weight:800;color:var(--muted);margin-bottom:6px}
 .form-group input,.form-group select{width:100%;height:38px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:var(--panel);color:var(--ink);font:13px var(--font)}
@@ -134,32 +135,37 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
 .company-link{border:0;background:transparent;color:var(--blue);font:inherit;font-weight:800;padding:0;cursor:pointer;text-align:left}.company-link:hover{text-decoration:underline}
 .total-action{text-align:center!important;width:92px}.total-action .btn{display:inline-flex;align-items:center;justify-content:center;height:30px;padding:0 10px;line-height:1;font-size:12px;white-space:nowrap}
 .calendar-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px}.calendar-toolbar h2{min-width:150px;margin:0;text-align:center;font-size:18px}.calendar-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}.calendar-scroll{overflow:auto;border:1px solid var(--line)}.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(96px,1fr));min-width:672px;background:var(--line);gap:1px}.calendar-weekday{padding:7px;background:var(--panel);color:var(--muted);text-align:center;font-size:11px;font-weight:800}.calendar-day{min-height:104px;padding:6px;background:var(--panel);overflow:hidden}.calendar-day.other{background:var(--bg);color:var(--sub)}.calendar-day.today{box-shadow:inset 0 0 0 2px var(--blue)}.calendar-day:not(.other):hover{background:var(--blueS)}.calendar-date{display:flex;align-items:center;justify-content:space-between;height:18px;margin-bottom:3px;font-size:11px;font-weight:800}.calendar-events{display:grid;gap:3px;max-height:77px;overflow:auto}.calendar-event{padding:2px 5px;border-left:3px solid var(--blue);border-radius:3px;background:var(--blueS);color:var(--ink);font-size:10px;line-height:1.3}.calendar-event.apply{border-color:var(--green);background:var(--greenS)}.calendar-event.exam{border-color:var(--amber);background:var(--amberS)}.calendar-event.interview{border-color:var(--blue);background:var(--blueS)}.calendar-event.deadline{border-color:var(--red);background:var(--redS)}.calendar-event.warm{border-color:#7c3aed;background:rgba(124,58,237,.1)}.calendar-event.result{border-color:var(--cyan);background:rgba(8,145,178,.1)}.calendar-event.other{border-color:#7c3aed;background:rgba(124,58,237,.1)}.calendar-day{cursor:pointer}.calendar-day.other{cursor:default}.calendar-legend{display:flex;gap:14px;flex-wrap:wrap;margin-left:auto;color:var(--sub);font-size:11px}.calendar-legend span:before{content:"";display:inline-block;width:8px;height:8px;margin-right:5px;border-radius:2px;background:var(--blue)}.calendar-legend .lg-apply:before{background:var(--green)}.calendar-legend .lg-exam:before{background:var(--amber)}.calendar-legend .lg-deadline:before{background:var(--red)}.calendar-legend .lg-warm:before{background:#7c3aed}.calendar-legend .lg-result:before{background:var(--cyan)}.calendar-legend .lg-other:before{background:#7c3aed}.countdown-panel{border:1px solid var(--line);background:var(--panel)}.countdown-panel h3{margin:0;padding:12px 14px;border-bottom:1px solid var(--line);font-size:14px}.countdown-list{display:grid;max-height:680px;overflow:auto}.countdown-item{display:grid;grid-template-columns:1fr auto;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}.countdown-item:last-child{border-bottom:0}.countdown-item b{display:block;font-size:12px}.countdown-item span{display:block;margin-top:2px;color:var(--sub);font-size:11px}.countdown-days{align-self:center;color:var(--blue);font-size:12px;font-weight:800;white-space:nowrap}.countdown-days.urgent{color:var(--red)}
-.resume-layout{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:calc(100vh - 150px);border:1px solid var(--line);background:var(--panel)}.resume-side{border-right:1px solid var(--line);padding:16px}.resume-list{display:grid;gap:8px;margin-top:14px}.resume-item{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);text-align:left;cursor:pointer}.resume-item.active{border-color:var(--blue);background:var(--blueS)}.resume-item b,.resume-item span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.resume-item span{margin-top:3px;color:var(--sub);font-size:11px}.resume-preview{min-width:0;background:var(--bg)}.resume-preview iframe{display:block;width:100%;height:calc(100vh - 152px);border:0}.resume-empty{display:grid;height:100%;place-items:center;color:var(--sub)}
+.dashboard-calendar .calendar-day{min-height:84px}.dashboard-calendar .countdown-list{max-height:532px}
+.resume-layout{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:calc(100vh - 150px);border:1px solid var(--line);background:var(--panel)}.resume-side{border-right:1px solid var(--line);padding:16px}.resume-list{display:grid;gap:8px;margin-top:14px}.resume-row{display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:7px;align-items:stretch}.resume-item{min-width:0;width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);text-align:left;cursor:pointer}.resume-item.active{border-color:var(--blue);background:var(--blueS)}.resume-item b,.resume-item span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.resume-item span{margin-top:3px;color:var(--sub);font-size:11px}.resume-delete{display:flex;align-self:stretch;align-items:center;justify-content:center;width:42px;height:auto;min-height:0;padding:0;border-radius:8px;font-size:11px;line-height:1}.resume-preview{min-width:0;background:var(--bg)}.resume-preview iframe{display:block;width:100%;height:calc(100vh - 152px);border:0}.resume-empty{display:grid;height:100%;place-items:center;color:var(--sub)}
 .ai-workspace{display:grid;grid-template-columns:minmax(320px,380px) minmax(0,1fr);gap:14px;height:calc(100vh - 112px);min-height:460px}
 .ai-side{display:grid;grid-template-rows:auto minmax(0,1fr);gap:14px;min-width:0;min-height:0}.ai-workspace .card{min-height:0;margin:0}.ai-workspace .card-hd{padding:11px 14px}.ai-workspace .card-body{padding:12px 14px}
 .ai-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 10px}.ai-config-card .form-group{min-width:0;margin:0}.ai-config-card .form-group label{margin-bottom:4px;font-size:11px}.ai-config-card .form-group input,.ai-config-card .form-group select{height:34px;padding:0 9px;border-radius:9px;font-size:12px}
 .ai-action-row{display:flex;align-items:center;gap:10px;margin-top:11px}.ai-action-row .btn{height:34px;flex:0 0 auto}.ai-action-row .help{margin:0;font-size:10px;line-height:1.35}
-.ai-history-card,.ai-result-card{display:flex;flex-direction:column;overflow:hidden}.ai-history-card .card-body,.ai-result-card .card-body{min-height:0;flex:1;overflow:hidden}.analysis-history{display:grid;gap:7px;max-height:100%;overflow:auto;padding-right:3px}.analysis-history-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:center}.analysis-history-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center;width:100%;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);text-align:left;cursor:pointer}.analysis-history-item:hover{border-color:var(--blue)}.analysis-history-item b,.analysis-history-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.analysis-history-item b{font-size:12px}.analysis-history-item span{grid-column:1/-1;color:var(--sub);font-size:10px}.analysis-history-item time{color:var(--muted);font-size:9px;white-space:nowrap}.analysis-download{display:inline-flex;align-items:center;justify-content:center;height:29px;padding:0 9px;line-height:1;font-size:11px;white-space:nowrap;text-decoration:none}
+.ai-history-card,.ai-result-card{display:flex;flex-direction:column;overflow:hidden}.ai-history-card .card-body,.ai-result-card .card-body{min-height:0;flex:1;overflow:hidden}.analysis-history{display:grid;gap:7px;max-height:100%;overflow:auto;padding-right:3px}.analysis-history-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:center}.analysis-history-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center;width:100%;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);text-align:left;cursor:pointer}.analysis-history-item:hover{border-color:var(--blue)}.analysis-history-item b,.analysis-history-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.analysis-history-item b{font-size:12px}.analysis-history-item span{grid-column:1/-1;color:var(--sub);font-size:10px}.analysis-history-item time{color:var(--muted);font-size:9px;white-space:nowrap}.analysis-history-actions{display:grid;grid-template-columns:repeat(2,auto);gap:5px}.analysis-history-actions .btn{display:inline-flex;align-items:center;justify-content:center;height:29px;padding:0 8px;line-height:1;font-size:10px;white-space:nowrap}.analysis-download{text-decoration:none}
 .ai-result-card .card-sub{min-width:0;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ai-result{height:100%;min-height:0;margin:0;padding:17px 18px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);overflow:auto;overflow-wrap:anywhere;font:13px/1.6 var(--font)}.ai-result h1{font-size:21px;margin:0 0 12px}.ai-result h2{font-size:17px;margin:18px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--line)}.ai-result h3{font-size:15px;margin:14px 0 6px}.ai-result p{margin:6px 0}.ai-result ul,.ai-result ol{margin:6px 0;padding-left:21px}.ai-result li{margin:3px 0}.ai-result blockquote{margin:9px 0;padding:7px 11px;border-left:3px solid var(--blue);background:var(--blueS);color:var(--muted)}.ai-result pre{overflow:auto;padding:10px;border-radius:6px;background:var(--ink);color:var(--bg)}.ai-result code{font-family:var(--mono)}.ai-result table{width:100%;border-collapse:collapse;margin:10px 0}.ai-result th,.ai-result td{padding:6px 8px;border:1px solid var(--line);text-align:left;vertical-align:top}.ai-result th{background:var(--panel)}
 /* ---- toast ---- */
-.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;gap:10px;align-items:center;padding:12px 18px;border-radius:999px;background:var(--ink);color:var(--bg);box-shadow:var(--shadow2);font-weight:800;font-size:13px;transition:.25s var(--spring)}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:30000;display:flex;gap:10px;align-items:center;padding:12px 18px;border-radius:999px;background:var(--ink);color:var(--bg);box-shadow:var(--shadow2);font-weight:800;font-size:13px;transition:.25s var(--spring)}
 .toast.hidden{opacity:0;pointer-events:none;transform:translate(-50%,-10px)}.toast.ok{background:var(--green);color:#fff}.toast.err{background:var(--red);color:#fff}
 /* ---- modal ---- */
 .modal-mask{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(10,14,23,.54);backdrop-filter:blur(7px)}
+.modal-mask#error-modal{z-index:25000}
 .modal-mask.show{display:flex}
 .modal{width:min(720px,96vw);max-height:88vh;overflow:auto;border:1px solid var(--line2);border-radius:22px;background:var(--panel);box-shadow:var(--shadow2);animation:pageIn .34s var(--spring)}
 .modal-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px 20px;border-bottom:1px solid var(--line)}
 .modal-hd h2{font-size:18px;letter-spacing:-.02em}.modal-hd p{margin-top:4px;color:var(--muted);font-size:12px}.modal-body{padding:18px 20px}.modal-ft{display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--line)}
 .error-pre{white-space:pre-wrap;word-break:break-word;max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--bg);padding:12px;font:12px/1.6 var(--mono);color:var(--muted)}
 .help{font-size:12px;color:var(--sub);margin-top:5px;line-height:1.45}.secret-note{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:6px 9px;border-radius:999px;background:var(--blueS);color:var(--blue);font-size:11px;font-weight:800}
+.provider-panel{display:none;padding:14px;border:1px solid var(--line);border-radius:15px;background:var(--bg)}.provider-panel.active{display:block}.provider-panel .grid-2{align-items:start}.provider-name{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;font-weight:900}.provider-name:before{content:"";width:9px;height:9px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 5px var(--blueS)}
+.model-input-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}.model-input-row .btn{height:38px;padding:0 10px;font-size:11px}.provider-url{grid-column:1/-1}.provider-url input{font-family:var(--mono);font-size:12px}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .grid-mini{display:grid;grid-template-columns:1.2fr 1fr;gap:18px}
-@media(max-width:1080px){.app{grid-template-columns:1fr}.sidebar{position:static;height:auto;flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line)}.kpis{grid-template-columns:repeat(3,1fr)}.funnel{grid-template-columns:repeat(2,1fr)}.grid-2,.grid-3,.grid-mini,.resume-layout,.calendar-layout{grid-template-columns:1fr}.resume-side{border-right:0;border-bottom:1px solid var(--line)}.resume-preview iframe{height:70vh}.countdown-list{max-height:360px}}
+@media(max-width:1080px){.app{grid-template-columns:1fr}.sidebar{position:static;height:auto;flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line)}.kpis{grid-template-columns:repeat(2,1fr)}.funnel{grid-template-columns:repeat(2,1fr)}.grid-2,.grid-3,.grid-mini,.resume-layout,.calendar-layout{grid-template-columns:1fr}.resume-side{border-right:0;border-bottom:1px solid var(--line)}.resume-preview iframe{height:70vh}.countdown-list{max-height:360px}}
 @media(max-width:1080px) and (min-width:761px){.ai-workspace{grid-template-columns:minmax(300px,350px) minmax(0,1fr);height:calc(100vh - 270px);min-height:380px}}
 @media(max-width:760px){.ai-workspace{display:grid;grid-template-columns:1fr;height:auto;min-height:0}.ai-side{display:contents}.ai-config-card{order:1}.ai-result-card{order:2;min-height:420px}.ai-history-card{order:3;max-height:380px}.ai-form-grid{grid-template-columns:1fr}.ai-action-row{align-items:stretch;flex-direction:column}.ai-action-row .btn{width:100%}.ai-result{min-height:360px}}
-@media(max-width:620px){.total-tools{align-items:stretch;flex-direction:column}.total-view-switch{align-self:flex-start}.total-search{max-width:none}.total-tools select{width:100%}}
+@media(max-width:820px){.detail-actions{grid-template-columns:1fr;align-items:stretch}.detail-actions-copy span{white-space:normal}.detail-action-buttons{grid-template-columns:repeat(4,minmax(0,1fr))}.detail-action-buttons .btn{width:100%;min-width:0;padding:0 6px}}
+@media(max-width:620px){.total-tools{align-items:stretch;flex-direction:column}.total-view-switch{align-self:flex-start}.total-search{max-width:none}.total-tools select{width:100%}.detail-actions{align-items:stretch;flex-direction:column}.detail-action-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.detail-action-buttons .btn{min-width:0;padding:0 5px;white-space:nowrap}.record-detail-modal .modal-ft>.btn{flex:1}.stats-rate-grid,.stats-chart-grid{grid-template-columns:1fr}.stats-chart-wide{grid-column:auto}.stats-rate-card{padding:12px}.stats-rate-ring{width:82px;height:82px}.stats-rate-ring>div{width:61px;height:61px}.stats-rate-ring b{font-size:18px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.card:hover,.kpi:hover,.funnel-step:hover{transform:none!important}.bg-orbits{display:none}}
 /* login */
 .login-overlay{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:20px}
@@ -184,33 +190,27 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
 .notification-item:last-child{border-bottom:0}.notification-item.unread{background:var(--blueS)}
 .notification-item h3{font-size:14px;margin-bottom:4px}.notification-item p{white-space:pre-wrap;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
 .notification-time{display:block;margin-top:7px;color:var(--sub);font-size:11px}
-.admin-user-row{display:grid;grid-template-columns:minmax(140px,1fr) minmax(105px,.65fr) minmax(140px,.8fr) minmax(150px,.8fr) minmax(320px,1.5fr);gap:16px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
-.admin-user-row:last-child{border-bottom:0}.admin-user-row.header{color:var(--sub);font-size:11px;font-weight:800;background:var(--bg)}
-.admin-user-name{font-weight:800}.admin-user-meta{font-size:11px;color:var(--sub)}
-.admin-user-date{white-space:nowrap}
-.user-presence{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px;font-weight:800}.user-presence:before{content:"";width:8px;height:8px;flex:0 0 auto;border-radius:50%;background:var(--sub)}.user-presence.online{color:var(--green)}.user-presence.online:before{background:var(--green);box-shadow:0 0 0 5px var(--greenS)}.user-presence-wrap small{display:block;margin-top:3px;color:var(--sub);font-size:10px;white-space:nowrap}
-.invite-list{display:grid;gap:8px}.invite-row{display:grid;grid-template-columns:minmax(150px,.8fr) minmax(130px,.7fr) minmax(170px,1fr) auto;gap:14px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:11px;background:var(--bg)}.invite-code{font:800 13px var(--mono);letter-spacing:.04em}.invite-meta{color:var(--sub);font-size:11px}.invite-actions{display:flex;gap:7px}.invite-actions .btn{height:30px;padding:0 10px;font-size:11px}
-.admin-password{display:grid;grid-template-columns:minmax(140px,1fr) auto auto;gap:8px;min-width:0}
-.admin-password input{width:100%;min-width:0;height:38px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:var(--bg);color:var(--ink);font:13px var(--font);outline:none;transition:border-color .16s var(--ease),box-shadow .16s var(--ease),background .16s var(--ease)}
-.admin-password input:focus{border-color:var(--blue);background:var(--panel);box-shadow:0 0 0 3px var(--blueS)}
-.admin-password .btn{min-width:64px;padding:0 14px;white-space:nowrap}
-.role-toggle{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
-.role-toggle input{width:16px;height:16px;accent-color:var(--blue)}
+.admin-layout{display:grid;grid-template-columns:180px minmax(0,1fr);gap:16px;align-items:start;max-height:calc(100vh - 140px)}.admin-nav-pane{display:flex;flex-direction:column;gap:4px}.admin-nav-item{display:block;width:100%;padding:11px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);font:13px var(--font);text-align:left;cursor:pointer;transition:all .16s var(--ease)}.admin-nav-item:hover{border-color:var(--blue);box-shadow:0 2px 8px rgba(37,99,235,.12)}.admin-nav-item.active{background:var(--blue);color:#fff;border-color:var(--blue);font-weight:800;box-shadow:0 3px 12px rgba(37,99,235,.25)}.admin-content-pane{min-width:0;overflow-y:auto;max-height:calc(100vh - 140px);padding-right:4px}.admin-panel{display:none}.admin-panel.active{display:block}.admin-panel .card{margin-bottom:0}
+.admin-user-card{display:grid;grid-template-columns:1fr 80px 90px 135px 1fr;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
+.admin-user-card:last-child{border-bottom:0}.admin-user-card.header{color:var(--sub);font-size:11px;font-weight:800;background:var(--bg)}
+.admin-user-card .uname{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.admin-user-card .umeta{font-size:11px;white-space:nowrap}.admin-user-card .urole{font-size:11px;white-space:nowrap}
+.admin-user-card .udate{font-size:11px;color:var(--muted);white-space:nowrap}
+.admin-user-card .ubtns{display:flex;gap:6px;align-items:center}
+.admin-user-card .ubtns input{width:100px;height:30px;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:12px var(--font);outline:none}
+.admin-user-card .ubtns input:focus{border-color:var(--blue)}
+.admin-user-card .ubtns .btn{height:30px;padding:0 9px;font-size:11px;white-space:nowrap}
+.invite-list{display:grid;gap:6px}.invite-row{display:grid;grid-template-columns:160px 60px 1fr auto;gap:10px;align-items:center;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}.invite-code{font:800 13px var(--mono);letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis}.invite-meta{color:var(--sub);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.invite-actions{display:flex;gap:6px}.invite-actions .btn{height:28px;padding:0 9px;font-size:11px}
+
 @media(max-width:760px){
+  .admin-layout{grid-template-columns:1fr;max-height:none}.admin-content-pane{max-height:none;overflow:visible}.admin-nav-pane{flex-direction:row;flex-wrap:wrap}.admin-nav-item{width:auto;padding:8px 14px;font-size:12px}
   #admin-user-list{padding:10px}
-  .admin-user-row{grid-template-columns:1fr auto;gap:8px 14px;margin-bottom:10px;padding:15px;border:1px solid var(--line);border-radius:15px;background:var(--panel);box-shadow:0 1px 2px rgba(16,24,40,.04)}
-  .admin-user-row:last-child{margin-bottom:0;border-bottom:1px solid var(--line)}
-  .admin-user-row.header{display:none}
-  .admin-user-date{grid-column:1/-1}
-  .admin-user-date:before{content:"注册于 ";color:var(--sub)}
+
   .user-presence-wrap{justify-self:end}
-  .admin-password{grid-column:1/-1;margin-top:6px;padding-top:13px;border-top:1px solid var(--line)}
+
 }
 @media(max-width:440px){
-  .admin-password{grid-template-columns:1fr 1fr}
-  .admin-password input{grid-column:1/-1}
-  .admin-password .btn{width:100%}
-  .admin-password.single-action .btn{grid-column:1/-1}
+
 }
 @media(max-width:700px){.invite-row{grid-template-columns:1fr auto}.invite-row .invite-meta{grid-column:1/-1}.invite-actions{grid-column:1/-1}}
 /* ---- chat ---- */
@@ -260,14 +260,33 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
   <div class="modal-ft"><button class="btn" onclick="copyErrorDetail()">复制错误</button><button class="btn btn-primary" onclick="closeErrorModal()">知道了</button></div></div>
 </div>
 <div class="modal-mask" id="config-modal" onclick="if(event.target===this)closeConfigModal()">
-  <div class="modal" style="width:min(560px,96vw)">
-    <div class="modal-hd"><div><h2>AI 配置</h2><p>配置简历分析使用的 DeepSeek 服务</p></div><button class="icon-btn" onclick="closeConfigModal()" title="关闭">&times;</button></div>
+  <div class="modal" style="width:min(650px,96vw)">
+    <div class="modal-hd"><div><h2>AI 配置</h2><p>选择简历分析使用的模型服务，每位用户独立配置</p></div><button class="icon-btn" onclick="closeConfigModal()" title="关闭">&times;</button></div>
     <div class="modal-body">
-      <div class="grid-2">
-        <div class="form-group"><label for="cfg-deepseek-key">DeepSeek API Key</label><input id="cfg-deepseek-key" type="password" autocomplete="off" placeholder="sk-..."><div class="help" id="cfg-deepseek-key-help">密钥仅保存在本地数据库</div></div>
-        <div class="form-group"><label for="cfg-deepseek-model">DeepSeek 模型</label><select id="cfg-deepseek-model"><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option></select></div>
+      <div class="form-group"><label for="cfg-ai-provider">当前服务商</label><select id="cfg-ai-provider" onchange="onAIProviderChange()"><option value="deepseek">DeepSeek</option><option value="openai">OpenAI GPT</option><option value="anthropic">Anthropic Claude</option></select></div>
+      <div class="provider-panel" id="provider-deepseek">
+        <div class="provider-name">DeepSeek</div><div class="grid-2">
+          <div class="form-group"><label for="cfg-deepseek-key">API Key</label><input id="cfg-deepseek-key" type="password" autocomplete="off" placeholder="sk-..."><div class="help" id="cfg-deepseek-key-help">尚未保存密钥</div></div>
+          <div class="form-group"><label for="cfg-deepseek-model-picker">模型名称</label><div class="model-input-row"><select id="cfg-deepseek-model-picker" onchange="selectDeepSeekModel()"><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option></select><button class="btn" type="button" onclick="loadProviderModels(this)">读取模型</button></div><input id="cfg-deepseek-model" list="deepseek-models" placeholder="也可直接填写中转模型 ID" style="margin-top:7px"><datalist id="deepseek-models"><option value="deepseek-v4-flash"><option value="deepseek-v4-pro"></datalist><div class="help">上方直接选择官方模型；下方可填写中转服务的自定义模型 ID</div></div>
+          <div class="form-group provider-url"><label for="cfg-deepseek-base-url">API Base URL</label><input id="cfg-deepseek-base-url" inputmode="url" placeholder="https://api.deepseek.com"><div class="help">支持填写 Base URL 或完整的 /chat/completions 地址</div></div>
+        </div>
       </div>
-      <div class="secret-note">API Key 按用户独立保存，页面不会明文回显</div>
+      <div class="provider-panel" id="provider-openai">
+        <div class="provider-name">OpenAI GPT</div><div class="grid-2">
+          <div class="form-group"><label for="cfg-openai-key">API Key</label><input id="cfg-openai-key" type="password" autocomplete="off" placeholder="sk-..."><div class="help" id="cfg-openai-key-help">尚未保存密钥</div></div>
+          <div class="form-group"><label for="cfg-openai-model">模型名称</label><div class="model-input-row"><input id="cfg-openai-model" list="openai-models" placeholder="gpt-5.4-mini"><button class="btn" type="button" onclick="loadProviderModels(this)">读取模型</button></div><datalist id="openai-models"><option value="gpt-5.6-sol"><option value="gpt-5.6-terra"><option value="gpt-5.6-luna"><option value="gpt-5.5"><option value="gpt-5.4"><option value="gpt-5.4-mini"><option value="gpt-5.4-nano"><option value="gpt-5.2"><option value="gpt-5-mini"><option value="gpt-4.1"><option value="gpt-4.1-mini"><option value="gpt-4o-mini"></datalist><div class="help">列表外仍可直接填写中转提供的模型 ID</div></div>
+          <div class="form-group provider-url"><label for="cfg-openai-base-url">API Base URL</label><input id="cfg-openai-base-url" inputmode="url" placeholder="https://api.openai.com/v1"><div class="help">支持 Base URL，也可填写完整的 /responses 或 /chat/completions 地址</div></div>
+          <div class="form-group"><label for="cfg-openai-api-mode">接口协议</label><select id="cfg-openai-api-mode"><option value="responses">Responses API（官方推荐）</option><option value="chat_completions">Chat Completions（中转兼容）</option></select></div>
+        </div>
+      </div>
+      <div class="provider-panel" id="provider-anthropic">
+        <div class="provider-name">Anthropic Claude</div><div class="grid-2">
+          <div class="form-group"><label for="cfg-anthropic-key">API Key</label><input id="cfg-anthropic-key" type="password" autocomplete="off" placeholder="sk-ant-..."><div class="help" id="cfg-anthropic-key-help">尚未保存密钥</div></div>
+          <div class="form-group"><label for="cfg-anthropic-model">模型名称</label><div class="model-input-row"><input id="cfg-anthropic-model" list="anthropic-models" placeholder="claude-sonnet-5"><button class="btn" type="button" onclick="loadProviderModels(this)">读取模型</button></div><datalist id="anthropic-models"><option value="claude-fable-5"><option value="claude-opus-4-8"><option value="claude-sonnet-5"><option value="claude-sonnet-4-6"><option value="claude-haiku-4-5"></datalist><div class="help">可搜索建议或直接填写中转模型 ID</div></div>
+          <div class="form-group provider-url"><label for="cfg-anthropic-base-url">API Base URL</label><input id="cfg-anthropic-base-url" inputmode="url" placeholder="https://api.anthropic.com/v1"><div class="help">支持填写 Base URL 或完整的 /messages 地址</div></div>
+        </div>
+      </div>
+      <div class="secret-note">所有 API Key 按用户独立保存且不会明文回显；中转地址建议使用 HTTPS</div>
     </div>
     <div class="modal-ft"><button class="btn" onclick="loadConfigStatus(false)">重新读取</button><button class="btn" onclick="closeConfigModal()">取消</button><button class="btn btn-primary" id="config-save" onclick="saveConfig()">保存配置</button></div>
   </div>
@@ -295,22 +314,28 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
     <div class="modal-ft"><button class="btn" type="button" onclick="closeRecordModal()">取消</button><button class="btn btn-primary" id="record-submit" type="submit">保存记录</button></div>
   </form></div>
 </div>
-<div class="modal-mask" id="company-modal" onclick="if(event.target===this)closeCompanyModal()">
-  <div class="modal"><div class="modal-hd"><div><h2 id="company-modal-title">公司信息</h2><p>修改后将保存到当前用户的本地总表。</p></div><button class="icon-btn" onclick="closeCompanyModal()" title="关闭">&times;</button></div>
-  <form id="company-form" onsubmit="submitCompanyDetails(event)">
-    <div class="modal-body">
-      <input id="company-record-id" type="hidden">
-      <div class="form-group"><label for="company-priority">优先级</label><select id="company-priority" required><option value="⭐⭐⭐⭐⭐">⭐⭐⭐⭐⭐</option><option value="⭐⭐⭐⭐">⭐⭐⭐⭐</option><option value="⭐⭐⭐">⭐⭐⭐</option><option value="⭐⭐">⭐⭐</option><option value="⭐">⭐</option></select></div>
-      <div class="form-group"><label for="company-job-jd">岗位 JD</label><textarea id="company-job-jd" maxlength="10000" placeholder="填写岗位职责、任职要求等 JD 信息"></textarea></div>
-      <div class="form-group"><label for="company-note">备注</label><textarea id="company-note" maxlength="5000" placeholder="填写公司评价、流程提醒或其他备注"></textarea></div>
-    </div>
-    <div class="modal-ft"><button class="btn" type="button" onclick="closeCompanyModal()">取消</button><button class="btn btn-primary" id="company-submit" type="submit">保存修改</button></div>
-  </form></div>
-</div>
 <div class="modal-mask" id="record-manager-modal" onclick="if(event.target===this)closeRecordManager()">
-  <div class="modal" style="width:min(700px,96vw)"><div class="modal-hd"><div><h2 id="record-manager-title">编辑投递记录</h2><p id="record-manager-description">选择需要修改或移出投递列表的记录。</p></div><button class="icon-btn" onclick="closeRecordManager()" title="关闭">&times;</button></div>
-    <div class="modal-body"><div class="tbl" style="max-height:60vh"><table><thead><tr><th>公司</th><th>目标岗位</th><th>操作</th></tr></thead><tbody id="record-manager-tbody"><tr><td colspan="3" class="center">加载中…</td></tr></tbody></table></div></div>
+  <div class="modal" style="width:min(720px,96vw)"><div class="modal-hd"><div><h2 id="record-manager-title">查找记录</h2><p id="record-manager-description">搜索并打开需要查看或修改的记录。</p></div><button class="icon-btn" onclick="closeRecordManager()" title="关闭">&times;</button></div>
+    <div class="modal-body"><div class="record-manager-search"><input id="record-manager-search" type="search" placeholder="搜索公司、岗位、城市、方向或类型" oninput="renderRecordManager()"></div><div class="tbl" style="max-height:55vh"><table><thead><tr><th>公司</th><th>目标岗位</th><th>操作</th></tr></thead><tbody id="record-manager-tbody"><tr><td colspan="3" class="center">加载中…</td></tr></tbody></table></div></div>
     <div class="modal-ft"><button class="btn" onclick="closeRecordManager()">关闭</button></div>
+  </div>
+</div>
+<div class="modal-mask" id="application-stats-modal" onclick="if(event.target===this)closeApplicationStats()">
+  <div class="modal application-stats-modal"><div class="modal-hd"><div><h2>投递统计</h2><p id="application-stats-subtitle">仅统计投递记录中的岗位</p></div><button class="icon-btn" onclick="closeApplicationStats()" title="关闭">&times;</button></div>
+    <div class="modal-body"><div class="stats-rate-grid" id="stats-rate-grid"><div class="stats-empty">正在生成统计…</div></div><div class="stats-chart-grid">
+      <section class="stats-chart"><h3>方向分布</h3><div class="stats-chart-body" id="stats-directions"></div></section>
+      <section class="stats-chart"><h3>公司类型</h3><div class="stats-chart-body" id="stats-company-types"></div></section>
+      <section class="stats-chart"><h3>当前进展</h3><div class="stats-chart-body" id="stats-progress"></div></section>
+      <section class="stats-chart"><h3>批次分布</h3><div class="stats-chart-body" id="stats-batches"></div></section>
+      <section class="stats-chart stats-chart-wide"><h3>投递城市</h3><div class="stats-chart-body" id="stats-cities"></div></section>
+    </div></div>
+    <div class="modal-ft"><button class="btn" onclick="closeApplicationStats()">关闭</button></div>
+  </div>
+</div>
+<div class="modal-mask" id="feishu-sync-modal" onclick="if(event.target===this)closeFeishuSyncModal()">
+  <div class="modal" style="width:min(620px,96vw)"><div class="modal-hd"><div><h2>同步飞书岗位</h2><p>仅 root 可用，将飞书表格中的新岗位同步到个人总表</p></div><button class="icon-btn" onclick="closeFeishuSyncModal()" title="关闭">&times;</button></div>
+    <div class="modal-body"><div class="form-group"><label for="feishu-sync-url">飞书表格链接</label><input id="feishu-sync-url" type="url" maxlength="2000" placeholder="https://xxx.feishu.cn/base/... 或 /sheets/..."></div><div class="feishu-sync-note">按公司名称、岗位和批次进行模糊去重。飞书单元格包含多个岗位、而个人总表中已保留其中一个岗位时，也会判定为重复并跳过。</div><div class="feishu-sync-result" id="feishu-sync-result"></div></div>
+    <div class="modal-ft"><button class="btn" onclick="closeFeishuSyncModal()">取消</button><button class="btn btn-primary" id="feishu-sync-submit" onclick="syncFeishuRecords()">开始同步</button></div>
   </div>
 </div>
 <div class="modal-mask" id="day-detail-modal" onclick="if(event.target===this)closeDayDetail()">
@@ -329,7 +354,7 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
   </div><div class="modal-ft"><button class="btn" type="button" onclick="closeCalendarEventModal()">取消</button><button class="btn btn-primary" id="cal-event-submit" type="submit">保存日程</button></div></form></div>
 </div>
 <div class="modal-mask" id="total-edit-modal" onclick="if(event.target===this)closeTotalEditModal()">
-  <div class="modal"><div class="modal-hd"><div><h2 id="total-edit-title">编辑总表记录</h2><p id="total-edit-description">仅修改总表基础信息，不会自动产生投递时间。</p></div><button class="icon-btn" onclick="closeTotalEditModal()" title="关闭">&times;</button></div>
+  <div class="modal record-detail-modal"><div class="modal-hd"><div><h2 id="total-edit-title">记录详情</h2><p id="total-edit-description">在一个窗口中查看和修改完整记录。</p></div><button class="icon-btn" onclick="closeTotalEditModal()" title="关闭">&times;</button></div>
   <form id="total-edit-form" onsubmit="submitTotalEdit(event)"><div class="modal-body"><div class="grid-2">
     <input id="total-edit-id" type="hidden">
     <div class="form-group"><label for="total-edit-company">公司</label><input id="total-edit-company" required maxlength="100"></div>
@@ -341,7 +366,18 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
     <div class="form-group" id="total-edit-progress-group"><label for="total-edit-progress">进展</label><select id="total-edit-progress"><option value="未投递">未投递</option><option value="已投递">已投递</option><option value="机考">机考</option><option value="面试">面试</option><option value="OC">OC</option><option value="已挂">已挂</option><option value="放弃">放弃</option></select></div>
     <div class="form-group"><label for="total-edit-deadline">截止</label><input id="total-edit-deadline" type="text" onfocus="activateOptionalDate(this)" onblur="deactivateOptionalDate(this)"></div>
     <div class="form-group" style="grid-column:1/-1"><label for="total-edit-url">入口网址</label><input id="total-edit-url" placeholder="https://..."></div>
-  </div></div><div class="modal-ft"><button class="btn" type="button" onclick="closeTotalEditModal()">取消</button><button class="btn btn-primary" id="total-edit-submit" type="submit">保存修改</button></div></form></div>
+    <div class="detail-section" id="total-edit-detail-section">投递流程与详细信息</div>
+    <div class="form-group" id="total-edit-priority-group"><label for="total-edit-priority">优先级</label><select id="total-edit-priority"><option value="⭐⭐⭐⭐⭐">⭐⭐⭐⭐⭐</option><option value="⭐⭐⭐⭐">⭐⭐⭐⭐</option><option value="⭐⭐⭐">⭐⭐⭐</option><option value="⭐⭐">⭐⭐</option><option value="⭐">⭐</option></select></div>
+    <div class="form-group"><label for="total-edit-apply-date">投递时间</label><input id="total-edit-apply-date" type="text" onfocus="activateOptionalDate(this)" onblur="deactivateOptionalDate(this)"></div>
+    <div class="form-group"><label for="total-edit-exam-date">机考时间</label><input id="total-edit-exam-date" type="text" onfocus="activateOptionalDate(this)" onblur="deactivateOptionalDate(this)"></div>
+    <div class="form-group"><label for="total-edit-interview1">一面</label><input id="total-edit-interview1" type="text" onfocus="activateOptionalDate(this)" onblur="deactivateOptionalDate(this)"></div>
+    <div class="form-group"><label for="total-edit-interview2">二面</label><input id="total-edit-interview2" type="text" onfocus="activateOptionalDate(this)" onblur="deactivateOptionalDate(this)"></div>
+    <div class="form-group"><label for="total-edit-interview3">三面</label><input id="total-edit-interview3" type="text" onfocus="activateOptionalDate(this)" onblur="deactivateOptionalDate(this)"></div>
+    <div class="form-group"><label for="total-edit-warm">保温</label><input id="total-edit-warm" type="text" onfocus="activateOptionalDate(this)" onblur="deactivateOptionalDate(this)"></div>
+    <div class="form-group"><label for="total-edit-result-date">结果时间</label><input id="total-edit-result-date" type="text" onfocus="activateOptionalDate(this)" onblur="deactivateOptionalDate(this)"></div>
+    <div class="form-group record-detail-textarea"><label for="total-edit-job-jd">岗位 JD</label><textarea id="total-edit-job-jd" maxlength="10000" placeholder="填写岗位职责、任职要求等信息"></textarea></div>
+    <div class="form-group record-detail-textarea"><label for="total-edit-note">备注</label><textarea id="total-edit-note" maxlength="5000" placeholder="填写公司评价、流程提醒或其他备注"></textarea></div>
+  </div></div><div class="detail-actions" id="total-edit-actions"><div class="detail-actions-copy"><b>记录管理</b><span>AI 补全只填写空缺字段，备注会追加在原内容之后</span></div><div class="detail-action-buttons"><button class="btn btn-ai-enrich" id="detail-enrich-btn" type="button" onclick="enrichCurrentRecord()">AI 补全</button><button class="btn btn-remove-application" id="detail-remove-btn" type="button" onclick="removeCurrentApplication()">移出投递</button><button class="btn" id="detail-share-btn" type="button" onclick="uploadCurrentToShared()">上传共享</button><button class="btn btn-danger" type="button" onclick="deleteCurrentRecord()">删除记录</button></div></div><div class="modal-ft"><button class="btn" type="button" onclick="closeTotalEditModal()">取消</button><button class="btn btn-primary" id="total-edit-submit" type="submit">保存修改</button></div></form></div>
 </div>
 <div class="modal-mask" id="chat-job-modal" onclick="if(event.target===this)closeChatJobModal()">
   <div class="modal chat-job-dialog"><div class="modal-hd"><div><h2>转发岗位信息</h2><p>选择岗位后直接转发给当前联系人</p></div><button class="icon-btn" onclick="closeChatJobModal()" title="关闭">&times;</button></div>
@@ -352,13 +388,12 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
   <aside class="sidebar">
     <div class="brand"><div class="mark"></div><div><b>校招信息看板</b><span>本地投递进度工作台</span></div></div>
     <div class="nav-sec">工作台</div>
-    <a data-page="page-dashboard" onclick="navTo(this)" class="active">看板总览</a>
+    <a data-page="page-dashboard" onclick="navTo(this)" class="active">投递信息</a>
     <a data-page="page-total" onclick="navTo(this)">总表信息</a>
-    <a data-page="page-chat" onclick="navTo(this)">聊天<span class="nav-unread" id="chat-nav-unread">0</span></a>
-    <a data-page="page-calendar" onclick="navTo(this)">秋招日历</a>
+    <a data-page="page-chat" onclick="navTo(this)">站内聊天<span class="nav-unread" id="chat-nav-unread">0</span></a>
     <a data-page="page-resume" onclick="navTo(this)">简历预览</a>
     <a data-page="page-ai-analysis" onclick="navTo(this)">简历分析</a>
-    <a data-page="page-admin" id="admin-nav" onclick="navTo(this)" style="display:none">账号管理</a>
+    <a data-page="page-admin" id="admin-nav" onclick="navTo(this)" style="display:none">管理页面</a>
     <div class="sidebar-foot">
       <div id="user-menu" style="display:none;align-items:center;gap:8px;margin-bottom:8px;padding:4px 0">
         <span style="font-weight:800;font-size:13px" id="user-name">—</span>
@@ -368,35 +403,23 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
     </div>
   </aside>
   <main class="main" id="app-main" style="display:none">
-    <div class="topbar"><h1 id="page-title">看板总览</h1><div class="spacer"></div><span class="muted" id="last-updated" style="font-size:12px">—</span><div class="notification-wrap"><button class="icon-btn notification-btn" id="notification-btn" onclick="toggleNotifications(event)" title="通知" aria-label="通知">&#128276;<span class="notification-dot"></span></button><div class="notification-panel" id="notification-panel"><div class="notification-head">最新通知</div><div id="notification-list"><div class="center">暂无通知</div></div></div></div><button class="icon-btn" onclick="openConfigModal()" title="AI 配置" aria-label="AI 配置"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15.25A3.25 3.25 0 1 0 12 8.75a3.25 3.25 0 0 0 0 6.5Z" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.8 7.8 0 0 0 .05-1.5 7.8 7.8 0 0 0-.05-1.5l2-1.55-2-3.46-2.48 1a7.7 7.7 0 0 0-2.57-1.5L14 2.35h-4L9.65 5a7.7 7.7 0 0 0-2.57 1.5l-2.48-1-2 3.46 2 1.55a7.8 7.8 0 0 0-.05 1.5c0 .51.02 1.01.05 1.5l-2 1.55 2 3.46 2.48-1a7.7 7.7 0 0 0 2.57 1.5l.35 2.64h4l.35-2.64a7.7 7.7 0 0 0 2.57-1.5l2.48 1 2-3.46-2-1.55Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button><button class="icon-btn" onclick="toggleTheme()" id="theme-btn" title="主题">🌙</button><button class="btn" onclick="refreshData(event)">刷新</button></div>
+    <div class="topbar"><h1 id="page-title">投递信息</h1><div class="spacer"></div><span class="muted" id="last-updated" style="font-size:12px">—</span><div class="notification-wrap"><button class="icon-btn notification-btn" id="notification-btn" onclick="toggleNotifications(event)" title="通知" aria-label="通知">&#128276;<span class="notification-dot"></span></button><div class="notification-panel" id="notification-panel"><div class="notification-head">最新通知</div><div id="notification-list"><div class="center">暂无通知</div></div></div></div><button class="icon-btn" onclick="openConfigModal()" title="AI 配置" aria-label="AI 配置"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15.25A3.25 3.25 0 1 0 12 8.75a3.25 3.25 0 0 0 0 6.5Z" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.8 7.8 0 0 0 .05-1.5 7.8 7.8 0 0 0-.05-1.5l2-1.55-2-3.46-2.48 1a7.7 7.7 0 0 0-2.57-1.5L14 2.35h-4L9.65 5a7.7 7.7 0 0 0-2.57 1.5l-2.48-1-2 3.46 2 1.55a7.8 7.8 0 0 0-.05 1.5c0 .51.02 1.01.05 1.5l-2 1.55 2 3.46 2.48-1a7.7 7.7 0 0 0 2.57 1.5l.35 2.64h4l.35-2.64a7.7 7.7 0 0 0 2.57-1.5l2.48 1 2-3.46-2-1.55Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button><button class="icon-btn" onclick="toggleTheme()" id="theme-btn" title="主题">🌙</button><button class="btn" onclick="refreshData(event)">刷新</button></div>
 
-    <!-- 看板总览 -->
+    <!-- 投递信息 -->
     <section class="page active" id="page-dashboard">
-      <div class="hero"><div>
-        <h2>校招信息看板</h2><p>本地职位表实时统计：投递漏斗、截止风险、方向分布一目了然。</p>
-        <div class="hero-metrics">
-          <span class="hero-chip"><i></i><span id="hero-health">—</span></span>
-          <span class="hero-chip"><span id="hero-focus">—</span></span>
-          <span class="hero-chip"><span id="hero-action">—</span></span>
-        </div>
-      </div></div>
       <div class="kpis">
-        <div class="kpi b"><div class="kpi-label">监控公司</div><div class="kpi-value" id="kpi-total">-</div><div class="kpi-sub">主表公司数</div></div>
-        <div class="kpi g"><div class="kpi-label">画像字段</div><div class="kpi-value" id="kpi-a">-</div><div class="kpi-sub">方向/类型统计</div></div>
-        <div class="kpi a"><div class="kpi-label">明确截止</div><div class="kpi-value" id="kpi-dated">-</div><div class="kpi-sub">有具体日期</div></div>
-        <div class="kpi r"><div class="kpi-label">明确结束</div><div class="kpi-value" id="kpi-closed">-</div><div class="kpi-sub">已截止/结束</div></div>
-        <div class="kpi c"><div class="kpi-label">已投递</div><div class="kpi-value" id="kpi-applied">-</div><div class="kpi-sub">有投递时间</div></div>
-        <div class="kpi g"><div class="kpi-label">面试中</div><div class="kpi-value" id="kpi-interview">-</div><div class="kpi-sub">一/二/三面</div></div>
+        <div class="kpi b"><div class="kpi-label">投递岗位</div><div class="kpi-value" id="kpi-total">-</div><div class="kpi-sub">已进入投递流程</div></div>
+        <div class="kpi a"><div class="kpi-label">笔试 / 机考</div><div class="kpi-value" id="kpi-dated">-</div><div class="kpi-sub">有笔试或机考记录</div></div>
+        <div class="kpi c"><div class="kpi-label">面试</div><div class="kpi-value" id="kpi-applied">-</div><div class="kpi-sub">进入面试流程</div></div>
+        <div class="kpi g"><div class="kpi-label">Offer</div><div class="kpi-value" id="kpi-interview">-</div><div class="kpi-sub">OC 或已录用</div></div>
       </div>
-      <div class="card"><div class="card-hd"><span class="dot g"></span><div class="card-title">投递漏斗</div></div><div class="card-body"><div class="funnel" id="funnel"><div class="center">加载中…</div></div></div></div>
-      <div class="grid-3">
-        <div class="card"><div class="card-hd"><span class="dot a"></span><div class="card-title">截止时间轴</div><div class="card-sub" id="dated-count">—</div></div><div class="card-body"><div class="timeline" id="deadline-timeline"><div class="center">—</div></div></div></div>
-        <div class="card"><div class="card-hd"><span class="dot"></span><div class="card-title">方向分布</div></div><div class="card-body" id="chart-dir"></div></div>
-        <div class="card"><div class="card-hd"><span class="dot g"></span><div class="card-title">公司类型</div></div><div class="card-body" id="chart-type"></div></div>
-      </div>
+      <div class="card dashboard-calendar"><div class="card-hd"><span class="dot a"></span><div class="card-title">秋招日历</div><div class="card-sub">日程、投递节点与截止日期</div></div><div class="card-body">
+        <div class="calendar-toolbar"><button class="icon-btn" onclick="changeCalendarMonth(-1)" title="上个月">&#8249;</button><h2 id="calendar-title">—</h2><button class="icon-btn" onclick="changeCalendarMonth(1)" title="下个月">&#8250;</button><button class="btn" onclick="calendarToday()">今天</button><button class="btn btn-primary" onclick="openCalendarEventModal()">新建日程</button><div class="calendar-legend"><span class="lg-apply">投递</span><span class="lg-exam">机考/笔试</span><span>面试</span><span class="lg-warm">保温</span><span class="lg-result">结果</span><span class="lg-deadline">截止</span><span class="lg-other">其他</span></div></div>
+        <div class="calendar-layout"><div class="calendar-scroll"><div class="calendar-grid" id="calendar-grid"><div class="center" style="grid-column:1/-1">加载中…</div></div></div><aside class="countdown-panel"><h3>近期安排</h3><div class="countdown-list" id="countdown-list"><div class="center">暂无安排</div></div></aside></div>
+      </div></div>
       <div class="card data-table-card"><div class="card-hd"><span class="dot"></span><div class="card-title">投递记录</div><div class="card-sub" id="recent-record-count">—</div></div>
         <div class="tbl" style="max-height:440px"><table class="data-table records-table"><colgroup><col style="width:120px"><col style="width:145px"><col style="width:68px"><col style="width:64px"><col style="width:68px"><col style="width:58px"><col style="width:58px"><col style="width:58px"><col style="width:58px"><col style="width:58px"><col style="width:58px"><col style="width:68px"><col style="width:76px"><col style="width:58px"></colgroup><thead><tr><th>公司</th><th>目标岗位</th><th>城市</th><th>批次</th><th>投递</th><th>机考</th><th>一面</th><th>二面</th><th>三面</th><th>保温</th><th>结果</th><th>截止</th><th>进展</th><th>入口</th></tr></thead><tbody id="recent-tbody"><tr><td colspan="14" class="center">加载中…</td></tr></tbody></table></div>
-        <div class="table-actions"><button class="btn btn-primary" onclick="openRecordModal()">新增记录</button><button class="btn" onclick="openRecordManager()">管理记录</button></div>
+        <div class="table-actions"><button class="btn btn-primary" onclick="openRecordModal()">新增记录</button><button class="btn" onclick="openRecordManager()">管理记录</button><button class="btn" onclick="openApplicationStats()">统计信息</button></div>
       </div>
     </section>
 
@@ -404,8 +427,8 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
     <section class="page" id="page-total">
       <div class="card data-table-card"><div class="card-hd"><span class="dot"></span><div class="card-title">总表信息</div><div class="card-sub" id="total-record-count">—</div></div>
         <div class="total-tools"><div class="total-view-switch" role="tablist" aria-label="总表范围"><button id="total-personal-tab" class="active" role="tab" aria-selected="true" onclick="switchTotalMode('personal')">个人总表</button><button id="total-shared-tab" role="tab" aria-selected="false" onclick="switchTotalMode('shared')">共享总表</button></div><div class="total-search"><input id="total-search" type="search" placeholder="查找公司、岗位、城市、方向或类型" aria-label="查找总表记录" oninput="renderTotalTable()"></div><select id="total-sort" aria-label="总表排序方式" onchange="renderTotalTable()"><option value="default">默认排序</option><option value="priority-desc">优先级：高到低</option><option value="priority-asc">优先级：低到高</option></select></div>
-        <div class="tbl" style="max-height:calc(100vh - 160px)"><table class="data-table master-table"><colgroup><col style="width:16%"><col style="width:21%"><col style="width:15%"><col style="width:13%"><col style="width:10%"><col style="width:10%"><col style="width:7%"><col style="width:8%"></colgroup><thead><tr><th>公司</th><th>目标岗位</th><th>方向</th><th>公司类型</th><th>截止</th><th id="total-status-head">进展</th><th>入口</th><th class="total-action">操作</th></tr></thead><tbody id="total-tbody"><tr><td colspan="8" class="center">加载中…</td></tr></tbody></table></div>
-        <div class="table-actions" id="total-personal-actions"><button class="btn btn-primary" onclick="openTotalCreateModal()">新增记录</button><button class="btn" onclick="openRecordManager('records')">管理记录</button><button class="btn" onclick="downloadTotalExcel('template',this)">下载模板</button><button class="btn" onclick="downloadTotalExcel('export',this)">导出 Excel</button><input id="total-import-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onchange="importTotalExcel(event)"><button class="btn" id="total-import-btn" onclick="$('total-import-file').click()">导入 Excel</button></div><div class="table-actions" id="total-shared-note" style="display:none"><div id="shared-admin-actions" style="display:none;gap:9px"><button class="btn btn-primary" onclick="openSharedCreateModal()">新建记录</button><button class="btn" onclick="openSharedManager()">管理记录</button></div><span class="muted">共享总表所有用户均可查看；完整个人记录可在“个人总表 → 管理记录”中上传。</span></div>
+        <div class="tbl" style="max-height:calc(100vh - 160px)"><table class="data-table master-table"><colgroup><col style="width:14%"><col style="width:18%"><col style="width:13%"><col style="width:11%"><col style="width:9%"><col style="width:8%"><col style="width:10%"><col style="width:7%"><col style="width:10%"></colgroup><thead><tr><th>公司</th><th>目标岗位</th><th>方向</th><th>公司类型</th><th>截止</th><th>批次</th><th id="total-status-head">进展</th><th>入口</th><th class="total-action">操作</th></tr></thead><tbody id="total-tbody"><tr><td colspan="9" class="center">加载中…</td></tr></tbody></table></div>
+        <div class="table-actions" id="total-personal-actions"><button class="btn btn-primary" onclick="openTotalCreateModal()">新增记录</button><button class="btn" onclick="openRecordManager('records')">管理记录</button><button class="btn" onclick="downloadTotalExcel('template',this)">下载模板</button><button class="btn" onclick="downloadTotalExcel('export',this)">导出 Excel</button><input id="total-import-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onchange="importTotalExcel(event)"><button class="btn" id="total-import-btn" onclick="$('total-import-file').click()">导入 Excel</button><button class="btn" id="feishu-sync-button" style="display:none" onclick="openFeishuSyncModal()">同步飞书</button></div><div class="table-actions" id="total-shared-note" style="display:none"><div id="shared-admin-actions" style="display:none;gap:9px"><button class="btn btn-primary" onclick="openSharedCreateModal()">新建记录</button><button class="btn" onclick="openSharedManager()">管理记录</button><button class="btn" id="givemeoc-sync-button" style="display:none" onclick="syncFromGivemeOC()">同步 GiveMeOC</button><span id="givemeoc-sync-progress" style="display:none;margin-left:6px;font:13px var(--font);color:var(--sub)"></span></div><span class="muted">共享总表所有用户均可查看；完整个人记录可在“个人总表 → 管理记录”中上传。</span></div>
       </div>
     </section>
 
@@ -425,14 +448,6 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
           </div>
         </div>
       </div>
-    </section>
-
-    <!-- 秋招日历 -->
-    <section class="page" id="page-calendar">
-      <div class="card"><div class="card-body">
-        <div class="calendar-toolbar"><button class="icon-btn" onclick="changeCalendarMonth(-1)" title="上个月">&#8249;</button><h2 id="calendar-title">—</h2><button class="icon-btn" onclick="changeCalendarMonth(1)" title="下个月">&#8250;</button><button class="btn" onclick="calendarToday()">今天</button><button class="btn btn-primary" onclick="openCalendarEventModal()">新建日程</button><div class="calendar-legend"><span class="lg-apply">投递</span><span class="lg-exam">机考/笔试</span><span>面试</span><span class="lg-warm">保温</span><span class="lg-result">结果</span><span class="lg-deadline">截止</span><span class="lg-other">其他</span></div></div>
-        <div class="calendar-layout"><div class="calendar-scroll"><div class="calendar-grid" id="calendar-grid"><div class="center" style="grid-column:1/-1">加载中…</div></div></div><aside class="countdown-panel"><h3>近期安排</h3><div class="countdown-list" id="countdown-list"><div class="center">暂无安排</div></div></aside></div>
-      </div></div>
     </section>
 
     <!-- 简历预览 -->
@@ -469,17 +484,59 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
     </section>
 
     <!-- Root 管理 -->
-    <section class="page" id="page-admin">
-      <div class="card"><div class="card-hd"><span class="dot"></span><div class="card-title">用户账号</div><div class="card-sub" id="admin-user-count">0 个用户</div></div>
-        <div id="admin-user-list"><div class="center">加载中…</div></div>
+    <section class="page" id="page-admin"><div class="admin-layout">
+      <nav class="admin-nav-pane">
+        <button class="admin-nav-item active" data-panel="users" id="admin-nav-users" style="display:none">用户账号</button>
+        <button class="admin-nav-item" data-panel="invite">邀请码</button>
+        <button class="admin-nav-item" data-panel="sync">自动同步</button>
+        <button class="admin-nav-item" data-panel="notice">发布通知</button>
+        <button class="admin-nav-item" data-panel="logs">系统日志</button>
+      </nav>
+      <div class="admin-content-pane">
+        <!-- users -->
+        <div class="admin-panel active" id="admin-panel-users">
+          <div class="card"><div class="card-hd"><span class="dot"></span><div class="card-title">用户账号</div><div class="card-sub" id="admin-user-count">0</div></div>
+            <div id="admin-user-list"><div class="center">加载中…</div></div>
+          </div>
+        </div>
+        <!-- invite -->
+        <div class="admin-panel" id="admin-panel-invite">
+          <div class="card"><div class="card-hd"><span class="dot g"></span><div class="card-title">注册邀请码</div><div class="card-sub" id="invite-code-count">0 可用</div></div><div class="card-body">
+            <button class="btn btn-primary btn-sm" id="invite-generate-btn" onclick="generateInviteCode()">生成邀请码</button>
+            <div class="help" style="margin:5px 0 8px;font-size:11px">一次性使用，注册后自动核销</div>
+            <div class="invite-list" id="invite-code-list"><div class="center">加载中…</div></div>
+          </div></div>
+        </div>
+        <!-- sync -->
+        <div class="admin-panel" id="admin-panel-sync">
+          <div class="card" id="sync-schedule-card"><div class="card-hd"><span class="dot a"></span><div class="card-title">自动同步</div><div class="card-sub"><span id="sync-schedule-status">—</span></div></div><div class="card-body">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font:13px var(--font);color:var(--ink)">
+                <input type="checkbox" id="sync-schedule-enabled" onchange="saveSyncSchedule()" style="display:none">
+                <span class="toggle-track" style="width:36px;height:20px;border-radius:10px;background:var(--line);position:relative;transition:background .2s;flex-shrink:0"><span class="toggle-thumb" style="position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span></span>启用
+              </label>
+              <span style="font:12px var(--font);color:var(--sub)">每天</span>
+              <input id="sync-schedule-time" type="time" value="04:00" onchange="saveSyncSchedule()" style="width:80px;height:30px;padding:0 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font:12px var(--font);outline:none">
+              <span style="font:11px var(--font);color:var(--muted)">从 GiveMeOC 拉取 2027届 秋招岗位</span>
+            </div>
+          </div></div>
+        </div>
+        <!-- notice -->
+        <div class="admin-panel" id="admin-panel-notice">
+          <div class="card"><div class="card-hd"><span class="dot a"></span><div class="card-title">发布通知</div></div><div class="card-body">
+            <div class="form-group"><input id="notice-title" maxlength="100" placeholder="通知标题"></div>
+            <div class="form-group"><textarea id="notice-content" maxlength="5000" rows="4" placeholder="通知内容"></textarea></div>
+            <button class="btn btn-primary" id="notice-submit" onclick="publishNotification()">发布通知</button>
+          </div></div>
+        </div>
+        <!-- logs -->
+        <div class="admin-panel" id="admin-panel-logs">
+          <div class="card" id="log-viewer-card"><div class="card-hd"><span class="dot"></span><div class="card-title">系统日志</div><div class="card-sub" id="log-count">—</div></div>
+            <div id="log-list" style="max-height:calc(100vh - 280px);overflow-y:auto;font:11px/1.6 var(--font-mono,monospace);background:var(--bg);border-radius:0 0 18px 18px;padding:6px 12px"><div class="center muted">连接中…</div></div>
+          </div>
+        </div>
       </div>
-      <div class="card"><div class="card-hd"><span class="dot g"></span><div class="card-title">注册邀请码</div><div class="card-sub" id="invite-code-count">0 个可用</div></div><div class="card-body"><button class="btn btn-primary" id="invite-generate-btn" onclick="generateInviteCode()">生成邀请码</button><div class="help" style="margin:7px 0 12px">邀请码仅可使用一次；注册成功后自动核销。</div><div class="invite-list" id="invite-code-list"><div class="center">加载中…</div></div></div></div>
-      <div class="card"><div class="card-hd"><span class="dot a"></span><div class="card-title">发布通知</div></div><div class="card-body">
-        <div class="form-group"><label for="notice-title">通知标题</label><input id="notice-title" maxlength="100" placeholder="例如：系统维护通知"></div>
-        <div class="form-group"><label for="notice-content">通知内容</label><textarea id="notice-content" maxlength="5000" rows="6" placeholder="填写需要通知所有用户的内容"></textarea></div>
-        <button class="btn btn-primary" id="notice-submit" onclick="publishNotification()">发布通知</button>
-      </div></div>
-    </section>
+    </div></section>
 
   </main>
 </div>
@@ -507,8 +564,8 @@ function animateNumber(id,value){var el=$(id);if(!el)return;var target=Number(va
 async function api(method,url,body,opt){opt=opt||{};var o={method:method,headers:{'Content-Type':'application/json'}};if(!opt.noauth&&_token)o.headers['Authorization']='Bearer '+_token;if(body!==undefined)o.body=JSON.stringify(body);var r,text;try{r=await fetch(url,o);text=await r.text()}catch(e){if(!opt.silent)showErrorModal('请求失败',url+'\n\n'+e.message);throw e}if((method==='GET'||opt.retryGateway)&&[502,503,504].includes(r.status)&&!opt._gatewayRetried){await new Promise(function(resolve){setTimeout(resolve,500)});return api(method,url,body,Object.assign({},opt,{_gatewayRetried:true}))}if(r.status===401){clearAuth();location.reload();throw new Error('登录已过期')}var data={};try{data=text?JSON.parse(text):{}}catch(e){var msg=(text||'HTTP '+r.status).slice(0,1200);if(!opt.silent)showErrorModal('接口返回不是 JSON',url+'\nHTTP '+r.status+'\n\n'+msg);var parseError=new Error(msg.slice(0,180));parseError.status=r.status;throw parseError}if(!r.ok){var fallback='HTTP '+r.status+(r.statusText?' '+r.statusText:'');var detail=typeof data.detail==='string'?data.detail:(data.error||(Object.keys(data).length?JSON.stringify(data):fallback));if(!opt.silent)showErrorModal('接口请求失败',url+'\nHTTP '+r.status+'\n\n'+detail);var requestError=new Error(detail||fallback);requestError.status=r.status;throw requestError}return data}
 
 /* ---------- 路由 ---------- */
-var PAGES={'page-dashboard':'看板总览','page-total':'总表信息','page-chat':'聊天','page-calendar':'秋招日历','page-resume':'简历预览','page-ai-analysis':'简历分析','page-admin':'账号管理'};
-function navTo(el){var id=typeof el==='string'?el:el.dataset.page;if(id==='page-admin'&&!(_currentUser&&_currentUser.is_root))id='page-dashboard';document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.toggle('active',a.dataset.page===id)});document.querySelectorAll('.page').forEach(function(p){p.classList.toggle('active',p.id===id)});$('page-title').textContent=PAGES[id]||'';localStorage.setItem('radar_page',id);if(id==='page-dashboard'&&!_lastData)load();if(id==='page-chat')loadChat();if(id==='page-calendar'){if(_lastData){renderCalendar()}else{load().then(renderCalendar)}loadLocalEvents().then(renderCalendar)}if(id==='page-resume')loadResumes();if(id==='page-ai-analysis')loadAIOptions();if(id==='page-admin')loadAdminPage()}
+var PAGES={'page-dashboard':'投递信息','page-total':'总表信息','page-chat':'聊天','page-resume':'简历预览','page-ai-analysis':'简历分析','page-admin':'管理页面'};
+function navTo(el){var id=typeof el==='string'?el:el.dataset.page;if(id==='page-calendar'||(id==='page-admin'&&!(_currentUser&&_currentUser.is_admin)))id='page-dashboard';document.querySelectorAll('.sidebar a').forEach(function(a){a.classList.toggle('active',a.dataset.page===id)});document.querySelectorAll('.page').forEach(function(p){p.classList.toggle('active',p.id===id)});$('page-title').textContent=PAGES[id]||'';localStorage.setItem('radar_page',id);if(id==='page-dashboard'){if(!_lastData)load();loadLocalEvents().then(renderCalendar)}if(id==='page-chat')loadChat();if(id==='page-resume')loadResumes();if(id==='page-ai-analysis')loadAIOptions();if(id==='page-admin')loadAdminPage()}
 function applyTheme(t){document.documentElement.dataset.theme=t;$('theme-btn').textContent=t==='dark'?'☀️':'🌙';localStorage.setItem('radar_theme',t)}
 function toggleTheme(){applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark')}
 
@@ -526,6 +583,15 @@ function normCompany(s){return String(s||'').replace(/\s+/g,'').trim()}
 function buildAppliedMap(recent){var map=new Map();for(var i=0;i<recent.length;i++){var r=recent[i],key=normCompany(r.company);if(!key)continue;var p=arr(r.progress),level='已投递',cls='done';if(p.some(function(x){return String(x).indexOf('面')>=0})){level='面试中';cls='mid'}if(p.some(function(x){return String(x).indexOf('OC')>=0||String(x).indexOf('Offer')>=0})){level='Offer';cls='done'}if(p.some(function(x){return String(x).indexOf('已挂')>=0||String(x).indexOf('放弃')>=0})){level='已结束';cls='dead'}map.set(key,{level:level,cls:cls})}return map}
 function renderBars(data,el,cls){if(!cls)cls='';var rows=arr(data),max=Math.max.apply(null,rows.map(function(x){return x[1]}));if(!max)max=1;el.innerHTML=rows.length?rows.map(function(x){return'<div class="bar"><div class="bar-row"><span>'+esc(x[0])+'</span><strong>'+x[1]+'</strong></div><div class="track"><div class="fill '+cls+'" style="width:'+Math.max(8,x[1]/max*100).toFixed(0)+'%"></div></div></div>'}).join(''):'<div class="center">暂无数据</div>'}
 
+/* ---------- 投递统计 ---------- */
+function applicationRecords(){return arr(_lastData&&_lastData.main&&_lastData.main.recent)}
+function applicationMilestones(record){var progress=arr(record&&record.progress).join(' '),offer=/\bOC\b|offer|录用/i.test(progress),interview=!!(record&&(record.interview1||record.interview2||record.interview3))||offer||/面试/.test(progress),exam=!!(record&&record.exam_date)||/机考|笔试/.test(progress);return{exam:exam,interview:interview,offer:offer}}
+function applicationDistribution(records,getter,splitValues){var counts=new Map();records.forEach(function(record){var values=arr(getter(record)),seen=new Set();values.forEach(function(value){var parts=splitValues?String(value||'').split(/[,，、]+/):[value];parts.forEach(function(part){var name=String(part||'').trim();if(name)seen.add(name)})});seen.forEach(function(name){counts.set(name,(counts.get(name)||0)+1)})});return Array.from(counts.entries()).sort(function(a,b){return b[1]-a[1]||String(a[0]).localeCompare(String(b[0]),'zh-CN')})}
+function statsRateCard(label,count,total,color,description){var rate=total?Math.round(count/total*100):0;return'<article class="stats-rate-card"><div class="stats-rate-ring" style="--rate:'+rate+';--chart-color:'+color+'"><div><b>'+rate+'%</b><span>'+count+' / '+total+'</span></div></div><div class="stats-rate-copy"><b>'+esc(label)+'</b><span>'+esc(description)+'</span></div></article>'}
+function renderApplicationStats(){var records=applicationRecords(),total=records.length,exam=0,interview=0,offer=0;records.forEach(function(record){var stages=applicationMilestones(record);if(stages.exam)exam++;if(stages.interview)interview++;if(stages.offer)offer++});$('application-stats-subtitle').textContent='仅统计投递记录中的 '+total+' 个岗位';$('stats-rate-grid').innerHTML=statsRateCard('笔试率',exam,total,'var(--amber)','有笔试、机考时间或处于相应阶段')+statsRateCard('面试率',interview,total,'var(--cyan)','有任一面试时间或已进入面试阶段')+statsRateCard('Offer 率',offer,total,'var(--green)','当前进展为 OC、Offer 或录用');renderBars(applicationDistribution(records,function(r){return r.dir},true),$('stats-directions'));renderBars(applicationDistribution(records,function(r){return r.type}),$('stats-company-types'),'g');renderBars(applicationDistribution(records,function(r){return arr(r.progress).slice(0,1)}),$('stats-progress'));renderBars(applicationDistribution(records,function(r){return r.batch}),$('stats-batches'),'g');renderBars(applicationDistribution(records,function(r){return r.city},true),$('stats-cities'))}
+function openApplicationStats(){renderApplicationStats();$('application-stats-modal').classList.add('show')}
+function closeApplicationStats(){$('application-stats-modal').classList.remove('show')}
+
 /* ---------- 新增投递记录 ---------- */
 function inputDate(v){if(!v)return'';var d=new Date(v);if(isNaN(d))return String(v).slice(0,10);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
 var RECORD_DATE_IDS=['record-date','record-exam','record-interview1','record-interview2','record-interview3','record-warm','record-result','record-deadline'];
@@ -542,27 +608,40 @@ async function deleteTotalRecord(i){var r=arr(_lastData&&_lastData.main&&_lastDa
 var _recordManagerSource='recent';
 function shareMissing(record){var missing=[];if(!String(record.company||'').trim())missing.push('公司名称');if(!String(record.type||'').trim())missing.push('公司类型');if(!String(record.job||'').trim())missing.push('岗位');if(!arr(record.dir).filter(Boolean).length)missing.push('方向');if(!String(record.url||'').trim())missing.push('入口');return missing}
 function renderRecordManager(source){
-  _recordManagerSource=source||_recordManagerSource||'recent';var isTotal=_recordManagerSource==='records',isShared=_recordManagerSource==='shared',records=isShared?_sharedRecords:arr(_lastData&&_lastData.main&&_lastData.main[_recordManagerSource]);
-  $('record-manager-title').textContent=isShared?'管理共享总表':isTotal?'管理个人总表':'编辑投递记录';$('record-manager-description').textContent=isShared?'管理员可在这里删除共享记录，用户已复制的个人记录不会受影响。':isTotal?'仅公司名称、公司类型、岗位、方向和入口均完整的记录可上传共享总表。':'投递记录删除仅改为未投递并清空流程时间。';
-  $('record-manager-tbody').innerHTML=records.map(function(r,i){if(isShared){return'<tr><td class="company">'+esc(r.company||'—')+'</td><td class="job">'+esc(r.job||'—')+'</td><td><div class="manager-actions"><button class="btn btn-danger" onclick="deleteSharedRecord('+i+')">删除</button></div></td></tr>'}var editFn=isTotal?'editTotalRecord('+i+')':'editRecord('+i+')',deleteFn=isTotal?'deleteTotalRecord('+i+')':'deleteRecord('+i+')',share='';if(isTotal){var missing=shareMissing(r),disabled=missing.length?' disabled title="需补全：'+esc(missing.join('、'))+'"':' onclick="uploadToShared('+i+')"';share='<button class="btn"'+disabled+'>上传共享</button>'}return'<tr><td class="company">'+esc(r.company||'—')+'</td><td class="job">'+esc(r.job||'—')+'</td><td><div class="manager-actions"><button class="btn" onclick="'+editFn+'">编辑</button>'+share+'<button class="btn" onclick="'+deleteFn+'">删除</button></div></td></tr>'}).join('')||'<tr><td colspan="3" class="center">暂无记录</td></tr>'
+  _recordManagerSource=source||_recordManagerSource||'recent';var isTotal=_recordManagerSource==='records',isShared=_recordManagerSource==='shared',records=isShared?_sharedRecords:arr(_lastData&&_lastData.main&&_lastData.main[_recordManagerSource]),query=String($('record-manager-search').value||'').trim().toLowerCase(),items=records.map(function(record,index){return{record:record,index:index}}).filter(function(item){var r=item.record,haystack=[r.company,r.job,r.city,r.type,arr(r.dir).join(' '),r.contributor].join(' ').toLowerCase();return!query||haystack.indexOf(query)>=0});
+  $('record-manager-title').textContent=isShared?'管理共享总表':isTotal?'查找个人总表记录':'查找投递记录';$('record-manager-description').textContent=isShared?'搜索共享记录并执行管理员操作。':isTotal?'搜索记录后进入统一详情窗口进行查看、修改、共享或删除。':'搜索投递中的公司或岗位，进入统一详情窗口修改所有信息。';
+  $('record-manager-tbody').innerHTML=items.map(function(item){var r=item.record,i=item.index;if(isShared){return'<tr><td class="company">'+esc(r.company||'—')+'</td><td class="job">'+esc(r.job||'—')+'</td><td><div class="manager-actions"><button class="btn btn-danger" onclick="deleteSharedRecord('+i+')">删除</button></div></td></tr>'}return'<tr><td class="company"><button class="company-link" onclick="openRecordDetails(\''+_recordManagerSource+'\','+i+')">'+esc(r.company||'—')+'</button></td><td class="job">'+esc(r.job||'—')+'</td><td><button class="btn" onclick="openRecordDetails(\''+_recordManagerSource+'\','+i+')">打开详情</button></td></tr>'}).join('')||'<tr><td colspan="3" class="center">'+(query?'没有匹配的记录':'暂无记录')+'</td></tr>'
 }
 async function uploadToShared(i){var records=arr(_lastData&&_lastData.main&&_lastData.main.records),r=records[i];if(!r||!r.record_id)return;var missing=shareMissing(r);if(missing.length){toast('请先补全：'+missing.join('、'),'error');return}try{var result=await api('POST','/api/dashboard/shared/records/from-personal/'+encodeURIComponent(r.record_id));toast(result.message||'已上传共享总表','success');await loadSharedRecords(true)}catch(err){toast('上传共享失败：'+err.message,'error',5600)}}
-function openRecordManager(source){renderRecordManager(source||'recent');$('record-manager-modal').classList.add('show')}
-async function openSharedManager(){if(!_sharedCanDelete)return;await loadSharedRecords(true);renderRecordManager('shared');$('record-manager-modal').classList.add('show')}
+function openRecordManager(source){_recordManagerSource=source||'recent';$('record-manager-search').value='';renderRecordManager(_recordManagerSource);$('record-manager-modal').classList.add('show');setTimeout(function(){$('record-manager-search').focus()},40)}
+async function openSharedManager(){if(!_sharedCanDelete)return;await loadSharedRecords(true);openRecordManager('shared')}
 function closeRecordManager(){$('record-manager-modal').classList.remove('show')}
 
 var _totalEditMode='personal';
-function setSharedCreateFields(shared){['total-edit-job','total-edit-directions','total-edit-company-type','total-edit-url'].forEach(function(id){$(id).required=shared});$('total-edit-job-label').textContent=shared?'目标岗位':'目标岗位（选填）';$('total-edit-directions-label').textContent=shared?'方向':'方向（选填）';$('total-edit-company-type-label').textContent=shared?'公司类型':'公司类型（选填）';$('total-edit-progress-group').style.display=shared?'none':'block'}
-function openTotalCreateModal(){_totalEditMode='personal';setSharedCreateFields(false);$('total-edit-form').reset();$('total-edit-id').value='';$('total-edit-deadline').type='text';$('total-edit-title').textContent='新增总表记录';$('total-edit-description').textContent='添加待关注岗位，不会自动加入投递记录。';$('total-edit-submit').textContent='新增记录';$('total-edit-progress').value='未投递';$('total-edit-modal').classList.add('show');setTimeout(function(){$('total-edit-company').focus()},30)}
-function openSharedCreateModal(){if(!_sharedCanDelete)return;_totalEditMode='shared';setSharedCreateFields(true);$('total-edit-form').reset();$('total-edit-id').value='';$('total-edit-deadline').type='text';$('total-edit-title').textContent='新建共享记录';$('total-edit-description').textContent='公司、公司类型、岗位、方向和入口均为必填项。';$('total-edit-submit').textContent='添加到共享总表';$('total-edit-progress').value='未投递';$('total-edit-modal').classList.add('show');setTimeout(function(){$('total-edit-company').focus()},30)}
-function editTotalRecord(i){var r=arr(_lastData&&_lastData.main&&_lastData.main.records)[i];if(!r||!r.record_id){toast('缺少本地记录 ID，无法编辑','error');return}_totalEditMode='personal';setSharedCreateFields(false);closeRecordManager();$('total-edit-form').reset();$('total-edit-id').value=r.record_id;$('total-edit-company').value=r.company||'';$('total-edit-job').value=r.job||'';$('total-edit-city').value=r.city||'';$('total-edit-batch').value=r.batch||'秋招';$('total-edit-directions').value=arr(r.dir).join('、');$('total-edit-company-type').value=r.type||'';$('total-edit-progress').value=arr(r.progress)[0]||'未投递';$('total-edit-deadline').type='date';$('total-edit-deadline').value=inputDate(r.deadline);deactivateOptionalDate($('total-edit-deadline'));$('total-edit-url').value=r.url||'';$('total-edit-title').textContent='编辑总表记录';$('total-edit-description').textContent='修改总表基础信息，不会自动产生投递时间。';$('total-edit-submit').textContent='保存修改';$('total-edit-modal').classList.add('show');setTimeout(function(){$('total-edit-company').focus()},30)}
+var TOTAL_DETAIL_DATE_IDS=['total-edit-deadline','total-edit-apply-date','total-edit-exam-date','total-edit-interview1','total-edit-interview2','total-edit-interview3','total-edit-warm','total-edit-result-date'];
+function setSharedCreateFields(shared){['total-edit-job','total-edit-directions','total-edit-company-type','total-edit-url'].forEach(function(id){$(id).required=shared});$('total-edit-job-label').textContent=shared?'目标岗位':'目标岗位（选填）';$('total-edit-directions-label').textContent=shared?'方向':'方向（选填）';$('total-edit-company-type-label').textContent=shared?'公司类型':'公司类型（选填）';$('total-edit-progress-group').style.display=shared?'none':'block';var detailIds=['total-edit-detail-section','total-edit-priority-group','total-edit-apply-date','total-edit-exam-date','total-edit-interview1','total-edit-interview2','total-edit-interview3','total-edit-warm','total-edit-result-date','total-edit-job-jd','total-edit-note'];detailIds.forEach(function(id){var el=$(id),target=el&&el.closest('.form-group')||el;if(target)target.style.display=shared?'none':''})}
+function resetTotalDetailForm(){ $('total-edit-form').reset();TOTAL_DETAIL_DATE_IDS.forEach(function(id){$(id).type='text'});$('total-edit-priority').value='⭐⭐⭐';$('total-edit-progress').value='未投递';$('total-edit-actions').style.display='none'}
+function openTotalCreateModal(){_totalEditMode='personal';resetTotalDetailForm();setSharedCreateFields(false);$('total-edit-id').value='';$('total-edit-title').textContent='新增总表记录';$('total-edit-description').textContent='新增后可随时从公司名称或管理记录进入完整详情。';$('total-edit-submit').textContent='新增记录';$('total-edit-modal').classList.add('show');setTimeout(function(){$('total-edit-company').focus()},30)}
+function openSharedCreateModal(){if(!_sharedCanDelete)return;_totalEditMode='shared';resetTotalDetailForm();setSharedCreateFields(true);$('total-edit-id').value='';$('total-edit-title').textContent='新建共享记录';$('total-edit-description').textContent='公司、公司类型、岗位、方向和入口均为必填项。';$('total-edit-submit').textContent='添加到共享总表';$('total-edit-modal').classList.add('show');setTimeout(function(){$('total-edit-company').focus()},30)}
+function findMasterRecord(recordId){return arr(_lastData&&_lastData.main&&_lastData.main.records).find(function(item){return item.record_id===recordId})}
+function isApplicationRecord(r){var progress=arr(r&&r.progress)[0]||'未投递';return progress!=='未投递'||!!(r&&(r.apply_date||r.exam_date||r.interview1||r.interview2||r.interview3||r.warm||r.result))}
+function openRecordDetails(source,i){var sourceRecord=arr(_lastData&&_lastData.main&&_lastData.main[source])[i],r=sourceRecord&&findMasterRecord(sourceRecord.record_id)||sourceRecord;if(!r||!r.record_id){toast('缺少本地记录 ID，无法打开详情','error');return}_totalEditMode='personal';resetTotalDetailForm();setSharedCreateFields(false);closeRecordManager();$('total-edit-id').value=r.record_id;$('total-edit-company').value=r.company||'';$('total-edit-job').value=r.job||'';$('total-edit-city').value=r.city||'';$('total-edit-batch').value=r.batch||'秋招';$('total-edit-directions').value=arr(r.dir).join('、');$('total-edit-company-type').value=r.type||'';$('total-edit-progress').value=arr(r.progress)[0]||'未投递';$('total-edit-url').value=r.url||'';$('total-edit-priority').value=r.priority||'⭐⭐⭐';$('total-edit-job-jd').value=r.job_jd||'';$('total-edit-note').value=r.note||'';var dateValues={'total-edit-deadline':r.deadline,'total-edit-apply-date':r.apply_date,'total-edit-exam-date':r.exam_date,'total-edit-interview1':r.interview1,'total-edit-interview2':r.interview2,'total-edit-interview3':r.interview3,'total-edit-warm':r.warm,'total-edit-result-date':r.result};Object.keys(dateValues).forEach(function(id){$(id).type='date';$(id).value=inputDate(dateValues[id]);deactivateOptionalDate($(id))});$('total-edit-title').textContent=r.company||'记录详情';$('total-edit-description').textContent='基础信息、投递流程、岗位 JD 与备注统一在此维护。';$('total-edit-submit').textContent='保存全部修改';$('total-edit-actions').style.display='grid';$('detail-remove-btn').style.display=isApplicationRecord(r)?'':'none';var missing=shareMissing(r);$('detail-share-btn').disabled=!!missing.length;$('detail-share-btn').title=missing.length?'需补全：'+missing.join('、'):'';$('total-edit-modal').classList.add('show');setTimeout(function(){$('total-edit-company').focus()},30)}
+function editTotalRecord(i){openRecordDetails('records',i)}
 function closeTotalEditModal(){$('total-edit-modal').classList.remove('show')}
-async function submitTotalEdit(e){e.preventDefault();var btn=$('total-edit-submit'),id=$('total-edit-id').value,shared=_totalEditMode==='shared';btn.disabled=true;btn.classList.add('loading');try{var directions=$('total-edit-directions').value.split(/[,，、]/).map(function(item){return item.trim()}).filter(Boolean),payload={company:$('total-edit-company').value.trim(),job:$('total-edit-job').value.trim(),city:$('total-edit-city').value.trim(),batch:$('total-edit-batch').value,progress:$('total-edit-progress').value,directions:directions,company_type:$('total-edit-company-type').value.trim(),deadline:$('total-edit-deadline').value||null,url:$('total-edit-url').value.trim()};var endpoint=shared?'/api/dashboard/shared/records':id?'/api/dashboard/records/'+encodeURIComponent(id)+'/master/update':'/api/dashboard/records/master',result=await api('POST',endpoint,payload);if(shared){await loadSharedRecords(true)}else renderDashboard(result.dashboard||{});toast(result.message||(id?'总表记录已更新':'总表记录已新增'),'success');closeTotalEditModal()}catch(err){toast('保存失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}}
-
-/* ---------- 公司信息 ---------- */
-function openCompanyModal(source,i){var r=arr(_lastData&&_lastData.main&&_lastData.main[source])[i];if(!r||!r.record_id){toast('缺少本地记录 ID，无法编辑','error');return}$('company-record-id').value=r.record_id;$('company-modal-title').textContent=r.company||'公司信息';$('company-priority').value=r.priority||'⭐⭐⭐';$('company-job-jd').value=r.job_jd||'';$('company-note').value=r.note||'';$('company-modal').classList.add('show');setTimeout(function(){$('company-priority').focus()},30)}
-function closeCompanyModal(){$('company-modal').classList.remove('show')}
-async function submitCompanyDetails(e){e.preventDefault();var btn=$('company-submit'),id=$('company-record-id').value;btn.disabled=true;btn.classList.add('loading');try{var r=await api('POST','/api/dashboard/records/'+encodeURIComponent(id)+'/details',{priority:$('company-priority').value,job_jd:$('company-job-jd').value,note:$('company-note').value});renderDashboard(r.dashboard||{});toast(r.message||'公司信息已更新','success');closeCompanyModal()}catch(err){toast('保存失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}}
+async function submitTotalEdit(e){e.preventDefault();var btn=$('total-edit-submit'),id=$('total-edit-id').value,shared=_totalEditMode==='shared';btn.disabled=true;btn.classList.add('loading');try{var directions=$('total-edit-directions').value.split(/[,，、]/).map(function(item){return item.trim()}).filter(Boolean),payload={company:$('total-edit-company').value.trim(),job:$('total-edit-job').value.trim(),city:$('total-edit-city').value.trim(),batch:$('total-edit-batch').value,progress:$('total-edit-progress').value,directions:directions,company_type:$('total-edit-company-type').value.trim(),deadline:$('total-edit-deadline').value||null,url:$('total-edit-url').value.trim(),priority:$('total-edit-priority').value,note:$('total-edit-note').value,job_jd:$('total-edit-job-jd').value,apply_date:$('total-edit-apply-date').value||null,exam_date:$('total-edit-exam-date').value||null,interview1:$('total-edit-interview1').value||null,interview2:$('total-edit-interview2').value||null,interview3:$('total-edit-interview3').value||null,warm:$('total-edit-warm').value||null,result_date:$('total-edit-result-date').value||null};var endpoint=shared?'/api/dashboard/shared/records':id?'/api/dashboard/records/'+encodeURIComponent(id)+'/master/update':'/api/dashboard/records/master',result=await api('POST',endpoint,payload);if(shared){await loadSharedRecords(true)}else renderDashboard(result.dashboard||{});toast(result.message||(id?'记录已更新':'记录已新增'),'success');closeTotalEditModal()}catch(err){toast('保存失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}}
+function currentDetailRecord(){return findMasterRecord($('total-edit-id').value)}
+async function removeCurrentApplication(){var r=currentDetailRecord();if(!r)return;if(!confirm('确定将“'+(r.company||'该记录')+'”移出投递记录并清空流程时间吗？'))return;try{var result=await api('POST','/api/dashboard/records/'+encodeURIComponent(r.record_id)+'/remove');renderDashboard(result.dashboard||{});closeTotalEditModal();toast(result.message||'已移出投递记录','success')}catch(err){toast('操作失败：'+err.message,'error',5600)}}
+async function uploadCurrentToShared(){var r=currentDetailRecord();if(!r)return;var missing=shareMissing(r);if(missing.length){toast('请先保存并补全：'+missing.join('、'),'error');return}try{var result=await api('POST','/api/dashboard/shared/records/from-personal/'+encodeURIComponent(r.record_id));toast(result.message||'已上传共享总表','success');await loadSharedRecords(true)}catch(err){toast('上传共享失败：'+err.message,'error',5600)}}
+async function enrichCurrentRecord(){
+  var r=currentDetailRecord(),btn=$('detail-enrich-btn');if(!r)return;
+  var formDirections=$('total-edit-directions').value.split(/[,，、]/).map(function(item){return item.trim()}).filter(Boolean).join('、'),savedDirections=arr(r.dir).filter(Boolean).join('、');
+  var dirty=$('total-edit-company').value.trim()!==String(r.company||'').trim()||$('total-edit-job').value.trim()!==String(r.job||'').trim()||$('total-edit-company-type').value.trim()!==String(r.type||'').trim()||formDirections!==savedDirections||$('total-edit-note').value!==String(r.note||'');
+  if(dirty){toast('请先保存当前手动修改，再执行 AI 补全','error',5200);return}
+  btn.disabled=true;btn.classList.add('loading');toast('正在联网搜索公司与岗位信息…');
+  try{var result=await api('POST','/api/ai/records/'+encodeURIComponent(r.record_id)+'/enrich',{});renderDashboard(result.dashboard||{});$('total-edit-company-type').value=result.company_type||'';$('total-edit-directions').value=arr(result.directions).join('、');$('total-edit-note').value=result.note||'';var updated=arr(result.updated_fields);toast(updated.length?'AI 已补全：'+updated.join('、'):(result.message||'没有需要补充的新内容'),'success',6500)}catch(err){toast('AI 补全失败：'+err.message,'error',7500)}finally{btn.disabled=false;btn.classList.remove('loading')}
+}
+async function deleteCurrentRecord(){var r=currentDetailRecord();if(!r)return;if(!confirm('确定永久删除“'+(r.company||'该记录')+'”吗？此操作不可撤销。'))return;try{var result=await api('POST','/api/dashboard/records/'+encodeURIComponent(r.record_id)+'/permanent-delete');renderDashboard(result.dashboard||{});closeTotalEditModal();toast(result.message||'记录已删除','success')}catch(err){toast('删除失败：'+err.message,'error',5600)}}
+function openCompanyModal(source,i){openRecordDetails(source,i)}
 
 function renderRecordRows(records,source){return records.map(function(r,i){return'<tr><td class="company"><button class="company-link" onclick="openCompanyModal(\''+source+'\','+i+')">'+esc(r.company||'—')+'</button></td><td class="job" title="'+esc(r.job||'')+'">'+esc(r.job||'—')+'</td><td title="'+esc(r.city||'')+'">'+esc(r.city||'—')+'</td><td><span class="badge bdg-b">'+esc(r.batch||'—')+'</span></td><td>'+tableDate(r.apply_date)+'</td><td>'+tableDate(r.exam_date)+'</td><td>'+tableDate(r.interview1)+'</td><td>'+tableDate(r.interview2)+'</td><td>'+tableDate(r.interview3)+'</td><td>'+tableDate(r.warm)+'</td><td>'+tableDate(r.result)+'</td><td>'+renderDeadline(r.deadline)+'</td><td>'+arr(r.progress).map(progressBadge).join(' ')+'</td><td>'+link(r.url)+'</td></tr>'}).join('')||'<tr><td colspan="14" class="center">暂无记录</td></tr>'}
 function priorityScore(record){return(String(record.priority||'').match(/⭐/g)||[]).length}
@@ -570,17 +649,17 @@ async function switchTotalMode(mode){
   _totalMode=mode==='shared'?'shared':'personal';var shared=_totalMode==='shared';
   $('total-personal-tab').classList.toggle('active',!shared);$('total-shared-tab').classList.toggle('active',shared);$('total-personal-tab').setAttribute('aria-selected',String(!shared));$('total-shared-tab').setAttribute('aria-selected',String(shared));
   $('total-personal-actions').style.display=shared?'none':'flex';$('total-shared-note').style.display=shared?'flex':'none';$('shared-admin-actions').style.display=shared&&_sharedCanDelete?'flex':'none';$('total-status-head').textContent=shared?'贡献者':'进展';$('total-sort').disabled=shared;if(shared)$('total-sort').value='default';
-  if(shared){$('total-tbody').innerHTML='<tr><td colspan="8" class="center">正在加载共享总表…</td></tr>';await loadSharedRecords()}else renderTotalTable()
+  if(shared){$('total-tbody').innerHTML='<tr><td colspan="9" class="center">正在加载共享总表…</td></tr>';await loadSharedRecords()}else renderTotalTable()
 }
-async function loadSharedRecords(silent){try{var result=await api('GET','/api/dashboard/shared/records',undefined,{silent:!!silent});_sharedRecords=arr(result.records);_sharedCanDelete=!!result.can_delete;$('shared-admin-actions').style.display=_totalMode==='shared'&&_sharedCanDelete?'flex':'none';if(_totalMode==='shared')renderTotalTable();return result}catch(err){if(!silent){toast('共享总表加载失败：'+err.message,'error',5600);$('total-tbody').innerHTML='<tr><td colspan="8" class="center">共享总表加载失败</td></tr>';throw err}return null}}
+async function loadSharedRecords(silent){try{var result=await api('GET','/api/dashboard/shared/records',undefined,{silent:!!silent});_sharedRecords=arr(result.records);_sharedCanDelete=!!result.can_delete;$('shared-admin-actions').style.display=_totalMode==='shared'&&_sharedCanDelete?'flex':'none';if(_totalMode==='shared')renderTotalTable();return result}catch(err){if(!silent){toast('共享总表加载失败：'+err.message,'error',5600);$('total-tbody').innerHTML='<tr><td colspan="9" class="center">共享总表加载失败</td></tr>';throw err}return null}}
 function renderTotalTable(){
   var shared=_totalMode==='shared',records=shared?_sharedRecords:arr(_lastData&&_lastData.main&&_lastData.main.records),query=String($('total-search')&&$('total-search').value||'').trim().toLocaleLowerCase(),sort=$('total-sort')?$('total-sort').value:'default';
   var items=records.map(function(record,index){return{record:record,index:index}}).filter(function(item){if(!query)return true;var r=item.record,haystack=[r.company,r.job,r.city,r.batch,r.type,r.priority,r.contributor,arr(r.dir).join(' '),arr(r.progress).join(' ')].join(' ').toLocaleLowerCase();return haystack.indexOf(query)>=0});
   if(!shared&&(sort==='priority-desc'||sort==='priority-asc')){items.sort(function(a,b){var pa=priorityScore(a.record),pb=priorityScore(b.record);if(pa===pb)return a.index-b.index;if(!pa)return 1;if(!pb)return-1;return sort==='priority-desc'?pb-pa:pa-pb})}
   $('total-tbody').innerHTML=shared?renderSharedRows(items):renderTotalRows(items);$('total-record-count').textContent=(shared?'共享 · ':'个人 · ')+(query?items.length+' / ':'')+records.length+' 条记录'
 }
-function renderTotalRows(items){return items.map(function(item){var r=item.record,i=item.index,applied=!!r.apply_date;return'<tr><td class="company"><button class="company-link" onclick="openCompanyModal(\'records\','+i+')">'+esc(r.company||'—')+'</button></td><td class="job" title="'+esc(r.job||'')+'">'+esc(r.job||'—')+'</td><td>'+tableText(r.dir)+'</td><td>'+tableText(r.type)+'</td><td>'+renderDeadline(r.deadline)+'</td><td>'+arr(r.progress).map(progressBadge).join(' ')+'</td><td>'+link(r.url)+'</td><td class="total-action"><button class="btn" '+(applied?'disabled':'onclick="addToApplications('+i+')"')+'>'+(applied?'已投递':'加入投递')+'</button></td></tr>'}).join('')||'<tr><td colspan="8" class="center">没有匹配的记录</td></tr>'}
-function renderSharedRows(items){return items.map(function(item){var r=item.record,i=item.index,add='<button class="btn" '+(r.is_added?'disabled':'onclick="copySharedToPersonal('+i+')"')+'>'+(r.is_added?'已添加':'添加个人')+'</button>';return'<tr><td class="company">'+esc(r.company||'—')+'</td><td class="job" title="'+esc(r.job||'')+'">'+esc(r.job||'—')+'</td><td>'+tableText(r.dir)+'</td><td>'+tableText(r.type)+'</td><td>'+renderDeadline(r.deadline)+'</td><td>'+tableText(r.contributor)+'</td><td>'+link(r.url)+'</td><td class="total-action"><div class="manager-actions">'+add+'</div></td></tr>'}).join('')||'<tr><td colspan="8" class="center">共享总表暂无匹配记录</td></tr>'}
+function renderTotalRows(items){return items.map(function(item){var r=item.record,i=item.index,applied=isApplicationRecord(r);return'<tr><td class="company"><button class="company-link" onclick="openCompanyModal(\'records\','+i+')">'+esc(r.company||'—')+'</button></td><td class="job" title="'+esc(r.job||'')+'">'+esc(r.job||'—')+'</td><td>'+tableText(r.dir)+'</td><td>'+tableText(r.type)+'</td><td>'+renderDeadline(r.deadline)+'</td><td><span class="badge bdg-b">'+esc(r.batch||'—')+'</span></td><td>'+arr(r.progress).map(progressBadge).join(' ')+'</td><td>'+link(r.url)+'</td><td class="total-action"><button class="btn" '+(applied?'disabled':'onclick="addToApplications('+i+')"')+'>'+(applied?'已投递':'加入投递')+'</button></td></tr>'}).join('')||'<tr><td colspan="9" class="center">没有匹配的记录</td></tr>'}
+function renderSharedRows(items){return items.map(function(item){var r=item.record,i=item.index,add='<button class="btn" '+(r.is_added?'disabled':'onclick="copySharedToPersonal('+i+')"')+'>'+(r.is_added?'已添加':'添加个人')+'</button>';return'<tr><td class="company">'+esc(r.company||'—')+'</td><td class="job" title="'+esc(r.job||'')+'">'+esc(r.job||'—')+'</td><td>'+tableText(r.dir)+'</td><td>'+tableText(r.type)+'</td><td>'+renderDeadline(r.deadline)+'</td><td><span class="badge bdg-b">'+esc(r.batch||'—')+'</span></td><td>'+tableText(r.contributor)+'</td><td>'+link(r.url)+'</td><td class="total-action"><div class="manager-actions">'+add+'</div></td></tr>'}).join('')||'<tr><td colspan="9" class="center">共享总表暂无匹配记录</td></tr>'}
 async function copySharedToPersonal(i){var r=_sharedRecords[i];if(!r||!r.record_id)return;try{var result=await api('POST','/api/dashboard/shared/records/'+encodeURIComponent(r.record_id)+'/copy');r.is_added=true;renderDashboard(result.dashboard||{});toast(result.message||'已添加到个人总表','success')}catch(err){toast('添加失败：'+err.message,'error',5600)}}
 async function deleteSharedRecord(i){var r=_sharedRecords[i];if(!r||!r.record_id)return;if(!confirm('确定从共享总表删除“'+(r.company||'该记录')+'”吗？已复制到用户个人总表的记录不会被删除。'))return;try{var result=await api('POST','/api/dashboard/shared/records/'+encodeURIComponent(r.record_id)+'/delete');toast(result.message||'共享记录已删除','success');await loadSharedRecords();if($('record-manager-modal').classList.contains('show')&&_recordManagerSource==='shared')renderRecordManager('shared')}catch(err){toast('删除共享记录失败：'+err.message,'error',5600)}}
 async function addToApplications(i){var r=arr(_lastData&&_lastData.main&&_lastData.main.records)[i];if(!r||!r.record_id){toast('缺少本地记录 ID，无法加入投递','error');return}try{var result=await api('POST','/api/dashboard/records/'+encodeURIComponent(r.record_id)+'/apply');renderDashboard(result.dashboard||{});toast(result.message||'已加入投递记录','success')}catch(err){toast('加入投递失败：'+err.message,'error',5600)}}
@@ -591,25 +670,26 @@ var _localEvents=[];
 async function loadLocalEvents(){try{var d=await api('GET','/api/dashboard/calendar/local-events',undefined,{silent:true});_localEvents=arr(d.events)}catch(e){_localEvents=[]}}
 function calendarDate(v){if(!v||v===0)return null;if(typeof v==='number'){var d=new Date(v);return isNaN(d)?null:d}var m=String(v).match(/(\d{4})[-\/]([01]?\d)[-\/]([0-3]?\d)/);if(m)return new Date(+m[1],+m[2]-1,+m[3]);return null}
 function calendarKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
-function calendarEvents(){var groups={};function add(value,type,label,row,extra){var date=calendarDate(value);if(!date)return;var key=calendarKey(date);if(!groups[key])groups[key]=[];var ev={date:date,type:type,label:label,company:row.company||'—',job:row.job||''};if(extra)Object.assign(ev,extra);groups[key].push(ev)}arr(_lastData&&_lastData.main&&_lastData.main.records).forEach(function(r){var rid=r.record_id;add(r.apply_date,'apply','投递',r,{rid:rid,etype:'apply'});add(r.exam_date,'exam','机考/笔试',r,{rid:rid,etype:'exam'});add(r.interview1,'interview','一面',r,{rid:rid,etype:'interview1'});add(r.interview2,'interview','二面',r,{rid:rid,etype:'interview2'});add(r.interview3,'interview','三面',r,{rid:rid,etype:'interview3'});add(r.warm,'warm','保温',r,{rid:rid,etype:'warm'});add(r.result,'result','结果',r,{rid:rid,etype:'result'});add(r.deadline,'deadline','截止',r,{rid:rid,etype:'deadline'})});_localEvents.forEach(function(e){add(e.date,'other',e.label,{company:'我的日程',job:''},{lid:e.id})});return groups}
+function calendarEvents(){var groups={};function add(value,type,label,row,extra){var date=calendarDate(value);if(!date)return;var key=calendarKey(date);if(!groups[key])groups[key]=[];var ev={date:date,type:type,label:label,company:row.company||'—',job:row.job||''};if(extra)Object.assign(ev,extra);groups[key].push(ev)}applicationRecords().forEach(function(r){var rid=r.record_id;add(r.apply_date,'apply','投递',r,{rid:rid,etype:'apply'});add(r.exam_date,'exam','机考/笔试',r,{rid:rid,etype:'exam'});add(r.interview1,'interview','一面',r,{rid:rid,etype:'interview1'});add(r.interview2,'interview','二面',r,{rid:rid,etype:'interview2'});add(r.interview3,'interview','三面',r,{rid:rid,etype:'interview3'});add(r.warm,'warm','保温',r,{rid:rid,etype:'warm'});add(r.result,'result','结果',r,{rid:rid,etype:'result'});add(r.deadline,'deadline','截止',r,{rid:rid,etype:'deadline'})});_localEvents.forEach(function(e){add(e.date,'other',e.label,{company:'我的日程',job:''},{lid:e.id})});return groups}
 function renderCountdown(groups){var todayNow=new Date(),today=new Date(todayNow.getFullYear(),todayNow.getMonth(),todayNow.getDate()),upcoming=[];Object.keys(groups).forEach(function(key){groups[key].forEach(function(item){var days=Math.round((new Date(item.date.getFullYear(),item.date.getMonth(),item.date.getDate())-today)/DAY);if(days>=0)upcoming.push({item:item,days:days})})});upcoming.sort(function(a,b){return a.item.date-b.item.date||a.item.company.localeCompare(b.item.company)});$('countdown-list').innerHTML=upcoming.slice(0,30).map(function(x){var dayText=x.days===0?'今天':x.days===1?'明天':'还有 '+x.days+' 天',dateText=calendarKey(x.item.date);return'<div class="countdown-item"><div><b>'+esc(x.item.company+' · '+x.item.label)+'</b><span>'+esc(dateText+(x.item.job?' · '+x.item.job:''))+'</span></div><div class="countdown-days '+(x.days<=3?'urgent':'')+'">'+dayText+'</div></div>'}).join('')||'<div class="center">暂无未来安排</div>'}
 function renderCalendar(){if(!$('calendar-grid'))return;var year=_calendarMonth.getFullYear(),month=_calendarMonth.getMonth(),first=new Date(year,month,1),offset=(first.getDay()+6)%7,start=new Date(year,month,1-offset),today=new Date(),events=calendarEvents(),html=['一','二','三','四','五','六','日'].map(function(x){return'<div class="calendar-weekday">周'+x+'</div>'}).join('');for(var i=0;i<42;i++){var day=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i),key=calendarKey(day),items=events[key]||[],other=day.getMonth()!==month,isToday=calendarKey(day)===calendarKey(today);html+='<div class="calendar-day '+(other?'other ':'')+(isToday?'today':'')+'" onclick="'+(!other?"openDayDetail('"+key+"')":'')+'"><div class="calendar-date"><span>'+day.getDate()+'</span></div><div class="calendar-events">'+items.map(function(e){var detail=e.label+' · '+e.company+(e.job?' · '+e.job:'');return'<div class="calendar-event '+e.type+'" title="'+esc(detail)+'">'+esc(e.label+' · '+e.company)+'</div>'}).join('')+'</div></div>'}$('calendar-title').textContent=year+' 年 '+(month+1)+' 月';$('calendar-grid').innerHTML=html;renderCountdown(events)}
 function changeCalendarMonth(delta){_calendarMonth=new Date(_calendarMonth.getFullYear(),_calendarMonth.getMonth()+delta,1);renderCalendar()}
 function calendarToday(){var today=new Date();_calendarMonth=new Date(today.getFullYear(),today.getMonth(),1);renderCalendar()}
 function openDayDetail(dateKey){var events=calendarEvents()[dateKey]||[];$('day-detail-title').textContent=dateKey;$('day-detail-sub').textContent=events.length+' 个日程';$('day-detail-body').innerHTML=events.map(function(e,i){var typeMap={apply:'投递',exam:'机考/笔试',interview:'面试',warm:'保温',result:'结果',deadline:'截止',other:'自定义'},tname=typeMap[e.type]||e.type,delFn=e.lid?("deleteCalendarEvent('"+e.lid+"')"):("deleteCalendarEvent('"+e.rid+"','"+e.etype+"')");return'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(e.label)+'</b><div style="color:var(--muted);font-size:12px;margin-top:2px">'+esc(e.company+(e.job?' · '+e.job:''))+' · <span class="badge bdg-'+(e.type==='other'?'a':e.type==='deadline'?'r':e.type==='exam'?'a':e.type==='warm'?'a':'b')+'">'+esc(tname)+'</span></div></div><button class="btn" style="height:28px;padding:0 10px;font-size:11px;flex-shrink:0" onclick="var self=this;self.disabled=true;'+delFn+'.then(function(){renderDayDetail(\''+dateKey+'\')}).finally(function(){self.disabled=false})">删除</button></div>'}).join('')||'<div class="center">该日暂无日程</div>';$('day-detail-modal').classList.add('show')}
 function renderDayDetail(dateKey){var events=calendarEvents()[dateKey]||[];$('day-detail-sub').textContent=events.length+' 个日程';$('day-detail-body').innerHTML=events.map(function(e,i){var typeMap={apply:'投递',exam:'机考/笔试',interview:'面试',warm:'保温',result:'结果',deadline:'截止',other:'自定义'},tname=typeMap[e.type]||e.type,delFn=e.lid?("deleteCalendarEvent('"+e.lid+"')"):("deleteCalendarEvent('"+e.rid+"','"+e.etype+"')");return'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(e.label)+'</b><div style="color:var(--muted);font-size:12px;margin-top:2px">'+esc(e.company+(e.job?' · '+e.job:''))+' · <span class="badge bdg-'+(e.type==='other'?'a':e.type==='deadline'?'r':e.type==='exam'?'a':e.type==='warm'?'a':'b')+'">'+esc(tname)+'</span></div></div><button class="btn" style="height:28px;padding:0 10px;font-size:11px;flex-shrink:0" onclick="var self=this;self.disabled=true;'+delFn+'.then(function(){renderDayDetail(\''+dateKey+'\')}).finally(function(){self.disabled=false})">删除</button></div>'}).join('')||'<div class="center">该日暂无日程</div>'}function closeDayDetail(){$('day-detail-modal').classList.remove('show')}
-async function deleteCalendarEvent(id,etype){if(!confirm('确定删除这个日程？'))return;try{if(etype){await api('POST','/api/dashboard/calendar/event/delete',{record_id:id,event_type:etype})}else{await api('POST','/api/dashboard/calendar/local-event/'+encodeURIComponent(id)+'/delete')}if(_lastData){await api('POST','/api/dashboard/refresh')};await loadLocalEvents();$('page-calendar').classList.contains('active')&&renderCalendar();toast('日程已删除','success')}catch(err){toast('删除失败：'+err.message,'error',5600)}}
-function openCalendarEventModal(dateStr){var dateVal=dateStr||inputDate(new Date());$('cal-event-date').value=dateVal;$('calendar-event-date-label').textContent='';var records=arr(_lastData&&_lastData.main&&_lastData.main.records);$('cal-event-record').innerHTML='<option value="">请选择公司</option>'+records.map(function(r){return'<option value="'+esc(r.record_id)+'">'+esc((r.company||'—')+' · '+(r.job||'—')+' · '+(r.city||'—'))+'</option>'}).join('');$('cal-event-type').value='apply';$('cal-event-label').value='';$('cal-event-label-group').style.display='none';$('cal-event-record').parentElement.style.display='block';$('cal-event-record').required=true;$('cal-event-hint').style.display='block';$('calendar-event-modal').classList.add('show');setTimeout(function(){$('cal-event-type').focus()},30)}
+async function deleteCalendarEvent(id,etype){if(!confirm('确定删除这个日程？'))return;try{if(etype){await api('POST','/api/dashboard/calendar/event/delete',{record_id:id,event_type:etype})}else{await api('POST','/api/dashboard/calendar/local-event/'+encodeURIComponent(id)+'/delete')}if(_lastData){var refreshed=await api('POST','/api/dashboard/refresh');renderDashboard(refreshed)}await loadLocalEvents();renderCalendar();toast('日程已删除','success')}catch(err){toast('删除失败：'+err.message,'error',5600)}}
+function openCalendarEventModal(dateStr){var dateVal=dateStr||inputDate(new Date());$('cal-event-date').value=dateVal;$('calendar-event-date-label').textContent='';var records=applicationRecords();$('cal-event-record').innerHTML='<option value="">请选择投递记录</option>'+records.map(function(r){return'<option value="'+esc(r.record_id)+'">'+esc((r.company||'—')+' · '+(r.job||'—')+' · '+(r.city||'—'))+'</option>'}).join('');$('cal-event-type').value='apply';$('cal-event-label').value='';$('cal-event-label-group').style.display='none';$('cal-event-record').parentElement.style.display='block';$('cal-event-record').required=true;$('cal-event-hint').style.display='block';$('calendar-event-modal').classList.add('show');setTimeout(function(){$('cal-event-type').focus()},30)}
 function onCalendarEventTypeChange(){var isOther=$('cal-event-type').value==='other';$('cal-event-label-group').style.display=isOther?'block':'none';$('cal-event-record').parentElement.style.display=isOther?'none':'block';$('cal-event-record').required=!isOther;$('cal-event-hint').style.display=isOther?'none':'block';if(isOther)setTimeout(function(){$('cal-event-label').focus()},30)}
 function closeCalendarEventModal(){$('calendar-event-modal').classList.remove('show')}
-async function submitCalendarEvent(e){e.preventDefault();var btn=$('cal-event-submit'),recordId=$('cal-event-record').value,eventType=$('cal-event-type').value,eventDate=$('cal-event-date').value;if(!eventDate){toast('请选择日程日期','error');return}var label=$('cal-event-label').value.trim();if(eventType==='other'){if(!label){toast('请填写自定义日程内容','error');return}btn.disabled=true;btn.classList.add('loading');try{var localResult=await api('POST','/api/dashboard/calendar/local-event',{date:eventDate,label:label});await loadLocalEvents();$('page-calendar').classList.contains('active')&&renderCalendar();toast(localResult.message||'本地日程已保存','success');closeCalendarEventModal()}catch(err){toast('保存失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}return}if(!recordId){toast('请先选择关联公司','error');return}btn.disabled=true;btn.classList.add('loading');try{var result=await api('POST','/api/dashboard/calendar/event',{record_id:recordId,event_type:eventType,date:eventDate});renderDashboard(result.dashboard||{});$('page-calendar').classList.contains('active')&&renderCalendar();toast(result.message||'日程已保存','success');closeCalendarEventModal()}catch(err){toast('保存日程失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}}
+async function submitCalendarEvent(e){e.preventDefault();var btn=$('cal-event-submit'),recordId=$('cal-event-record').value,eventType=$('cal-event-type').value,eventDate=$('cal-event-date').value;if(!eventDate){toast('请选择日程日期','error');return}var label=$('cal-event-label').value.trim();if(eventType==='other'){if(!label){toast('请填写自定义日程内容','error');return}btn.disabled=true;btn.classList.add('loading');try{var localResult=await api('POST','/api/dashboard/calendar/local-event',{date:eventDate,label:label});await loadLocalEvents();renderCalendar();toast(localResult.message||'本地日程已保存','success');closeCalendarEventModal()}catch(err){toast('保存失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}return}if(!recordId){toast('请先选择关联公司','error');return}btn.disabled=true;btn.classList.add('loading');try{var result=await api('POST','/api/dashboard/calendar/event',{record_id:recordId,event_type:eventType,date:eventDate});renderDashboard(result.dashboard||{});renderCalendar();toast(result.message||'日程已保存','success');closeCalendarEventModal()}catch(err){toast('保存日程失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}}
 
 /* ---------- 简历预览 ---------- */
 var _resumeFiles=[],_activeResume='';
 function fileSize(n){if(n<1024)return n+' B';if(n<1048576)return(n/1024).toFixed(1)+' KB';return(n/1048576).toFixed(1)+' MB'}
-function renderResumeList(){$('resume-list').innerHTML=_resumeFiles.map(function(f,i){return'<button class="resume-item '+(f.name===_activeResume?'active':'')+'" onclick="previewResume('+i+')"><b>'+esc(f.name)+'</b><span>'+f.type.toUpperCase()+' · '+fileSize(f.size)+'</span></button>'}).join('')||'<div class="center">尚未上传简历</div>'}
+function renderResumeList(){$('resume-list').innerHTML=_resumeFiles.map(function(f,i){return'<div class="resume-row"><button class="resume-item '+(f.name===_activeResume?'active':'')+'" onclick="previewResume('+i+')"><b>'+esc(f.name)+'</b><span>'+f.type.toUpperCase()+' · '+fileSize(f.size)+'</span></button><button class="btn btn-danger resume-delete" type="button" title="删除简历" aria-label="删除 '+esc(f.name)+'" onclick="deleteResume('+i+',this)">删除</button></div>'}).join('')||'<div class="center">尚未上传简历</div>'}
 async function loadResumes(){try{var d=await api('GET','/api/resumes',undefined,{silent:true});_resumeFiles=arr(d.files);renderResumeList();if(_activeResume&&!_resumeFiles.some(function(f){return f.name===_activeResume})){$('resume-preview').innerHTML='<div class="resume-empty">选择一份简历进行预览</div>';_activeResume=''}}catch(e){toast('简历列表加载失败：'+e.message,'error')}}
 function previewResume(i){var f=_resumeFiles[i];if(!f)return;_activeResume=f.name;renderResumeList();$('resume-preview').innerHTML='<iframe title="'+esc(f.name)+'" src="/api/resumes/'+encodeURIComponent(f.name)+'/preview?token='+encodeURIComponent(_token)+'"></iframe>'}
+async function deleteResume(i,btn){var file=_resumeFiles[i];if(!file)return;if(!confirm('确定删除简历“'+file.name+'”吗？已有分析历史不会被一并删除。'))return;btn.disabled=true;btn.classList.add('loading');try{var result=await api('DELETE','/api/resumes/'+encodeURIComponent(file.name));if(_activeResume===file.name){_activeResume='';$('resume-preview').innerHTML='<div class="resume-empty">选择一份简历进行预览</div>'}await loadResumes();toast(result.message||'简历已删除','success')}catch(err){toast('删除简历失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}}
 async function uploadResume(e){
   var input=e.target,file=input.files&&input.files[0];if(!file)return;
   var ext=file.name.toLowerCase().split('.').pop();
@@ -638,34 +718,26 @@ async function uploadResume(e){
 }
 
 /* ---------- AI 简历分析 ---------- */
-async function loadAIOptions(){try{if(!_lastData)await load();await loadResumes();var resumeValue=$('ai-resume').value,recordValue=$('ai-record').value;$('ai-resume').innerHTML='<option value="">请选择已上传简历</option>'+_resumeFiles.map(function(f){return'<option value="'+esc(f.name)+'">'+esc(f.name)+'</option>'}).join('');var records=arr(_lastData&&_lastData.main&&_lastData.main.records);$('ai-record').innerHTML='<option value="">请选择公司与岗位</option>'+records.map(function(r){return'<option value="'+esc(r.record_id)+'">'+esc((r.company||'—')+' · '+(r.job||'—'))+'</option>'}).join('');if(_resumeFiles.some(function(f){return f.name===resumeValue}))$('ai-resume').value=resumeValue;if(records.some(function(r){return r.record_id===recordValue}))$('ai-record').value=recordValue;var cfg=await api('GET','/api/config',undefined,{silent:true});$('ai-model-label').textContent=(cfg.values&&cfg.values.deepseek_model)||'deepseek-v4-flash';await loadAnalysisHistory()}catch(e){toast('分析选项加载失败：'+e.message,'error')}}
-async function loadAnalysisHistory(){var data=await api('GET','/api/ai/history',undefined,{silent:true}),items=arr(data.items);$('ai-history-count').textContent=items.length+' 条';$('ai-history-list').innerHTML=items.map(function(item){return'<div class="analysis-history-row"><button class="analysis-history-item" onclick="previewAnalysisHistory(\''+esc(item.id)+'\')"><b>'+esc(item.company||'—')+'</b><span>'+esc((item.analysis_mode_label||'综合匹配分析')+' · '+(item.job||'—')+' · '+(item.resume||'—'))+'</span><time>'+esc(String(item.created_at||'').replace('T',' '))+'</time></button><a class="btn analysis-download" href="/api/ai/history/'+encodeURIComponent(item.id)+'/download?token='+encodeURIComponent(_token)+'">下载</a></div>'}).join('')||'<div class="center">暂无分析历史</div>'}
-async function previewAnalysisHistory(id){$('ai-result').textContent='正在加载历史分析…';try{var result=await api('GET','/api/ai/history/'+encodeURIComponent(id));$('ai-result').innerHTML=result.analysis_html||'';$('ai-result-meta').textContent=(result.analysis_mode_label||'综合匹配分析')+' · '+(result.company||'')+' · '+(result.job||'')+' · '+(result.model||'')+' · '+String(result.created_at||'').replace('T',' ');$('ai-result').scrollIntoView({behavior:'smooth',block:'start'})}catch(err){$('ai-result').textContent='历史记录加载失败：'+err.message;toast('历史记录加载失败','error')}}
-async function analyzeResume(){var resume=$('ai-resume').value,recordId=$('ai-record').value;if(!resume||!recordId){toast('请先选择简历和岗位','error');return}var btn=$('ai-analyze-btn');btn.disabled=true;btn.classList.add('loading');$('ai-result').textContent='正在读取简历并调用 AI 分析，请稍候…';$('ai-result-meta').textContent='分析中';try{var result=await api('POST','/api/ai/analyze',{resume_filename:resume,record_id:recordId,analysis_mode:$('ai-mode').value,focus:$('ai-focus').value.trim()});if(result.analysis_html)$('ai-result').innerHTML=result.analysis_html;else $('ai-result').textContent=result.analysis||'模型未返回内容';$('ai-result-meta').textContent=(result.analysis_mode_label||'')+' · '+(result.company||'')+' · '+(result.job||'')+' · '+(result.model||'');await loadAnalysisHistory();toast('简历分析完成并已保存','success')}catch(err){$('ai-result').textContent='分析失败：'+err.message;$('ai-result-meta').textContent='失败';toast('分析失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}}
+async function loadAIOptions(){try{if(!_lastData)await load();await loadResumes();var resumeValue=$('ai-resume').value,recordValue=$('ai-record').value;$('ai-resume').innerHTML='<option value="">请选择已上传简历</option>'+_resumeFiles.map(function(f){return'<option value="'+esc(f.name)+'">'+esc(f.name)+'</option>'}).join('');var records=arr(_lastData&&_lastData.main&&_lastData.main.records);$('ai-record').innerHTML='<option value="">请选择公司与岗位</option>'+records.map(function(r){return'<option value="'+esc(r.record_id)+'">'+esc((r.company||'—')+' · '+(r.job||'—'))+'</option>'}).join('');if(_resumeFiles.some(function(f){return f.name===resumeValue}))$('ai-resume').value=resumeValue;if(records.some(function(r){return r.record_id===recordValue}))$('ai-record').value=recordValue;var cfg=await api('GET','/api/config',undefined,{silent:true}),values=cfg.values||{},provider=values.ai_provider||'deepseek',model=values[provider+'_model']||'';$('ai-model-label').textContent=aiProviderLabel(provider)+' · '+model;await loadAnalysisHistory()}catch(e){toast('分析选项加载失败：'+e.message,'error')}}
+var _activeAnalysisHistory='';
+async function loadAnalysisHistory(){var data=await api('GET','/api/ai/history',undefined,{silent:true}),items=arr(data.items);$('ai-history-count').textContent=items.length+' 条';$('ai-history-list').innerHTML=items.map(function(item){return'<div class="analysis-history-row"><button class="analysis-history-item" onclick="previewAnalysisHistory(\''+esc(item.id)+'\')"><b>'+esc(item.company||'—')+'</b><span>'+esc((item.analysis_mode_label||'综合匹配分析')+' · '+(item.job||'—')+' · '+(item.resume||'—'))+'</span><time>'+esc(String(item.created_at||'').replace('T',' '))+'</time></button><div class="analysis-history-actions"><a class="btn analysis-download" href="/api/ai/history/'+encodeURIComponent(item.id)+'/download?token='+encodeURIComponent(_token)+'">下载</a><button class="btn btn-danger" type="button" onclick="deleteAnalysisHistory(\''+esc(item.id)+'\',this)">删除</button></div></div>'}).join('')||'<div class="center">暂无分析历史</div>'}
+async function previewAnalysisHistory(id){_activeAnalysisHistory=id;$('ai-result').textContent='正在加载历史分析…';try{var result=await api('GET','/api/ai/history/'+encodeURIComponent(id));$('ai-result').innerHTML=result.analysis_html||'';$('ai-result-meta').textContent=(result.analysis_mode_label||'综合匹配分析')+' · '+(result.company||'')+' · '+(result.job||'')+' · '+aiProviderLabel(result.provider||'deepseek')+' / '+(result.model||'')+' · '+String(result.created_at||'').replace('T',' ');$('ai-result').scrollIntoView({behavior:'smooth',block:'start'})}catch(err){_activeAnalysisHistory='';$('ai-result').textContent='历史记录加载失败：'+err.message;toast('历史记录加载失败','error')}}
+async function deleteAnalysisHistory(id,btn){if(!confirm('确定删除这条分析历史吗？此操作不可撤销。'))return;btn.disabled=true;btn.classList.add('loading');try{var result=await api('DELETE','/api/ai/history/'+encodeURIComponent(id));if(_activeAnalysisHistory===id){_activeAnalysisHistory='';$('ai-result').textContent='该分析历史已删除，请选择其他记录或重新开始分析。';$('ai-result-meta').textContent='—'}await loadAnalysisHistory();toast(result.message||'分析记录已删除','success')}catch(err){toast('删除分析历史失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}}
+async function analyzeResume(){var resume=$('ai-resume').value,recordId=$('ai-record').value;if(!resume||!recordId){toast('请先选择简历和岗位','error');return}_activeAnalysisHistory='';var btn=$('ai-analyze-btn');btn.disabled=true;btn.classList.add('loading');$('ai-result').textContent='正在读取简历并调用 AI 分析，请稍候…';$('ai-result-meta').textContent='分析中';try{var result=await api('POST','/api/ai/analyze',{resume_filename:resume,record_id:recordId,analysis_mode:$('ai-mode').value,focus:$('ai-focus').value.trim()});if(result.analysis_html)$('ai-result').innerHTML=result.analysis_html;else $('ai-result').textContent=result.analysis||'模型未返回内容';$('ai-result-meta').textContent=(result.analysis_mode_label||'')+' · '+(result.company||'')+' · '+(result.job||'')+' · '+(result.provider_name||aiProviderLabel(result.provider))+' / '+(result.model||'');await loadAnalysisHistory();toast('简历分析完成并已保存','success')}catch(err){$('ai-result').textContent='分析失败：'+err.message;$('ai-result-meta').textContent='失败';toast('分析失败：'+err.message,'error',5600)}finally{btn.disabled=false;btn.classList.remove('loading')}}
 
 /* ---------- 看板数据 ---------- */
 function renderDashboard(d){
   d=d||{};d.main=d.main||{};_lastData=d;
   if(d.error)toast((d.stale?'缓存：':'')+d.error,'error',5600);
-  var recent=arr(d.main.recent),records=arr(d.main.records),appliedMap=buildAppliedMap(recent);
-  var dated=[];
-  (d.main.deadlines||[]).forEach(function(r){
-    var w=analyze({deadline:r.deadline});
-    if(w.level==='dated'||w.level==='closed'){dated.push({company:r.company,job:r.job,deadline:r.deadline,window:w})}
-  });
-  dated.sort(function(a,b){return a.window.rank-b.window.rank});
+  var recent=arr(d.main.recent),examCount=0,interviewCount=0,offerCount=0;
+  recent.forEach(function(record){var stages=applicationMilestones(record);if(stages.exam)examCount++;if(stages.interview)interviewCount++;if(stages.offer)offerCount++});
   $('last-updated').textContent=(d.now||'')+(d.stale?' · 缓存':'');
-  animateNumber('kpi-total',d.main.total_companies||0);animateNumber('kpi-a',(d.main.directions||[]).length+(d.main.ctypes||[]).length);animateNumber('kpi-dated',dated.length);animateNumber('kpi-closed',0);animateNumber('kpi-applied',recent.length);animateNumber('kpi-interview',d.main.interview_count||0);
-  if($('hero-health'))$('hero-health').textContent=d.stale?'使用缓存':'本地数据正常';
-  if($('hero-focus'))$('hero-focus').textContent=(d.main.directions||[]).length+' 类方向 · '+(d.main.ctypes||[]).length+' 类公司';
-  if($('hero-action'))$('hero-action').textContent=recent.length?'继续跟进 '+recent.length+' 条投递':'在总表信息中新增公司';
-  $('funnel').innerHTML=[['监控公司',d.main.total_companies||0,'主表公司'],['已投递',recent.length,'有投递时间'],['机考',d.main.exam_count||0,'测评/机考'],['面试',d.main.interview_count||0,'一至三面'],['Offer',d.main.offer_count||0,'OC/录用']].map(function(x){return'<div class="funnel-step"><b>'+x[1]+'</b><span>'+x[0]+' · '+x[2]+'</span></div>'}).join('');
-  $('deadline-timeline').innerHTML=dated.length?dated.slice(0,12).map(function(r){var dt=r.window.date?r.window.date.toISOString().slice(5,10):'--';return'<div class="tl-item"><div class="tl-date">'+dt+'</div><div class="tl-main"><b>'+esc(r.company)+'</b><span>'+esc(r.job||'—')+'</span></div><div>'+badge(r.window)+'</div></div>'}).join(''):'<div class="center">—</div>';
-  renderBars(d.main.directions,$('chart-dir'));renderBars(d.main.ctypes,$('chart-type'),'g');
+  animateNumber('kpi-total',recent.length);animateNumber('kpi-dated',examCount);animateNumber('kpi-applied',interviewCount);animateNumber('kpi-interview',offerCount);
   $('recent-tbody').innerHTML=renderRecordRows(recent.slice(0,40),'recent');
   $('recent-record-count').textContent=recent.length+' 条记录';
+  if($('application-stats-modal').classList.contains('show'))renderApplicationStats();
   renderTotalTable();
-  if($('page-calendar').classList.contains('active'))renderCalendar();
+  renderCalendar();
 }
 async function load(){var d=await api('GET','/api/dashboard');renderDashboard(d);if(d.error)showErrorModal('本地数据读取失败',d.error)}
 
@@ -698,11 +770,58 @@ async function importTotalExcel(event){
   }catch(err){showErrorModal('总表导入失败',err.message);toast('导入失败，请根据提示修改 Excel','error',6000)}finally{input.value='';btn.disabled=false;btn.classList.remove('loading')}
 }
 
+/* ---------- Root 飞书同步 ---------- */
+function openFeishuSyncModal(){if(!(_currentUser&&_currentUser.is_root))return;$('feishu-sync-url').value=localStorage.getItem('root_feishu_sync_url')||'';$('feishu-sync-result').classList.remove('show');$('feishu-sync-result').innerHTML='';$('feishu-sync-modal').classList.add('show');setTimeout(function(){$('feishu-sync-url').focus()},30)}
+function closeFeishuSyncModal(){$('feishu-sync-modal').classList.remove('show')}
+async function syncFromGivemeOC(){
+  if(!(_currentUser&&_currentUser.is_root))return;
+  var btn=$('givemeoc-sync-button'),prg=$('givemeoc-sync-progress');
+  if(!confirm('即将从 GiveMeOC 同步 2027届 岗位到共享总表，确定继续吗？'))return;
+  btn.disabled=true;btn.classList.add('loading');prg.textContent='扫描中…';prg.style.display='';
+  var pollTimer=null;
+  var done=function(msg,ok){
+    clearInterval(pollTimer);
+    prg.style.display='none';btn.disabled=false;btn.classList.remove('loading');
+    toast(msg||'同步完成',ok?'success':'error',6000);
+    loadSharedRecords(true);
+  };
+  try{
+    var start=await api('POST','/api/dashboard/sync-from-givemeoc');
+    pollTimer=setInterval(async function(){
+      try{
+        var p=await api('GET','/api/dashboard/sync-from-givemeoc/progress?sync_id='+encodeURIComponent(start.sync_id),undefined,{silent:true});
+        if(p.phase==='scanning'){prg.textContent='扫描中（'+p.found+' 条）…';}
+        else{prg.textContent='同步中 '+p.done+'/'+p.total+'…';}
+        if(p.finished){done(p.message,true);}
+      }catch(e){done('同步异常：'+e.message,false);}
+    },800);
+  }catch(err){
+    if(pollTimer)clearInterval(pollTimer);
+    done('GiveMeOC 同步启动失败：'+err.message,false);
+  }
+}
+async function syncFeishuRecords(){
+  if(!(_currentUser&&_currentUser.is_root))return;var input=$('feishu-sync-url'),url=input.value.trim(),btn=$('feishu-sync-submit'),resultEl=$('feishu-sync-result');
+  if(!/^https:\/\//i.test(url)){toast('请填写完整的飞书表格 HTTPS 链接','error');input.focus();return}
+  btn.disabled=true;btn.classList.add('loading');resultEl.classList.remove('show');toast('正在读取飞书表格并匹配重复记录…');
+  try{
+    var data=await api('POST','/api/dashboard/records/feishu-sync',{url:url});localStorage.setItem('root_feishu_sync_url',url);renderDashboard(data.dashboard||{});
+    var skipped=arr(data.skipped).slice(0,5),details=skipped.length?'<div style="margin-top:7px;color:var(--muted)">重复示例：'+skipped.map(function(item){return esc((item.company||'—')+' · '+(item.job||'岗位未填写')+' · '+(item.batch||'—'))}).join('<br>')+'</div>':'';
+    resultEl.innerHTML='<b>'+esc(data.message||'同步完成')+'</b><span>有效岗位 '+Number(data.source_count||0)+' 条；空白或缺少公司/岗位 '+Number(data.invalid_count||0)+' 条未导入。</span>'+details;resultEl.classList.add('show');toast(data.message||'飞书同步完成','success',6000)
+  }catch(err){resultEl.innerHTML='<b>同步失败</b><span>'+esc(err.message)+'</span>';resultEl.classList.add('show');toast('飞书同步失败：'+err.message,'error',7000)}finally{btn.disabled=false;btn.classList.remove('loading')}
+}
+
 /* ---------- AI 配置 ---------- */
-function configPayload(){return{deepseek_api_key:$('cfg-deepseek-key').value.trim(),deepseek_model:$('cfg-deepseek-model').value}}
-function fillConfigForm(values){$('cfg-deepseek-key').value='';$('cfg-deepseek-key').placeholder=values.deepseek_api_key_masked?'已保存：'+values.deepseek_api_key_masked:'sk-...';$('cfg-deepseek-model').value=values.deepseek_model||'deepseek-v4-flash';$('cfg-deepseek-key-help').textContent=values.deepseek_api_key_masked?'已保存密钥：'+values.deepseek_api_key_masked:'密钥仅保存在本地数据库'}
+function aiProviderLabel(provider){return{deepseek:'DeepSeek',openai:'OpenAI GPT',anthropic:'Claude'}[provider]||'DeepSeek'}
+function onAIProviderChange(){var provider=$('cfg-ai-provider').value;document.querySelectorAll('.provider-panel').forEach(function(panel){panel.classList.toggle('active',panel.id==='provider-'+provider)})}
+function selectDeepSeekModel(){var value=$('cfg-deepseek-model-picker').value;if(value)$('cfg-deepseek-model').value=value}
+function syncDeepSeekModelPicker(models){var input=$('cfg-deepseek-model'),picker=$('cfg-deepseek-model-picker'),values=arr(models&&models.length?models:['deepseek-v4-flash','deepseek-v4-pro']),current=input.value.trim()||'deepseek-v4-flash';if(current&&!values.includes(current))values.unshift(current);picker.innerHTML=values.map(function(model){var label=model==='deepseek-v4-pro'?'DeepSeek V4 Pro':model==='deepseek-v4-flash'?'DeepSeek V4 Flash':model;return'<option value="'+esc(model)+'">'+esc(label)+'</option>'}).join('');picker.value=current}
+function configPayload(){return{ai_provider:$('cfg-ai-provider').value,deepseek_api_key:$('cfg-deepseek-key').value.trim(),deepseek_model:$('cfg-deepseek-model').value.trim(),deepseek_base_url:$('cfg-deepseek-base-url').value.trim(),openai_api_key:$('cfg-openai-key').value.trim(),openai_model:$('cfg-openai-model').value.trim(),openai_base_url:$('cfg-openai-base-url').value.trim(),openai_api_mode:$('cfg-openai-api-mode').value,anthropic_api_key:$('cfg-anthropic-key').value.trim(),anthropic_model:$('cfg-anthropic-model').value.trim(),anthropic_base_url:$('cfg-anthropic-base-url').value.trim()}}
+function fillConfigSecret(provider,values){var key=$('cfg-'+provider+'-key'),help=$('cfg-'+provider+'-key-help'),masked=values[provider+'_api_key_masked']||'';key.value='';key.placeholder=masked?'已保存：'+masked:(provider==='anthropic'?'sk-ant-...':'sk-...');help.textContent=masked?'已保存密钥：'+masked:'尚未保存密钥'}
+function fillConfigForm(values){$('cfg-ai-provider').value=values.ai_provider||'deepseek';$('cfg-deepseek-model').value=values.deepseek_model||'deepseek-v4-flash';syncDeepSeekModelPicker();$('cfg-deepseek-base-url').value=values.deepseek_base_url||'https://api.deepseek.com';$('cfg-openai-model').value=values.openai_model||'gpt-5.4-mini';$('cfg-openai-base-url').value=values.openai_base_url||'https://api.openai.com/v1';$('cfg-openai-api-mode').value=values.openai_api_mode||'responses';$('cfg-anthropic-model').value=values.anthropic_model||'claude-sonnet-5';$('cfg-anthropic-base-url').value=values.anthropic_base_url||'https://api.anthropic.com/v1';['deepseek','openai','anthropic'].forEach(function(provider){fillConfigSecret(provider,values)});onAIProviderChange()}
+async function loadProviderModels(button){var provider=$('cfg-ai-provider').value,modelInput=$('cfg-'+provider+'-model'),list=$(provider+'-models');button.disabled=true;button.classList.add('loading');try{var result=await api('POST','/api/config/models',configPayload()),models=arr(result.models);list.innerHTML=models.map(function(model){return'<option value="'+esc(model)+'"></option>'}).join('');if(!modelInput.value&&models.length)modelInput.value=models[0];if(provider==='deepseek')syncDeepSeekModelPicker(models);toast('已读取 '+models.length+' 个可用模型','success')}catch(e){toast('读取模型失败：'+e.message,'error',6000)}finally{button.disabled=false;button.classList.remove('loading')}}
 async function loadConfigStatus(){try{var d=await api('GET','/api/config',undefined,{silent:true});fillConfigForm(d.values||{});$('conn-text').textContent='本地存储';$('conn-pulse').style.background='var(--green)';return d}catch(e){$('conn-text').textContent='接口异常';showErrorModal('配置接口异常',e.message)}}
-function openConfigModal(){$('notification-panel').classList.remove('show');$('config-modal').classList.add('show');loadConfigStatus(false);setTimeout(function(){$('cfg-deepseek-key').focus()},80)}
+function openConfigModal(){$('notification-panel').classList.remove('show');$('config-modal').classList.add('show');loadConfigStatus(false);setTimeout(function(){$('cfg-ai-provider').focus()},80)}
 function closeConfigModal(){$('config-modal').classList.remove('show')}
 async function saveConfig(){var btn=$('config-save');btn.disabled=true;btn.classList.add('loading');try{var r=await api('POST','/api/config',configPayload());toast(r.message||'已保存配置','success');await loadConfigStatus();closeConfigModal()}catch(e){toast('保存失败：'+e.message,'error')}finally{btn.disabled=false;btn.classList.remove('loading')}}
 
@@ -722,23 +841,68 @@ document.addEventListener('click',function(e){if(!e.target.closest('.notificatio
 /* ---------- Root 管理 ---------- */
 function renderAdminUsers(users){
   var onlineCount=users.filter(function(user){return user.is_online}).length;$('admin-user-count').textContent=users.length+' 个用户 · '+onlineCount+' 在线';
-  var head='<div class="admin-user-row header"><span>账号</span><span>状态</span><span>权限</span><span>注册时间</span><span>操作</span></div>';
+  var head='<div class="admin-user-card header"><span class="uname">账号</span><span class="umeta">状态</span><span class="urole">权限</span><span class="udate">注册</span><span class="ubtns">操作</span></div>';
   $('admin-user-list').innerHTML=head+users.map(function(user){
-    var role=user.is_root?'Root 管理员':(user.is_admin?'管理员':'普通用户'),lastSeen=user.is_online?'刚刚活跃':(user.last_seen_at?'最后活跃 '+formatSystemTime(user.last_seen_at):'从未上线');
-    return'<div class="admin-user-row"><div><div class="admin-user-name">'+esc(user.username)+'</div><div class="admin-user-meta">ID '+user.id+'</div></div>'+
-      '<div class="user-presence-wrap"><span class="user-presence '+(user.is_online?'online':'')+'">'+(user.is_online?'在线':'离线')+'</span><small>'+esc(lastSeen)+'</small></div>'+
-      '<label class="role-toggle"><input type="checkbox" '+(user.is_admin?'checked ':'')+(user.is_root?'disabled ':'')+'onchange="setUserAdmin('+user.id+',this.checked)"><span>'+role+'</span></label>'+
-      '<span class="admin-user-meta admin-user-date">'+esc(formatSystemTime(user.created_at))+'</span>'+
-      '<div class="admin-password '+(user.is_root?'single-action':'')+'"><input type="password" id="admin-password-'+user.id+'" minlength="4" maxlength="100" autocomplete="new-password" placeholder="输入新密码"><button class="btn" onclick="changeUserPassword('+user.id+')">修改密码</button>'+(user.is_root?'':'<button class="btn btn-danger" onclick="deleteManagedUser('+user.id+',\''+esc(user.username).replace(/&#39;/g,"\\'")+'\')">删除</button>')+'</div></div>'
+    var role=user.is_root?'Root Admin':(user.is_admin?'管理员':'普通'),online=user.is_online;
+    var status='<span style="color:'+(online?'var(--green)':'var(--muted)')+'">'+(online?'● 在线':'○ 离线')+'</span>';
+    return'<div class="admin-user-card"><span class="uname">'+esc(user.username)+' <span style="font-weight:400;font-size:10px;color:var(--muted)">#'+user.id+'</span></span>'+
+      '<span class="umeta">'+status+'</span>'+
+      '<label class="urole"><input type="checkbox" '+(user.is_admin?'checked ':'')+(user.is_root?'disabled ':'')+'onchange="setUserAdmin('+user.id+',this.checked)">'+role+'</label>'+
+      '<span class="udate">'+esc(formatSystemTime(user.created_at))+'</span>'+
+      '<span class="ubtns"><input type="password" id="admin-password-'+user.id+'" minlength="4" maxlength="100" autocomplete="new-password" placeholder="新密码"><button class="btn" onclick="changeUserPassword('+user.id+')">改密</button>'+(user.is_root?'':'<button class="btn btn-danger" onclick="deleteManagedUser('+user.id+',\''+esc(user.username).replace(/&#39;/g,"\\'")+'\')">删除</button>')+'</span></div>'
   }).join('')
 }
 async function loadAdminUsers(){if(!(_currentUser&&_currentUser.is_root))return;try{var data=await api('GET','/api/admin/users');renderAdminUsers(data.users||[])}catch(e){toast('用户列表加载失败：'+e.message,'error')}}
 function renderInviteCodes(items){var available=items.filter(function(item){return!item.used_at&&!item.revoked}).length;$('invite-code-count').textContent=available+' 个可用';$('invite-code-list').innerHTML=items.map(function(item){var used=!!item.used_at,revoked=!!item.revoked,status=used?'已使用':revoked?'已作废':'可使用',statusClass=used?'bdg-m':revoked?'bdg-r':'bdg-g',detail=used?'使用者：'+(item.used_by_name||'已注销用户')+' · '+formatSystemTime(item.used_at):'生成于 '+formatSystemTime(item.created_at);return'<div class="invite-row"><span class="invite-code">'+esc(item.code)+'</span><span class="badge '+statusClass+'">'+status+'</span><span class="invite-meta">'+esc(detail)+'</span><div class="invite-actions"><button class="btn" onclick="copyInviteCode(\''+esc(item.code)+'\')">复制</button>'+(!used&&!revoked?'<button class="btn btn-danger" onclick="revokeInviteCode(\''+esc(item.code)+'\')">作废</button>':'')+'</div></div>'}).join('')||'<div class="center">尚未生成邀请码</div>'}
-async function loadInviteCodes(){if(!(_currentUser&&_currentUser.is_root))return;try{var data=await api('GET','/api/admin/invite-codes');renderInviteCodes(data.invite_codes||[])}catch(e){toast('邀请码加载失败：'+e.message,'error')}}
+async function loadInviteCodes(){if(!(_currentUser&&(_currentUser.is_root||_currentUser.is_admin)))return;try{var data=await api('GET','/api/admin/invite-codes');renderInviteCodes(data.invite_codes||[])}catch(e){toast('邀请码加载失败：'+e.message,'error')}}
 function copyInviteCode(code){if(navigator.clipboard)navigator.clipboard.writeText(code);toast('邀请码已复制','success')}
 async function generateInviteCode(){var btn=$('invite-generate-btn');btn.disabled=true;btn.classList.add('loading');try{var data=await api('POST','/api/admin/invite-codes');var code=data.invite_code&&data.invite_code.code||'';if(code&&navigator.clipboard)navigator.clipboard.writeText(code);toast(code?'邀请码已生成并复制':'邀请码已生成','success');await loadInviteCodes()}catch(e){toast('邀请码生成失败：'+e.message,'error')}finally{btn.disabled=false;btn.classList.remove('loading')}}
 async function revokeInviteCode(code){if(!confirm('确定作废邀请码“'+code+'”吗？'))return;try{var data=await api('POST','/api/admin/invite-codes/'+encodeURIComponent(code)+'/revoke');toast(data.message||'邀请码已作废','success');await loadInviteCodes()}catch(e){toast('邀请码作废失败：'+e.message,'error')}}
-function loadAdminPage(){loadAdminUsers();loadInviteCodes()}
+function loadAdminPage(){
+  var isRoot=_currentUser&&_currentUser.is_root,isAdmin=_currentUser&&(_currentUser.is_admin||_currentUser.is_root);
+  $('admin-nav-users').style.display=isRoot?'':'none';
+  if(isRoot)loadAdminUsers();
+  if(isAdmin){loadInviteCodes();loadSyncSchedule();startLogStream()}
+  // If not root, switch to first available panel
+  if(!isRoot)switchAdminPanel('invite');
+}
+/* ── Admin panel switching ── */
+function switchAdminPanel(panel){
+  document.querySelectorAll('.admin-nav-item').forEach(function(b){b.classList.toggle('active',b.dataset.panel===panel)});
+  document.querySelectorAll('.admin-panel').forEach(function(p){p.classList.toggle('active',p.id==='admin-panel-'+panel)});
+  if(panel==='logs')startLogStream();
+}
+document.addEventListener('click',function(e){var btn=e.target.closest('.admin-nav-item');if(btn){e.preventDefault();switchAdminPanel(btn.dataset.panel)}});
+/* ── 实时日志 ── */
+var _logStream=null,_logLines=[],_logMax=300;
+function startLogStream(){
+  if(_logStream){_logStream.close();_logStream=null}
+  _logLines=[];$('log-list').innerHTML='<div class="center muted">连接中…</div>';
+  // Load history first
+  api('GET','/api/logs/history',undefined,{silent:true}).then(function(d){
+    _logLines=arr(d.logs);renderLogs()
+  }).catch(function(){});
+  // Then connect SSE
+  _logStream=new EventSource('/api/stream?'+(_token?'token='+encodeURIComponent(_token):''));
+  _logStream.onmessage=function(e){
+    try{var evt=JSON.parse(e.data);_logLines.push(evt);if(_logLines.length>_logMax)_logLines.shift();renderLogs()}catch(ex){}
+  };
+  _logStream.onerror=function(){_logStream&&_logStream.close();setTimeout(function(){if($('page-admin').classList.contains('active'))startLogStream()},5000)};
+}
+function renderLogs(){
+  var list=$('log-list');
+  if(!_logLines.length){list.innerHTML='<div class="center muted">暂无日志</div>';$('log-count').textContent='0 条';return}
+  $('log-count').textContent=_logLines.length+' 条';
+  var colors={error:'#dc2626',warn:'#d97706',info:'var(--ink)',success:'#16a34a',system:'var(--sub)'};
+  list.innerHTML=_logLines.slice().reverse().map(function(l){
+    var c=colors[l.level]||'var(--sub)';
+    return'<div style="display:flex;gap:8px;white-space:nowrap"><span style="color:var(--muted);flex-shrink:0">'+esc(l.time)+'</span> <span style="color:var(--blue);flex-shrink:0">['+esc(l.channel)+']</span> <span style="color:'+c+'">'+esc(l.message)+'</span></div>'
+  }).join('');
+  list.scrollTop=0
+}
+function _updateToggleUI(enabled){var track=document.querySelector('#sync-schedule-card .toggle-track');var thumb=document.querySelector('#sync-schedule-card .toggle-thumb');if(track){track.style.background=enabled?'var(--blue)':'var(--line)'}if(thumb){thumb.style.left=enabled?'18px':'2px'}}
+async function loadSyncSchedule(){if(!(_currentUser&&_currentUser.is_root))return;try{var d=await api('GET','/api/dashboard/admin/sync-schedule',undefined,{silent:true});$('sync-schedule-enabled').checked=d.enabled;$('sync-schedule-time').value=d.time;_updateToggleUI(d.enabled);$('sync-schedule-status').textContent=d.enabled?'已启用 · 每日 '+d.time:'已关闭'}catch(e){$('sync-schedule-status').textContent='加载失败'}}
+async function saveSyncSchedule(){var enabled=$('sync-schedule-enabled').checked,time=$('sync-schedule-time').value||'04:00';_updateToggleUI(enabled);try{var d=await api('POST','/api/dashboard/admin/sync-schedule',{enabled:enabled,time:time});$('sync-schedule-status').textContent=d.enabled?'已启用 · 每日 '+d.time:'已关闭';toast(d.message||'已保存','success')}catch(e){_updateToggleUI(!enabled);$('sync-schedule-enabled').checked=!enabled;toast('保存失败：'+e.message,'error')}}
 async function changeUserPassword(userId){var input=$('admin-password-'+userId),password=input.value;if(password.length<4){toast('密码至少 4 个字符','error');return}try{await api('POST','/api/admin/users/'+userId+'/password/update',{password:password});input.value='';toast('密码已更新','success')}catch(e){toast('修改密码失败：'+e.message,'error')}}
 async function setUserAdmin(userId,isAdmin){try{await api('POST','/api/admin/users/'+userId+'/admin/update',{is_admin:isAdmin});toast('管理员权限已更新','success');loadAdminUsers()}catch(e){toast('权限修改失败：'+e.message,'error');loadAdminUsers()}}
 async function deleteManagedUser(userId,username){
@@ -787,7 +951,13 @@ function refreshData(e){var btn=e&&e.currentTarget;if(btn)btn.classList.add('loa
 applyTheme(localStorage.getItem('radar_theme')||'light');
 updateAuthUI();
 if(_token)initApp();
-async function initApp(){try{var me=await api('GET','/api/auth/me',undefined,{silent:true});_currentUser=me.user;$('admin-nav').style.display=_currentUser.is_root?'flex':'none'}catch(e){clearAuth();return}$('app-main').style.display='';(function(){var saved=localStorage.getItem('radar_page')||'page-dashboard';var el=document.querySelector('.sidebar a[data-page="'+saved+'"]');el?navTo(el):navTo('page-dashboard')})();loadConfigStatus(true);loadNotifications(false);loadChatUsers(true);document.addEventListener('mousemove',function(e){var c=e.target.closest('.card');if(!c)return;var r=c.getBoundingClientRect();c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px')});load().catch(function(e){toast('加载失败：'+e.message,'error',5000)});setInterval(function(){if($('page-dashboard').classList.contains('active'))load().catch(function(){});if($('page-admin').classList.contains('active'))loadAdminUsers();loadNotifications(false)},60000);setInterval(function(){if(!_token)return;loadChatUsers(true);if($('page-chat').classList.contains('active')&&_chatPeerId)loadChatMessages(true)},5000)}
+async function initApp(){try{var me=await api('GET','/api/auth/me',undefined,{silent:true});_currentUser=me.user;var isAdmin=_currentUser.is_admin||_currentUser.is_root;$('admin-nav').style.display=isAdmin?'flex':'none';$('feishu-sync-button').style.display=_currentUser.is_root?'':'none';$('givemeoc-sync-button').style.display=_currentUser.is_root?'':'none'}catch(e){clearAuth();return}$('app-main').style.display='';(function(){var saved=localStorage.getItem('radar_page')||'page-dashboard';var el=document.querySelector('.sidebar a[data-page="'+saved+'"]');el?navTo(el):navTo('page-dashboard')})();loadConfigStatus(true);loadNotifications(false);loadChatUsers(true);document.addEventListener('mousemove',function(e){var c=e.target.closest('.card');if(!c)return;var r=c.getBoundingClientRect();c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px')});load().catch(function(e){toast('加载失败：'+e.message,'error',5000)});setInterval(function(){if($('page-dashboard').classList.contains('active'))load().catch(function(){});if($('page-admin').classList.contains('active'))loadAdminUsers();loadNotifications(false)},60000);setInterval(function(){if(!_token)return;loadChatUsers(true);if($('page-chat').classList.contains('active')&&_chatPeerId)loadChatMessages(true)},5000)}
 </script>
 </body>
-</html>
+</html>  .admin-user-card{grid-template-columns:1fr auto;gap:4px 8px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:8px}
+  .admin-user-card:last-child{margin-bottom:0;border-bottom:1px solid var(--line)}
+  .admin-user-card.header{display:none}
+  .admin-user-card .udate{display:none}
+  .admin-user-card .ubtns{grid-column:1/-1;width:100%}
+  .admin-user-card .ubtns input{flex:1;min-width:0}
+

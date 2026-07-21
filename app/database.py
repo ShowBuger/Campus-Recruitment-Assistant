@@ -16,14 +16,22 @@ def _ensure_dir() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
+_tables_initialized = False
+
+
 def get_db() -> sqlite3.Connection:
     """获取数据库连接，自动初始化表结构。"""
+    global _tables_initialized
     _ensure_dir()
     conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
-    _init_tables(conn)
+    if not _tables_initialized:
+        with _write_lock:
+            if not _tables_initialized:
+                _init_tables(conn)
+                _tables_initialized = True
     return conn
 
 
@@ -38,8 +46,17 @@ def _init_tables(conn: sqlite3.Connection) -> None:
 
         CREATE TABLE IF NOT EXISTS user_configs (
             user_id INTEGER PRIMARY KEY,
+            ai_provider TEXT NOT NULL DEFAULT 'deepseek',
             deepseek_api_key TEXT DEFAULT '',
             deepseek_model TEXT DEFAULT 'deepseek-v4-flash',
+            deepseek_base_url TEXT DEFAULT 'https://api.deepseek.com',
+            openai_api_key TEXT DEFAULT '',
+            openai_model TEXT DEFAULT 'gpt-5.4-mini',
+            openai_base_url TEXT DEFAULT 'https://api.openai.com/v1',
+            openai_api_mode TEXT DEFAULT 'responses',
+            anthropic_api_key TEXT DEFAULT '',
+            anthropic_model TEXT DEFAULT 'claude-sonnet-5',
+            anthropic_base_url TEXT DEFAULT 'https://api.anthropic.com/v1',
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
@@ -192,8 +209,56 @@ def _init_tables(conn: sqlite3.Connection) -> None:
         """CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_request_id
            ON notifications(request_id) WHERE request_id IS NOT NULL"""
     )
+    config_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(user_configs)")
+    }
+    config_migrations = {
+        "ai_provider": "TEXT NOT NULL DEFAULT 'deepseek'",
+        "openai_api_key": "TEXT DEFAULT ''",
+        "openai_model": "TEXT DEFAULT 'gpt-5.4-mini'",
+        "openai_base_url": "TEXT DEFAULT 'https://api.openai.com/v1'",
+        "openai_api_mode": "TEXT DEFAULT 'responses'",
+        "anthropic_api_key": "TEXT DEFAULT ''",
+        "anthropic_model": "TEXT DEFAULT 'claude-sonnet-5'",
+        "anthropic_base_url": "TEXT DEFAULT 'https://api.anthropic.com/v1'",
+        "deepseek_base_url": "TEXT DEFAULT 'https://api.deepseek.com'",
+    }
+    for column, declaration in config_migrations.items():
+        if column not in config_columns:
+            conn.execute(f"ALTER TABLE user_configs ADD COLUMN {column} {declaration}")
     conn.execute("UPDATE users SET is_admin = 1 WHERE username = 'root'")
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS system_config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL DEFAULT ''
+        );
+    """)
+    # Default sync schedule
+    conn.execute(
+        "INSERT OR IGNORE INTO system_config (key, value) VALUES ('sync_enabled', '0')"
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO system_config (key, value) VALUES ('sync_time', '04:00')"
+    )
     conn.commit()
+
+
+# ── 系统配置 ─────────────────────────────────────────
+
+def get_system_config(key: str) -> str | None:
+    db = get_db()
+    row = db.execute("SELECT value FROM system_config WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def set_system_config(key: str, value: str) -> None:
+    with _write_lock:
+        db = get_db()
+        db.execute(
+            "INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)",
+            (key, value),
+        )
+        db.commit()
 
 
 # ── 用户管理 ────────────────────────────────────────
@@ -459,26 +524,59 @@ def get_user_config(user_id: int) -> dict:
         db.execute("INSERT INTO user_configs (user_id) VALUES (?)", (user_id,))
         db.commit()
         return {
+            "ai_provider": "deepseek",
             "deepseek_api_key": "",
             "deepseek_model": "deepseek-v4-flash",
+            "deepseek_base_url": "https://api.deepseek.com",
+            "openai_api_key": "",
+            "openai_model": "gpt-5.4-mini",
+            "openai_base_url": "https://api.openai.com/v1",
+            "openai_api_mode": "responses",
+            "anthropic_api_key": "",
+            "anthropic_model": "claude-sonnet-5",
+            "anthropic_base_url": "https://api.anthropic.com/v1",
             "configured": False,
         }
     d = dict(row)
     d.pop("user_id", None)
-    d["configured"] = bool(d.get("deepseek_api_key"))
+    provider = d.get("ai_provider") or "deepseek"
+    key_field = {
+        "deepseek": "deepseek_api_key",
+        "openai": "openai_api_key",
+        "anthropic": "anthropic_api_key",
+    }.get(provider, "deepseek_api_key")
+    d["configured"] = bool(d.get(key_field))
     return d
 
 
-def save_ai_config(user_id: int, api_key: str, model: str) -> None:
+def save_ai_config(user_id: int, values: dict) -> None:
     with _write_lock:
         db = get_db()
         db.execute(
-            """INSERT INTO user_configs (user_id, deepseek_api_key, deepseek_model)
-               VALUES (?, ?, ?)
+            """INSERT INTO user_configs
+               (user_id, ai_provider, deepseek_api_key, deepseek_model,
+                deepseek_base_url, openai_api_key, openai_model, openai_base_url,
+                openai_api_mode, anthropic_api_key, anthropic_model, anthropic_base_url)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(user_id) DO UPDATE SET
+               ai_provider=excluded.ai_provider,
                deepseek_api_key=excluded.deepseek_api_key,
-               deepseek_model=excluded.deepseek_model""",
-            (user_id, api_key, model),
+               deepseek_model=excluded.deepseek_model,
+               deepseek_base_url=excluded.deepseek_base_url,
+               openai_api_key=excluded.openai_api_key,
+               openai_model=excluded.openai_model,
+               openai_base_url=excluded.openai_base_url,
+               openai_api_mode=excluded.openai_api_mode,
+               anthropic_api_key=excluded.anthropic_api_key,
+               anthropic_model=excluded.anthropic_model,
+               anthropic_base_url=excluded.anthropic_base_url""",
+            (
+                user_id, values["ai_provider"],
+                values["deepseek_api_key"], values["deepseek_model"], values["deepseek_base_url"],
+                values["openai_api_key"], values["openai_model"], values["openai_base_url"],
+                values["openai_api_mode"], values["anthropic_api_key"],
+                values["anthropic_model"], values["anthropic_base_url"],
+            ),
         )
         db.commit()
 

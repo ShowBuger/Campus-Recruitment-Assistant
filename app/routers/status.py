@@ -26,3 +26,8 @@ def stream():
         "Cache-Control": "no-cache",
         "X-Accel-Buffering": "no",
     })
+
+
+@router.get("/logs/history")
+def logs_history():
+    return {"logs": bus.history()}

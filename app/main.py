@@ -12,6 +12,9 @@ from fastapi.staticfiles import StaticFiles
 from app import bus
 from app.routers import dashboard, status, config, resume, ai, auth, admin, chat
 
+# Start background sync scheduler
+dashboard.start_sync_scheduler()
+
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 PROJECT_DIR = os.path.join(os.path.dirname(__file__), "..")
 
