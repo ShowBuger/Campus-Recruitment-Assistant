@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import bus
-from app.routers import dashboard, status, config, resume, ai, auth, admin, chat
+from app.routers import dashboard, status, config, resume, ai, auth, admin, chat, autofill
 
 # Start background sync scheduler
 dashboard.start_sync_scheduler()
@@ -35,6 +35,7 @@ app.include_router(config.router)
 app.include_router(resume.router)
 app.include_router(ai.router)
 app.include_router(chat.router)
+app.include_router(autofill.router)
 
 
 @app.get("/")
