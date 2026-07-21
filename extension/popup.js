@@ -1,37 +1,43 @@
 "use strict";
 
 const $ = id => document.getElementById(id);
+const SERVER = "https://www.toudimianban.cloud";
+var _refreshTimer = null;
 
 // ── Log ────────────────────────────────────────────────────────────
 function log(msg, isError) {
   const el = $("log");
+  el.style.display = "block";
   const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
   el.innerHTML += `<div style="${isError ? "color:#e11d48" : ""}">${time} ${msg}</div>`;
   el.scrollTop = el.scrollHeight;
 }
 
-// ── Load saved state ──────────────────────────────────────────────
-async function loadState() {
-  const data = await chrome.storage.local.get([
-    "serverUrl", "username", "token", "profiles", "selectedProfileId", "fillMode", "autoDetect"
-  ]);
-  $("server-url").value = data.serverUrl || "https://www.toudimianban.cloud";
-  if (data.username) $("username").value = data.username;
-  if (data.profiles) {
-    renderProfiles(data.profiles, data.selectedProfileId);
-    updateConnectionStatus(true, data.username, data.profiles.length);
-  } else if (data.token) {
-    // Already logged in from before, try to refresh
-    $("btn-connect").textContent = "刷新";
-    updateConnectionStatus(true, data.username || "已登录");
-  }
-  if (data.fillMode) {
-    document.querySelectorAll(".mode-btn").forEach(b => {
-      b.classList.toggle("active", b.dataset.mode === data.fillMode);
+// ── Panel switching ────────────────────────────────────────────────
+function showPanel(name) {
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  $(`panel-${name}`).classList.add("active");
+}
+
+function updateHeader(username, profileCount) {
+  $("conn-status").textContent = username ? `✅ ${username} · ${profileCount || 0} 模板` : "未登录";
+  $("btn-logout").style.display = username ? "" : "none";
+}
+
+async function loadProfiles(token) {
+  try {
+    const resp = await fetch(SERVER + "/api/autofill/extension/config", {
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
     });
-  }
-  if (data.autoDetect !== undefined) {
-    $("toggle-auto").classList.toggle("on", data.autoDetect);
+    if (!resp.ok) throw new Error("会话过期");
+    const data = await resp.json();
+    const profiles = data.profiles || [];
+    const { selectedProfileId } = await chrome.storage.local.get(["selectedProfileId"]);
+    renderProfiles(profiles, selectedProfileId);
+    await chrome.storage.local.set({ profiles, aiProvider: data.ai_provider, hasAiKey: data.has_ai_key });
+    return profiles;
+  } catch (e) {
+    throw e;
   }
 }
 
@@ -42,69 +48,87 @@ function renderProfiles(profiles, selectedId) {
   ).join("") || '<option value="">无模板</option>';
 }
 
-function updateConnectionStatus(ok, username, profileCount) {
-  const el = $("conn-status");
-  if (ok) {
-    el.innerHTML = `✅ ${escHtml(username || "")} · ${profileCount || 0} 个模板`;
-  } else {
-    el.innerHTML = "⚠ 未登录";
-  }
-}
-
 function escHtml(s) {
   return String(s).replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[m]);
 }
 
-// ── Connect / Login ────────────────────────────────────────────────
-$("btn-connect").addEventListener("click", async () => {
-  const btn = $("btn-connect");
-  btn.disabled = true;
-  btn.textContent = "登录中…";
-  const serverUrl = $("server-url").value.trim();
+// ── Auto refresh ───────────────────────────────────────────────────
+function startAutoRefresh(token) {
+  stopAutoRefresh();
+  _refreshTimer = setInterval(async () => {
+    try {
+      await loadProfiles(token);
+    } catch (e) { /* silent */ }
+  }, 5 * 60 * 1000); // every 5 minutes
+}
+
+function stopAutoRefresh() {
+  if (_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer = null; }
+}
+
+// ── Login ──────────────────────────────────────────────────────────
+$("btn-login").addEventListener("click", async () => {
+  const btn = $("btn-login");
   const username = $("username").value.trim();
   const password = $("password").value.trim();
-  if (!serverUrl) { log("请输入服务器地址", true); btn.disabled = false; btn.textContent = "登录"; return; }
-  if (!username || !password) { log("请输入用户名和密码", true); btn.disabled = false; btn.textContent = "登录"; return; }
+  const errEl = $("login-error");
+
+  if (!username || !password) {
+    errEl.textContent = "请输入用户名和密码";
+    errEl.style.display = "block";
+    return;
+  }
+  errEl.style.display = "none";
+  btn.disabled = true;
+  btn.textContent = "登录中…";
 
   try {
-    // Step 1: Login to get token
-    const loginResp = await fetch(serverUrl + "/api/auth/login", {
+    const resp = await fetch(SERVER + "/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password })
     });
-    if (!loginResp.ok) {
-      const err = await loginResp.json().catch(() => ({ detail: "用户名或密码错误" }));
-      throw new Error(err.detail || "登录失败");
+    if (!resp.ok) {
+      const e = await resp.json().catch(() => ({ detail: "用户名或密码错误" }));
+      throw new Error(e.detail || "登录失败");
     }
-    const loginData = await loginResp.json();
-    const token = loginData.token;
+    const data = await resp.json();
+    const token = data.token;
 
-    // Step 2: Fetch profiles
-    const configResp = await fetch(serverUrl + "/api/autofill/extension/config", {
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
-    });
-    if (!configResp.ok) throw new Error("获取配置失败");
-    const data = await configResp.json();
-    const profiles = data.profiles || [];
+    const profiles = await loadProfiles(token);
+    await chrome.storage.local.set({ token, username });
+    if (profiles.length && !(await chrome.storage.local.get(["selectedProfileId"])).selectedProfileId) {
+      await chrome.storage.local.set({ selectedProfileId: profiles[0].id });
+    }
 
-    await chrome.storage.local.set({
-      serverUrl, token, username,
-      profiles, aiProvider: data.ai_provider, hasAiKey: data.has_ai_key,
-      selectedProfileId: profiles[0]?.id || ""
-    });
     $("password").value = "";
-    renderProfiles(profiles, profiles[0]?.id);
-    updateConnectionStatus(true, username, profiles.length);
-    log(`已登录 · ${profiles.length} 个模板`);
-    btn.textContent = "刷新";
+    showPanel("main");
+    updateHeader(username, profiles.length);
+    startAutoRefresh(token);
+    log("已登录 · " + profiles.length + " 个模板");
   } catch (e) {
-    updateConnectionStatus(false);
-    log("登录失败: " + e.message, true);
-    btn.textContent = "登录";
+    errEl.textContent = e.message;
+    errEl.style.display = "block";
   }
   btn.disabled = false;
+  btn.textContent = "登 录";
 });
+
+// Enter key to login
+$("password").addEventListener("keydown", e => { if (e.key === "Enter") $("btn-login").click(); });
+$("username").addEventListener("keydown", e => { if (e.key === "Enter") $("password").focus(); });
+
+// ── Logout ─────────────────────────────────────────────────────────
+async function doLogout() {
+  stopAutoRefresh();
+  await chrome.storage.local.remove(["token", "username", "profiles", "selectedProfileId"]);
+  showPanel("login");
+  updateHeader("", 0);
+  $("log").style.display = "none";
+  $("log").innerHTML = "";
+}
+// expose to inline onclick
+window.doLogout = doLogout;
 
 // ── Profile selection ─────────────────────────────────────────────
 $("profile-select").addEventListener("change", async () => {
@@ -121,12 +145,12 @@ document.querySelectorAll(".mode-btn").forEach(btn => {
 });
 
 // ── Auto detect toggle ────────────────────────────────────────────
-function toggleAutoDetect() {
+window.toggleAutoDetect = function () {
   const toggle = $("toggle-auto");
   const on = !toggle.classList.contains("on");
   toggle.classList.toggle("on", on);
   chrome.storage.local.set({ autoDetect: on });
-}
+};
 
 // ── Fill button ───────────────────────────────────────────────────
 $("btn-fill").addEventListener("click", async () => {
@@ -145,9 +169,7 @@ $("btn-fill").addEventListener("click", async () => {
 
   try {
     const result = await chrome.tabs.sendMessage(tab.id, {
-      action: "fill",
-      profile,
-      mode: fillMode || "full"
+      action: "fill", profile, mode: fillMode || "full"
     });
     if (result) {
       log(`已填充 ${result.succeeded}/${result.total} 字段`);
@@ -182,4 +204,39 @@ $("btn-detect").addEventListener("click", async () => {
 });
 
 // ── Init ──────────────────────────────────────────────────────────
-loadState();
+(async () => {
+  const { token, username, fillMode, autoDetect, profiles, selectedProfileId } =
+    await chrome.storage.local.get(["token", "username", "fillMode", "autoDetect", "profiles", "selectedProfileId"]);
+
+  // Restore UI state
+  if (fillMode) {
+    document.querySelectorAll(".mode-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.mode === fillMode);
+    });
+  }
+  if (autoDetect !== undefined) {
+    $("toggle-auto").classList.toggle("on", autoDetect);
+  }
+
+  if (token && username) {
+    // Already logged in — try to refresh
+    showPanel("main");
+    if (profiles) {
+      renderProfiles(profiles, selectedProfileId);
+      updateHeader(username, profiles.length);
+    } else {
+      updateHeader(username, 0);
+    }
+    $("username").value = username;
+    // Refresh in background
+    loadProfiles(token).then(p => {
+      updateHeader(username, p.length);
+    }).catch(() => {
+      // Token expired, show login
+      chrome.storage.local.remove(["token", "username"]);
+      showPanel("login");
+      updateHeader("", 0);
+    });
+    startAutoRefresh(token);
+  }
+})();

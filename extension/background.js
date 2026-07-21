@@ -1,13 +1,10 @@
 "use strict";
 
-// ── Defaults ─────────────────────────────────────────────────────
-const DEFAULT_SERVER = "https://www.toudimianban.cloud";
+const SERVER = "https://www.toudimianban.cloud";
 
 // ── Server API helpers ────────────────────────────────────────────
 async function apiCall(endpoint, options = {}) {
-  const { serverUrl } = await chrome.storage.local.get(["serverUrl"]);
-  const base = serverUrl || DEFAULT_SERVER;
-  const url = base + endpoint;
+  const url = SERVER + endpoint;
   const headers = { "Content-Type": "application/json" };
   const { token } = await chrome.storage.local.get(["token"]);
   if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -26,8 +23,6 @@ async function loadServerConfig() {
     const data = await apiCall("/api/autofill/extension/config");
     const profiles = data.profiles || [];
     await chrome.storage.local.set({ profiles, aiProvider: data.ai_provider, hasAiKey: data.has_ai_key });
-
-    // Auto-select first profile if none selected
     const { selectedProfileId } = await chrome.storage.local.get(["selectedProfileId"]);
     if (!selectedProfileId && profiles.length > 0) {
       await chrome.storage.local.set({ selectedProfileId: profiles[0].id });
@@ -59,7 +54,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.action === "getProfiles") {
     chrome.storage.local.get(["profiles", "selectedProfileId", "fillMode", "autoDetect",
-      "serverUrl", "aiProvider", "hasAiKey"], sendResponse);
+      "aiProvider", "hasAiKey"], sendResponse);
     return true;
   }
 
@@ -86,9 +81,5 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // ── On install ────────────────────────────────────────────────────
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.set({
-    serverUrl: "https://www.toudimianban.cloud",
-    autoDetect: true,
-    fillMode: "full"
-  });
+  chrome.storage.local.set({ autoDetect: true, fillMode: "full" });
 });
