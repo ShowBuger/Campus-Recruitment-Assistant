@@ -16,6 +16,7 @@ async function loadState() {
     "serverUrl", "token", "profiles", "selectedProfileId", "fillMode", "autoDetect"
   ]);
   if (data.serverUrl) $("server-url").value = data.serverUrl;
+  else $("server-url").value = "https://www.toudimianban.cloud";
   if (data.token) $("token").value = data.token;
   if (data.profiles) {
     renderProfiles(data.profiles, data.selectedProfileId);

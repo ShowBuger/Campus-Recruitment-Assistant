@@ -1,7 +1,7 @@
 "use strict";
 
 // ── Defaults ─────────────────────────────────────────────────────
-const DEFAULT_SERVER = "http://localhost:8765";
+const DEFAULT_SERVER = "https://www.toudimianban.cloud";
 
 // ── Server API helpers ────────────────────────────────────────────
 async function apiCall(endpoint, options = {}) {
@@ -87,7 +87,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // ── On install ────────────────────────────────────────────────────
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({
-    serverUrl: DEFAULT_SERVER,
+    serverUrl: "https://www.toudimianban.cloud",
     autoDetect: true,
     fillMode: "full"
   });

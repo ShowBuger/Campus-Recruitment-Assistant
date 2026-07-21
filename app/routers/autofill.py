@@ -896,7 +896,7 @@ def extension_config(user: dict = Depends(auth_module.get_current_user)):
     return {
         "success": True,
         "profiles": profile_list,
-        "server_url": "",
+        "server_url": "https://www.toudimianban.cloud",
         "ai_provider": provider,
         "has_ai_key": bool(cfg.get(key_field, "")),
         "ai_model": cfg.get(model_field, "") or {
