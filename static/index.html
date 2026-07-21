@@ -521,37 +521,54 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
     <section class="page" id="page-auto-fill">
       <div class="autofill-layout">
         <div class="autofill-side">
-          <h3>投递设置</h3>
-          <div class="form-group" style="margin:0"><label for="af-record" style="font-size:11px">选择投递记录</label><select id="af-record" onchange="onAfRecordChange()"><option value="">请选择公司</option></select></div>
-          <div class="autofill-url-row"><input id="af-url" type="url" placeholder="投递页面网址" onchange="onAfUrlChange()"><button class="btn btn-primary" id="af-open-btn" onclick="openAutoFillPage()">打开</button></div>
+          <h3>简历模板管理</h3>
           <div class="form-group" style="margin:0"><label for="af-profile" style="font-size:11px">选择简历模板</label><select id="af-profile" onchange="onAfProfileChange()"><option value="">请选择模板</option></select></div>
           <div style="display:flex;gap:6px"><button class="btn" id="af-new-profile-btn" onclick="openProfileModal()" style="flex:1;height:30px;font-size:11px">新建模板</button><button class="btn" id="af-edit-profile-btn" onclick="editCurrentProfile()" style="flex:1;height:30px;font-size:11px" disabled>编辑模板</button></div>
-          <h3>填充模式</h3>
-          <div class="autofill-mode-row">
-            <button class="btn active-mode" data-mode="full" onclick="setAfMode('full',this)">全量填充</button>
-            <button class="btn" data-mode="incremental" onclick="setAfMode('incremental',this)">增量填充</button>
-            <button class="btn" data-mode="ai" onclick="setAfMode('ai',this)">AI 匹配</button>
-          </div>
-          <div style="display:flex;gap:6px">
-            <button class="btn btn-primary" id="af-detect-btn" onclick="detectAutoFillFields()" style="flex:1;height:32px;font-size:11px">检测字段</button>
-            <button class="btn" id="af-fill-btn" onclick="executeAutoFill()" style="flex:1;height:32px;font-size:11px" disabled>执行填充</button>
-          </div>
-          <h3>字段映射 <span style="font-weight:400;font-size:10px;color:var(--sub)" id="af-field-count"></span></h3>
-          <div class="autofill-field-list" id="af-field-list"><div class="center" style="font-size:11px">请先打开投递页面并检测字段</div></div>
-          <h3>填充日志</h3>
-          <div class="autofill-log" id="af-log"><div class="muted">等待操作…</div></div>
+          <h3>字段预览</h3>
+          <div class="autofill-field-list" id="af-field-list"><div class="center" style="font-size:11px">选择一个模板查看字段</div></div>
+          <h3>快速操作</h3>
+          <div class="form-group" style="margin:0"><label for="af-record" style="font-size:11px">关联投递记录</label><select id="af-record" onchange="onAfRecordChange()"><option value="">请选择公司</option></select></div>
+          <div style="display:flex;gap:6px;margin-top:8px"><button class="btn" id="af-copy-script-btn" onclick="copyFillScript()" style="flex:1;height:30px;font-size:11px">📋 复制填充脚本</button></div>
+          <div class="help" style="margin-top:6px;font-size:10px">在目标页面按 F12，粘贴脚本到控制台即可执行填充。适用于无法使用扩展的场景。</div>
         </div>
         <div class="autofill-preview" id="autofill-preview">
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--panel)">
-            <button class="btn" onclick="afZoom(-0.1)" style="height:26px;padding:0 8px;font-size:13px" title="缩小">🔍−</button>
-            <span style="font-size:11px;color:var(--muted);min-width:36px;text-align:center" id="af-zoom-label">100%</span>
-            <button class="btn" onclick="afZoom(0.1)" style="height:26px;padding:0 8px;font-size:13px" title="放大">🔍+</button>
-            <span style="flex:1"></span>
-            <button class="btn" id="af-popout-btn" onclick="afPopOut()" style="height:26px;padding:0 10px;font-size:11px;display:none" title="在新窗口打开">🔗 新窗口</button>
-          </div>
-          <div class="autofill-iframe-overlay" id="af-overlay"><span>选择投递记录和网址后打开页面</span></div>
-          <div id="af-iframe-wrap" style="width:100%;height:calc(100vh - 195px);overflow:auto">
-            <iframe id="af-iframe" title="投递页面" style="width:100%;height:100%;border:0;transform-origin:0 0"></iframe>
+          <div style="padding:24px;max-width:640px;margin:0 auto">
+            <div style="text-align:center;margin-bottom:28px">
+              <div class="mark" style="margin:0 auto 16px;width:56px;height:56px;border-radius:16px"></div>
+              <h2 style="font-size:22px;margin:0 0 6px">浏览器扩展</h2>
+              <p style="color:var(--muted);font-size:13px;margin:0">推荐使用浏览器扩展进行自动填充，支持所有页面（含 SPA）</p>
+            </div>
+
+            <div class="card" style="margin-bottom:18px">
+              <div class="card-hd"><span class="dot g"></span><span class="card-title">安装步骤</span></div>
+              <div class="card-body" style="font-size:13px;line-height:2">
+                <div><strong>1.</strong> 下载扩展文件：<a id="af-ext-download" href="/api/autofill/extension/download" class="btn" style="display:inline-flex;height:30px;padding:0 12px;font-size:11px;vertical-align:middle;margin-left:6px">📦 下载 extension.zip</a></div>
+                <div><strong>2.</strong> 打开 Chrome，地址栏输入 <code style="background:var(--blueS);padding:2px 6px;border-radius:4px">chrome://extensions</code></div>
+                <div><strong>3.</strong> 打开右上角「<strong>开发者模式</strong>」</div>
+                <div><strong>4.</strong> 将下载的 <code style="background:var(--blueS);padding:2px 6px;border-radius:4px">extension.zip</code> 解压</div>
+                <div><strong>5.</strong> 点击「<strong>加载已解压的扩展程序</strong>」，选择解压后的文件夹</div>
+                <div><strong>6.</strong> 点击扩展图标，填写服务器地址和令牌即可使用</div>
+              </div>
+            </div>
+
+            <div class="card" style="margin-bottom:18px">
+              <div class="card-hd"><span class="dot"></span><span class="card-title">获取令牌</span></div>
+              <div class="card-body" style="font-size:13px;line-height:1.8">
+                <div>按 <code style="background:var(--blueS);padding:2px 6px;border-radius:4px">F12</code> 打开开发者工具，在控制台执行：</div>
+                <pre style="background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;font:12px var(--mono);margin:8px 0;overflow:auto" id="af-token-cmd">localStorage.getItem('rb_token')</pre>
+                <button class="btn" onclick="copyTokenCmd()" style="height:28px;padding:0 10px;font-size:11px">📋 复制命令</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-hd"><span class="dot a"></span><span class="card-title">使用说明</span></div>
+              <div class="card-body" style="font-size:13px;line-height:1.8">
+                <div>• 打开任意校招投递页面，扩展会自动检测表单（右上角弹窗）</div>
+                <div>• 点击扩展图标可手动选择模板和填充模式</div>
+                <div>• 支持 <strong>全量填充</strong>、<strong>增量填充</strong>（仅填空字段）、<strong>AI 匹配</strong></div>
+                <div>• 模板在此页面管理，扩展自动同步</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1024,218 +1041,42 @@ updateAuthUI();
 if(_token)initApp();
 async function initApp(){try{var me=await api('GET','/api/auth/me',undefined,{silent:true});_currentUser=me.user;var isAdmin=_currentUser.is_admin||_currentUser.is_root;$('admin-nav').style.display=isAdmin?'flex':'none';$('feishu-sync-button').style.display=_currentUser.is_root?'':'none';$('givemeoc-sync-button').style.display=_currentUser.is_root?'':'none'}catch(e){clearAuth();return}$('app-main').style.display='';(function(){var saved=localStorage.getItem('radar_page')||'page-dashboard';var el=document.querySelector('.sidebar a[data-page="'+saved+'"]');el?navTo(el):navTo('page-dashboard')})();loadConfigStatus(true);loadNotifications(false);loadChatUsers(true);document.addEventListener('mousemove',function(e){var c=e.target.closest('.card');if(!c)return;var r=c.getBoundingClientRect();c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px')});load().catch(function(e){toast('加载失败：'+e.message,'error',5000)});setInterval(function(){if($('page-dashboard').classList.contains('active'))load().catch(function(){});if($('page-admin').classList.contains('active'))loadAdminUsers();loadNotifications(false)},60000);setInterval(function(){if(!_token)return;loadChatUsers(true);if($('page-chat').classList.contains('active')&&_chatPeerId)loadChatMessages(true)},5000)}
 /* ---------- 自动投递 ---------- */
-var _afProfiles=[],_afProfileId='',_afMode='full',_afFields=[],_afLoaded=false,_afEditingProfileId='';
+var _afProfiles=[],_afProfileId='',_afEditingProfileId='';
 var AF_PROFILE_FIELDS=['姓名','邮箱','手机','性别','出生日期','民族','政治面貌','学校','专业','学历','毕业时间','英语水平','实习经历','项目经历','技能','获奖情况','自我评价','期望城市','期望薪资','最快到岗','GitHub','博客'];
-function afLog(msg,cls){var el=$('af-log');if(!el)return;var now=new Date(),time=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');var entry=document.createElement('div');entry.innerHTML='<span style="color:var(--muted)">'+time+'</span> <span class="'+(cls||'')+'">'+esc(msg)+'</span>';el.appendChild(entry);el.scrollTop=el.scrollHeight;while(el.children.length>80)el.removeChild(el.firstChild)}
 function loadAutoFillPage(){loadAfRecords();loadAfProfiles();}
 async function loadAfRecords(){if(!_lastData)try{await load()}catch(e){}var records=arr(_lastData&&_lastData.main&&_lastData.main.records);var sel=$('af-record'),current=sel.value;sel.innerHTML='<option value="">请选择公司</option>'+records.map(function(r){return'<option value="'+esc(r.record_id)+'" data-url="'+esc(r.url||'')+'">'+esc((r.company||'—')+' · '+(r.job||'—'))+'</option>'}).join('');if(current&&records.some(function(r){return r.record_id===current}))sel.value=current}
-async function loadAfProfiles(){try{var d=await api('GET','/api/autofill/profiles',undefined,{silent:true});_afProfiles=arr(d.profiles);renderAfProfileSelect()}catch(e){afLog('模板列表加载失败：'+e.message,'err')}}
-function renderAfProfileSelect(){var sel=$('af-profile'),current=_afProfileId;sel.innerHTML='<option value="">请选择模板</option>'+_afProfiles.map(function(p){return'<option value="'+esc(p.id)+'">'+esc(p.name)+' ('+p.field_count+' 字段)</option>'}).join('');if(current&&_afProfiles.some(function(p){return p.id===current}))sel.value=current;$('af-edit-profile-btn').disabled=!_afProfileId}
-function onAfRecordChange(){var sel=$('af-record'),opt=sel.options[sel.selectedIndex],url=opt&&opt.dataset.url||'';if(url){$('af-url').value=url;afLog('已自动填入记录网址：'+url)}$('af-open-btn').disabled=!$('af-url').value.trim()}
-function onAfUrlChange(){$('af-open-btn').disabled=!$('af-url').value.trim()}
-function onAfProfileChange(){_afProfileId=$('af-profile').value;$('af-edit-profile-btn').disabled=!_afProfileId}
-function setAfMode(mode,btn){_afMode=mode;document.querySelectorAll('.autofill-mode-row .btn').forEach(function(b){b.classList.toggle('active-mode',b===btn)})}
-/* ── Open page via proxy ── */
-var _afLoadId=0;
-async function openAutoFillPage(){
-  var url=$('af-url').value.trim();if(!url){toast('请填写投递页面网址','error');return}
-  if(!/^https?:\/\//i.test(url)){toast('请输入完整网址 (https://...)','error');return}
-  var btn=$('af-open-btn'),overlay=$('af-overlay'),iframe=$('af-iframe');
-  btn.disabled=true;btn.classList.add('loading');overlay.classList.remove('hidden');overlay.querySelector('span').textContent='正在加载投递页面…';_afLoaded=false;_afFields=[];renderAfFields();$('af-fill-btn').disabled=true;
-  _afLoadId++;var loadId=_afLoadId;
-  try{
-    var result=await api('POST','/api/autofill/proxy',{url:url,record_id:$('af-record').value});
-    if(loadId!==_afLoadId)return; // Stale request
-    iframe.src=result.view_url;
-    iframe.onload=function(){
-      if(loadId!==_afLoadId)return; // Stale
-      overlay.classList.add('hidden');_afLoaded=true;$('af-popout-btn').style.display='';
-      var title=decodeURIComponent(result.title||'');if(!title)title=result.final_url||url;
-      afLog('页面已加载：'+esc(title),'ok');
-      _afZoom=1.0;$('af-zoom-label').textContent='100%';var iframe=$('af-iframe');iframe.style.transform='';iframe.style.width='100%';iframe.style.height='100%';
-      setTimeout(function(){detectAutoFillFields()},700);
-    };
-  }catch(err){overlay.classList.add('hidden');afLog('页面加载失败：'+err.message,'err');toast('页面加载失败：'+err.message,'error')}
-  finally{btn.disabled=false;btn.classList.remove('loading')}
-}
-/* ── Detect fields via direct DOM access ── */
-function _afCollectFields(doc){
-  var fields=[],seen={};
-  var inputs=doc.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="file"]), textarea, select');
-  inputs.forEach(function(el){
-    var name=(el.name||'').trim(),id=(el.id||'').trim(),label='';
-    var lbl=doc.querySelector('label[for="'+CSS.escape(id)+'"]');
-    if(!lbl&&el.closest){
-      var row=el.closest('label')||el.closest('.form-item')||el.closest('.form-group')||el.closest('tr')||el.closest('div');
-      if(row)lbl=row.querySelector('label');
-    }
-    if(lbl)label=(lbl.textContent||'').replace(/\s+/g,' ').trim();
-    var key=name+'|'+id+'|'+label;if(seen[key])return;seen[key]=true;
-    var options=[];
-    if(el.tagName==='SELECT'){Array.from(el.options).forEach(function(o){options.push({value:o.value||'',text:(o.textContent||'').trim()})})}
-    fields.push({name:name,id:id,type:el.type||el.tagName.toLowerCase(),label:label,placeholder:(el.placeholder||'').trim(),required:el.required||el.getAttribute('aria-required')==='true',options:options.slice(0,50),tagName:el.tagName});
-  });
-  return fields;
-}
-var _afDetectTimer=null,_afDetectAttempts=0;
-function detectAutoFillFields(){
-  if(!_afLoaded){toast('请先打开投递页面','error');return}
-  var iframe=$('af-iframe'),doc=null;
-  try{doc=iframe.contentDocument||iframe.contentWindow.document}catch(e){}
-  if(!doc){afLog('无法访问页面（跨域限制），尝试 postMessage…','warn');detectViaPostMessage();return}
-  _afDetectAttempts=0;
-  clearInterval(_afDetectTimer);
-  function tryDetect(){
-    _afDetectAttempts++;
-    var fields=_afCollectFields(doc);
-    if(fields.length>0){
-      clearInterval(_afDetectTimer);
-      _afFields=fields;renderAfFields();
-      afLog('检测到 '+_afFields.length+' 个表单字段','ok');
-      $('af-fill-btn').disabled=false;
-      return;
-    }
-    if(_afDetectAttempts>=15){clearInterval(_afDetectTimer);afLog('未检测到表单字段（可能是SPA页面，请在新窗口打开后手动填写）','warn');renderAfFields();return}
-  }
-  tryDetect();
-  _afDetectTimer=setInterval(tryDetect,1000);
-}
-function detectViaPostMessage(){
-  var iframe=$('af-iframe');if(!iframe.contentWindow)return;
-  iframe.contentWindow.postMessage({source:'autofill',action:'collect'},'*');
-  var start=Date.now(),timer=setInterval(function(){
-    if(Date.now()-start>8000){clearInterval(timer);afLog('字段检测超时','warn');renderAfFields()}
-  },600);
-  window._afFieldHandler=function(event){
-    if(!event.data||event.data.source!=='autofill-bridge'||event.data.action!=='fields')return;
-    clearInterval(timer);window._afFieldHandler=null;
-    _afFields=event.data.fields||[];renderAfFields();
-    afLog('检测到 '+_afFields.length+' 个表单字段','ok');
-    $('af-fill-btn').disabled=false;
-  };
-  window.addEventListener('message',window._afFieldHandler);
-}
-/* ── Execute fill ── */
-async function executeAutoFill(){
-  if(!_afLoaded||!_afFields.length){toast('请先检测表单字段','error');return}
-  if(!_afProfileId){toast('请先选择简历模板','error');return}
-  var btn=$('af-fill-btn');btn.disabled=true;btn.classList.add('loading');
-  try{
-    var profile=await api('GET','/api/autofill/profiles/'+encodeURIComponent(_afProfileId));
-    var profileFields=profile.fields||{};
-    if(_afMode==='ai'){
-      afLog('正在调用 AI 进行智能匹配…');
-      var aiResult=await api('POST','/api/autofill/ai-match',{profile_id:_afProfileId,fields:_afFields,mode:_afMode});
-      var mappings=aiResult.mappings||[];
-      afLog('AI 匹配完成：'+mappings.length+'/'+_afFields.length+' 个字段已映射','ok');
-      var fillData=mappings.map(function(m){
-        _afFields[m.page_field_index]._mappedField=m.profile_field;
-        _afFields[m.page_field_index]._mappedValue=m.value;
-        return{field:{name:_afFields[m.page_field_index].name,id:_afFields[m.page_field_index].id,tagName:_afFields[m.page_field_index].tagName},field_label:m.profile_field,value:m.value};
-      });
-      sendFillToIframe(fillData);
-    }else{
-      var fills=buildFieldMappings(_afFields,profileFields,_afMode==='incremental');
-      renderAfFields();
-      afLog('规则匹配完成：'+fills.length+' 个字段待填充','ok');
-      sendFillToIframe(fills);
-    }
-  }catch(err){afLog('填充失败：'+err.message,'err');toast('填充失败：'+err.message,'error')}
-  finally{btn.disabled=false;btn.classList.remove('loading')}
-}
-function buildFieldMappings(pageFields,profileFields,incremental){
-  var fills=[],aliasesMap={'姓名':['name','姓名','fullname','realname'],'邮箱':['email','邮箱','邮件','mail'],'手机':['phone','手机','电话','mobile','tel'],'性别':['gender','sex','性别'],'出生日期':['birth','生日','出生'],'学校':['school','学校','院校','university','college'],'专业':['major','专业','specialty'],'学历':['degree','学历','education'],'毕业时间':['graduation','毕业'],'英语水平':['english','英语','cet','toefl','ielts'],'实习经历':['intern','实习','work','工作经历'],'项目经历':['project','项目'],'技能':['skill','技能','技术'],'获奖情况':['award','获奖','荣誉','honor'],'自我评价':['self','自我','评价','intro','简介','介绍'],'期望城市':['city','城市','location','地点'],'期望薪资':['salary','薪资','薪酬'],'最快到岗':['available','到岗','入职'],'GitHub':['github','gitlab','gitee','博客','blog','website','主页']};
-  pageFields.forEach(function(f){
-    var label=(f.label||'').toLowerCase(),name=(f.name||'').toLowerCase(),id=(f.id||'').toLowerCase(),placeholder=(f.placeholder||'').toLowerCase();
-    var bestField=null,bestScore=0;
-    for(var pk in profileFields){
-      if(!profileFields[pk])continue;
-      var aliases=aliasesMap[pk]||[pk];
-      for(var a=0;a<aliases.length;a++){
-        var alias=aliases[a].toLowerCase();
-        if(label.indexOf(alias)>=0){bestScore=90;bestField=pk;break}
-        if(name.indexOf(alias)>=0&&bestScore<80){bestScore=80;bestField=pk}
-        if(id.indexOf(alias)>=0&&bestScore<70){bestScore=70;bestField=pk}
-        if(placeholder.indexOf(alias)>=0&&bestScore<60){bestScore=60;bestField=pk}
-      }
-      if(bestScore>=90)break;
-    }
-    if(bestField&&(!incremental||true)){
-      f._mappedField=bestField;f._mappedValue=profileFields[bestField];
-      fills.push({field:{name:f.name,id:f.id,tagName:f.tagName},field_label:bestField,value:profileFields[bestField]});
-    }else{f._mappedField=null;f._mappedValue=null}
-  });
-  return fills;
-}
-var _afZoom=1.0;
-function afZoom(delta){_afZoom=Math.max(0.4,Math.min(1.5,_afZoom+delta));$('af-zoom-label').textContent=Math.round(_afZoom*100)+'%';var iframe=$('af-iframe');if(iframe){iframe.style.transform='scale('+_afZoom+')';iframe.style.width=Math.round(100/_afZoom)+'%';iframe.style.height=Math.round(100/_afZoom)+'%'}}
-function afPopOut(){var iframe=$('af-iframe');var src=iframe&&iframe.src;if(src)window.open(src,'_blank');else toast('请先打开投递页面','error')}
-function _afDirectFill(doc,fieldInfo,value){
-  if(!value)return false;
-  var el=null;
-  if(fieldInfo.id)el=doc.getElementById(fieldInfo.id);
-  if(!el&&fieldInfo.name)el=doc.querySelector('[name="'+CSS.escape(fieldInfo.name)+'"]');
-  if(!el)return false;
-  try{
-    if(el.tagName==='SELECT'){
-      for(var i=0;i<el.options.length;i++){
-        var ot=(el.options[i].textContent||'').trim(),ov=el.options[i].value;
-        if(ot.toLowerCase()===value.toLowerCase()||ov.toLowerCase()===value.toLowerCase()){el.value=ov;el.dispatchEvent(new Event('change',{bubbles:true}));return true}
-      }
-      for(var i=0;i<el.options.length;i++){
-        var ot=(el.options[i].textContent||'').trim();
-        if(ot.toLowerCase().indexOf(value.toLowerCase())>=0||value.toLowerCase().indexOf(ot.toLowerCase())>=0){el.value=el.options[i].value;el.dispatchEvent(new Event('change',{bubbles:true}));return true}
-      }
-      return false;
-    }
-    var setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')||Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value');
-    if(setter&&setter.set)setter.set.call(el,value);else el.value=value;
-    el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));
-    return true;
-  }catch(e){try{el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));return true}catch(e2){return false}}
-}
-function sendFillToIframe(fills){
-  var iframe=$('af-iframe');if(!iframe){toast('无法访问页面窗口','error');return}
-  var doc=null;try{doc=iframe.contentDocument||iframe.contentWindow.document}catch(e){}
-  if(doc){
-    // Direct DOM fill (same origin)
-    var ok=0;
-    fills.forEach(function(f){
-      if(_afDirectFill(doc,f.field,f.value)){ok++;afLog('✓ '+f.field_label+' → 已填','ok')}
-      else{afLog('✗ '+f.field_label+' → 未匹配','warn')}
-    });
-    afLog('填充完成：'+ok+'/'+fills.length+' 个字段已填入','ok');
-    toast('已填充 '+ok+'/'+fills.length+' 个字段','success');
-  }else{
-    // Fallback: postMessage
-    iframe.contentWindow.postMessage({source:'autofill',action:'fill',fields:fills},'*');
-    var start=Date.now(),timer=setInterval(function(){if(Date.now()-start>10000){clearInterval(timer);afLog('填充响应超时','warn')}},800);
-    window._afFillHandler=function(event){
-      if(!event.data||event.data.source!=='autofill-bridge'||event.data.action!=='fill-result')return;
-      clearInterval(timer);window._afFillHandler=null;
-      afLog('填充完成：'+event.data.succeeded+'/'+event.data.total+' 个字段已填入','ok');
-      (event.data.results||[]).forEach(function(r){if(r.filled)afLog('✓ '+r.field.field_label+' → 已填','ok');else afLog('✗ '+r.field.field_label+' → 未匹配','warn')});
-      toast('已填充 '+event.data.succeeded+'/'+event.data.total+' 个字段','success');
-    };
-    window.addEventListener('message',window._afFillHandler);
-  }
-}
-/* ── Render field mapping UI ── */
-function renderAfFields(){
+async function loadAfProfiles(){try{var d=await api('GET','/api/autofill/profiles',undefined,{silent:true});_afProfiles=arr(d.profiles);renderAfProfileSelect()}catch(e){}}
+function renderAfProfileSelect(){var sel=$('af-profile'),current=_afProfileId;sel.innerHTML='<option value="">请选择模板</option>'+_afProfiles.map(function(p){return'<option value="'+esc(p.id)+'">'+esc(p.name)+' ('+p.field_count+' 字段)</option>'}).join('');if(current&&_afProfiles.some(function(p){return p.id===current}))sel.value=current;$('af-edit-profile-btn').disabled=!_afProfileId;showProfilePreview()}
+function onAfRecordChange(){}
+function onAfProfileChange(){_afProfileId=$('af-profile').value;$('af-edit-profile-btn').disabled=!_afProfileId;showProfilePreview()}
+function showProfilePreview(){
   var el=$('af-field-list');if(!el)return;
-  $('af-field-count').textContent=_afFields.length?_afFields.length+' 个字段':'';
-  if(!_afFields.length){el.innerHTML='<div class="center" style="font-size:11px">请先打开投递页面并检测字段</div>';return}
-  el.innerHTML=_afFields.map(function(f,i){
-    var mapped=f._mappedField||'',hasMapping=!!mapped,cls=hasMapping?'mapped':(f._mappedField===null?'skipped':'');
-    return'<div class="autofill-field-item '+(cls)+'"><span class="af-label" title="'+(f.label||f.name||f.id)+'">'+(f.label||f.name||f.id||'(未知)')+'</span><span class="af-arrow">→</span><span class="af-target">'+(mapped||'—')+'</span><select class="af-manual" onchange="remapAfField('+i+',this.value)"><option value="">手动指定</option>'+AF_PROFILE_FIELDS.map(function(k){return'<option value="'+esc(k)+'" '+(mapped===k?'selected':'')+'>'+esc(k)+'</option>'}).join('')+'</select></div>'
-  }).join('')
+  if(!_afProfileId){el.innerHTML='<div class="center" style="font-size:11px">选择一个模板查看字段</div>';return}
+  var profile=_afProfiles.find(function(p){return p.id===_afProfileId});
+  if(!profile){el.innerHTML='<div class="center" style="font-size:11px">模板未找到</div>';return}
+  api('GET','/api/autofill/profiles/'+encodeURIComponent(_afProfileId),undefined,{silent:true}).then(function(data){
+    var fields=data.fields||{},items=Object.entries(fields).filter(function(e){return e[1]});
+    el.innerHTML=items.length?items.map(function(e){return'<div class="autofill-field-item mapped"><span class="af-label">'+esc(e[0])+'</span><span class="af-arrow">→</span><span class="af-target" title="'+esc(e[1])+'">'+esc(e[1].substring(0,20))+'</span></div>'}).join(''):'<div class="center" style="font-size:11px">该模板暂无填写内容</div>'
+  }).catch(function(){el.innerHTML='<div class="center" style="font-size:11px">加载失败</div>'})
 }
-function remapAfField(index,profileField){
-  if(!profileField){_afFields[index]._mappedField=null;_afFields[index]._mappedValue=null}
-  else{_afFields[index]._mappedField=profileField}
-  renderAfFields();
-  afLog('手动映射：字段 #'+(index+1)+' → '+profileField||'未映射');
+/* ── Copy fill script for console ── */
+function copyFillScript(){
+  if(!_afProfileId){toast('请先选择简历模板','error');return}
+  api('GET','/api/autofill/profiles/'+encodeURIComponent(_afProfileId),undefined,{silent:true}).then(function(data){
+    var fields=data.fields||{},prof=JSON.stringify(fields),record=$('af-record'),url=record.options[record.selectedIndex]&&record.options[record.selectedIndex].dataset.url||'';
+    var script='(function(){var p='+prof+';var m={'+
+      '"姓名":["name","姓名","fullname","realname"],"邮箱":["email","邮箱","邮件","mail"],"手机":["phone","手机","电话","mobile","tel"],'+
+      '"性别":["gender","sex","性别"],"学校":["school","学校","院校","university","college"],"专业":["major","专业","specialty"],'+
+      '"学历":["degree","学历","education"],"毕业时间":["graduation","毕业"],"英语水平":["english","英语","cet","toefl","ielts"],'+
+      '"实习经历":["intern","实习","work"],"项目经历":["project","项目"],"技能":["skill","技能","技术"],'+
+      '"获奖情况":["award","获奖","荣誉"],"自我评价":["self","自我介绍","简介","intro"]};'+
+      'function f(el,v){try{if(el.tagName=="SELECT"){var v2=v.toLowerCase();for(var i=0;i<el.options.length;i++){var ot=(el.options[i].textContent||"").trim().toLowerCase();if(ot===v2||ot.indexOf(v2)>=0||v2.indexOf(ot)>=0){el.value=el.options[i].value;el.dispatchEvent(new Event("change",{bubbles:true}));return}}}var s=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value");if(s&&s.set)s.set.call(el,v);else el.value=v;el.dispatchEvent(new Event("input",{bubbles:true}));el.dispatchEvent(new Event("change",{bubbles:true}))}catch(e){el.value=v}}'+
+      'document.querySelectorAll("input:not([type=hidden]):not([type=submit]):not([type=button]),textarea,select").forEach(function(el){var n=(el.name||"").toLowerCase(),id2=(el.id||"").toLowerCase(),l="";var lbl=document.querySelector("label[for=\'"+CSS.escape(el.id)+"\']");if(!lbl&&el.closest){var r=el.closest("label")||el.closest(".form-item")||el.closest(".form-group")||el.closest("tr");if(r)lbl=r.querySelector("label")}if(lbl)l=(lbl.textContent||"").replace(/\\s+/g," ").trim().toLowerCase();'+
+      'for(var pk in p){var aliases=m[pk]||[pk];for(var a=0;a<aliases.length;a++){var al=aliases[a].toLowerCase();if(n===al||l.indexOf(al)>=0||id2===al){f(el,p[pk]);break}}}})})();';
+    navigator.clipboard.writeText(script).then(function(){toast('填充脚本已复制到剪贴板！在目标页面按 F12 打开控制台，粘贴并回车即可','success',5000)})
+  }).catch(function(){toast('获取模板失败','error')})
 }
+function copyTokenCmd(){var cmd='localStorage.getItem(\'rb_token\')';navigator.clipboard.writeText(cmd).then(function(){toast('已复制，粘贴到浏览器控制台执行','success')})}
 /* ── Profile modal ── */
 function openProfileModal(id){_afEditingProfileId=id||'';var profile=id?_afProfiles.find(function(p){return p.id===id}):null;$('af-profile-modal-title').textContent=profile?'编辑简历模板':'新建简历模板';$('af-profile-name').value=profile?profile.name:'';$('af-profile-delete').style.display=profile?'':'none';$('af-profile-submit').textContent=profile?'保存修改':'创建模板';renderProfileFields(profile);$('autofill-profile-modal').classList.add('show');setTimeout(function(){$('af-profile-name').focus()},30)}
 function closeProfileModal(){$('autofill-profile-modal').classList.remove('show')}

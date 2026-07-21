@@ -4,6 +4,8 @@ import json
 import os
 import re
 import time
+import io
+import zipfile
 import secrets
 import threading
 from pathlib import Path
@@ -901,3 +903,27 @@ def extension_config(user: dict = Depends(auth_module.get_current_user)):
             "deepseek": "deepseek-v4-flash", "openai": "gpt-5.4-mini", "anthropic": "claude-sonnet-5"
         }.get(provider, ""),
     }
+
+
+@router.get("/extension/download")
+def download_extension():
+    """Download the browser extension as a zip file."""
+    ext_dir = PROJECT_DIR / "extension"
+    if not ext_dir.is_dir():
+        raise HTTPException(status_code=404, detail="扩展目录不存在")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file_path in ext_dir.rglob("*"):
+            if file_path.name.startswith(".") or "__pycache__" in file_path.parts:
+                continue
+            if file_path.is_file():
+                arcname = str(file_path.relative_to(ext_dir))
+                zf.write(file_path, arcname)
+
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=autofill-extension.zip"},
+    )
