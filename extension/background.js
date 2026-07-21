@@ -40,8 +40,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const { selectedProfileId, profiles, fillMode } = await chrome.storage.local.get([
         "selectedProfileId", "profiles", "fillMode"
       ]);
-      const profile = (profiles || []).find(p => p.id === selectedProfileId);
-      if (!profile) { sendResponse({ error: "请先选择简历模板" }); return; }
+      // Auto-select first profile if none selected
+      let pid = selectedProfileId;
+      if (!pid && profiles && profiles.length > 0) {
+        pid = profiles[0].id;
+        await chrome.storage.local.set({ selectedProfileId: pid });
+      }
+      const profile = (profiles || []).find(p => p.id === pid);
+      if (!profile) {
+        sendResponse({ error: "请先选择简历模板", debug: { pid, profileCount: (profiles||[]).length } });
+        return;
+      }
       sendResponse({ profile, mode: fillMode || "full" });
     })();
     return true;

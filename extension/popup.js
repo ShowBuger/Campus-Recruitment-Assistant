@@ -32,7 +32,12 @@ async function loadProfiles(token) {
     if (!resp.ok) throw new Error("会话过期");
     const data = await resp.json();
     const profiles = data.profiles || [];
-    const { selectedProfileId } = await chrome.storage.local.get(["selectedProfileId"]);
+    let { selectedProfileId } = await chrome.storage.local.get(["selectedProfileId"]);
+    // Auto-select first profile if none or invalid
+    if (!selectedProfileId || !profiles.find(p => p.id === selectedProfileId)) {
+      selectedProfileId = profiles.length > 0 ? profiles[0].id : "";
+      await chrome.storage.local.set({ selectedProfileId });
+    }
     renderProfiles(profiles, selectedProfileId);
     await chrome.storage.local.set({ profiles, aiProvider: data.ai_provider, hasAiKey: data.has_ai_key });
     return profiles;
@@ -132,7 +137,10 @@ window.doLogout = doLogout;
 
 // ── Profile selection ─────────────────────────────────────────────
 $("profile-select").addEventListener("change", async () => {
-  await chrome.storage.local.set({ selectedProfileId: $("profile-select").value });
+  const id = $("profile-select").value;
+  if (id) {
+    await chrome.storage.local.set({ selectedProfileId: id });
+  }
 });
 
 // ── Fill mode ─────────────────────────────────────────────────────
@@ -158,11 +166,17 @@ $("btn-fill").addEventListener("click", async () => {
   btn.disabled = true;
   btn.textContent = "填充中…";
 
-  const { profiles, selectedProfileId, fillMode } = await chrome.storage.local.get([
+  let { profiles, selectedProfileId, fillMode } = await chrome.storage.local.get([
     "profiles", "selectedProfileId", "fillMode"
   ]);
+  // Auto-select first if none
+  if (!selectedProfileId && profiles && profiles.length > 0) {
+    selectedProfileId = profiles[0].id;
+    await chrome.storage.local.set({ selectedProfileId });
+    $("profile-select").value = selectedProfileId;
+  }
   const profile = (profiles || []).find(p => p.id === selectedProfileId);
-  if (!profile) { log("请先选择简历模板", true); btn.disabled = false; btn.textContent = "🚀 立即填充"; return; }
+  if (!profile) { log("请先在扩展中登录并选择简历模板", true); btn.disabled = false; btn.textContent = "🚀 立即填充"; return; }
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) { log("无法获取当前标签页", true); btn.disabled = false; btn.textContent = "🚀 立即填充"; return; }
