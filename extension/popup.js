@@ -13,14 +13,17 @@ function log(msg, isError) {
 // ── Load saved state ──────────────────────────────────────────────
 async function loadState() {
   const data = await chrome.storage.local.get([
-    "serverUrl", "token", "profiles", "selectedProfileId", "fillMode", "autoDetect"
+    "serverUrl", "username", "token", "profiles", "selectedProfileId", "fillMode", "autoDetect"
   ]);
-  if (data.serverUrl) $("server-url").value = data.serverUrl;
-  else $("server-url").value = "https://www.toudimianban.cloud";
-  if (data.token) $("token").value = data.token;
+  $("server-url").value = data.serverUrl || "https://www.toudimianban.cloud";
+  if (data.username) $("username").value = data.username;
   if (data.profiles) {
     renderProfiles(data.profiles, data.selectedProfileId);
-    updateConnectionStatus(true, data.profiles.length);
+    updateConnectionStatus(true, data.username, data.profiles.length);
+  } else if (data.token) {
+    // Already logged in from before, try to refresh
+    $("btn-connect").textContent = "刷新";
+    updateConnectionStatus(true, data.username || "已登录");
   }
   if (data.fillMode) {
     document.querySelectorAll(".mode-btn").forEach(b => {
@@ -39,12 +42,12 @@ function renderProfiles(profiles, selectedId) {
   ).join("") || '<option value="">无模板</option>';
 }
 
-function updateConnectionStatus(ok, profileCount) {
+function updateConnectionStatus(ok, username, profileCount) {
   const el = $("conn-status");
   if (ok) {
-    el.innerHTML = `✅ 已连接 · ${profileCount || 0} 个模板`;
+    el.innerHTML = `✅ ${escHtml(username || "")} · ${profileCount || 0} 个模板`;
   } else {
-    el.innerHTML = "⚠ 未连接服务器";
+    el.innerHTML = "⚠ 未登录";
   }
 }
 
@@ -52,41 +55,55 @@ function escHtml(s) {
   return String(s).replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[m]);
 }
 
-// ── Connect to server ─────────────────────────────────────────────
+// ── Connect / Login ────────────────────────────────────────────────
 $("btn-connect").addEventListener("click", async () => {
   const btn = $("btn-connect");
   btn.disabled = true;
-  btn.textContent = "连接中…";
+  btn.textContent = "登录中…";
   const serverUrl = $("server-url").value.trim();
-  const token = $("token").value.trim();
-  if (!serverUrl) { log("请输入服务器地址", true); btn.disabled = false; btn.textContent = "连接"; return; }
-
-  await chrome.storage.local.set({ serverUrl, token });
+  const username = $("username").value.trim();
+  const password = $("password").value.trim();
+  if (!serverUrl) { log("请输入服务器地址", true); btn.disabled = false; btn.textContent = "登录"; return; }
+  if (!username || !password) { log("请输入用户名和密码", true); btn.disabled = false; btn.textContent = "登录"; return; }
 
   try {
-    const base = serverUrl;
-    const resp = await fetch(base + "/api/autofill/extension/config", {
+    // Step 1: Login to get token
+    const loginResp = await fetch(serverUrl + "/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    });
+    if (!loginResp.ok) {
+      const err = await loginResp.json().catch(() => ({ detail: "用户名或密码错误" }));
+      throw new Error(err.detail || "登录失败");
+    }
+    const loginData = await loginResp.json();
+    const token = loginData.token;
+
+    // Step 2: Fetch profiles
+    const configResp = await fetch(serverUrl + "/api/autofill/extension/config", {
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
     });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }));
-      throw new Error(err.detail || "认证失败");
-    }
-    const data = await resp.json();
+    if (!configResp.ok) throw new Error("获取配置失败");
+    const data = await configResp.json();
     const profiles = data.profiles || [];
+
     await chrome.storage.local.set({
-      profiles, aiProvider: data.ai_provider, hasAiKey: data.has_aiKey,
+      serverUrl, token, username,
+      profiles, aiProvider: data.ai_provider, hasAiKey: data.has_ai_key,
       selectedProfileId: profiles[0]?.id || ""
     });
+    $("password").value = "";
     renderProfiles(profiles, profiles[0]?.id);
-    updateConnectionStatus(true, profiles.length);
-    log(`已连接 · ${profiles.length} 个模板`);
+    updateConnectionStatus(true, username, profiles.length);
+    log(`已登录 · ${profiles.length} 个模板`);
+    btn.textContent = "刷新";
   } catch (e) {
     updateConnectionStatus(false);
-    log("连接失败: " + e.message, true);
+    log("登录失败: " + e.message, true);
+    btn.textContent = "登录";
   }
   btn.disabled = false;
-  btn.textContent = "连接";
 });
 
 // ── Profile selection ─────────────────────────────────────────────

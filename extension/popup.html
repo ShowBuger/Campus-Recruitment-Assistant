@@ -34,19 +34,20 @@
 <body>
 <div class="header">
   <h1>📋 自动投递助手</h1>
-  <span id="conn-status">未连接服务器</span>
+  <span id="conn-status">未登录</span>
 </div>
 <div class="body">
   <div class="section">
     <label>服务器地址</label>
     <div class="row">
       <input type="url" id="server-url" placeholder="https://www.toudimianban.cloud" value="https://www.toudimianban.cloud">
-      <button class="btn" id="btn-connect">连接</button>
+      <button class="btn" id="btn-connect">登录</button>
     </div>
   </div>
   <div class="section">
-    <label>登录令牌</label>
-    <input type="password" id="token" placeholder="从看板页面获取 token">
+    <label>登录凭据</label>
+    <input id="username" placeholder="用户名" style="margin-bottom:6px">
+    <input type="password" id="password" placeholder="密码">
   </div>
   <div class="section">
     <label>简历模板</label>
