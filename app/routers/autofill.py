@@ -814,7 +814,6 @@ def ai_match(body: AIMatchRequest, user: dict = Depends(auth_module.get_current_
             "page_field": field_info,
         })
 
-    # In incremental mode, only fill empty fields (caller handles this)
     return {
         "success": True,
         "mappings": fills,
@@ -822,4 +821,83 @@ def ai_match(body: AIMatchRequest, user: dict = Depends(auth_module.get_current_
         "mapped_count": len(fills),
         "provider": provider,
         "model": model,
+    }
+
+
+# ── Extension API ─────────────────────────────────────────────────
+
+class ExtensionMatchRequest(BaseModel):
+    fields: list
+    profile_id: str
+
+
+@router.post("/extension/match")
+def extension_match(body: ExtensionMatchRequest, user: dict = Depends(auth_module.get_current_user)):
+    """Lightweight AI match for browser extension — returns fill commands."""
+    profiles = _load_profiles(user["user_id"])
+    if body.profile_id not in profiles:
+        raise HTTPException(status_code=404, detail="简历模板不存在")
+    profile = profiles[body.profile_id]
+    profile_fields = profile.get("fields", {})
+
+    # Use rule-based matching (fast, no API call needed)
+    fills = []
+    for f in body.fields:
+        label = (f.get("label") or "").lower()
+        name = (f.get("name") or "").lower()
+        uid = (f.get("id") or "").lower()
+        placeholder = (f.get("placeholder") or "").lower()
+        best_field, best_score = None, 0
+        for pk, aliases in FIELD_ALIASES.items():
+            if pk not in profile_fields or not profile_fields[pk]:
+                continue
+            for alias in aliases:
+                a = alias.lower()
+                if a in label: score = 95
+                elif a == name: score = 85
+                elif a in uid: score = 75
+                elif a in placeholder: score = 65
+                else: continue
+                if score > best_score:
+                    best_score, best_field = score, pk
+        if best_field and best_score >= 65:
+            fills.append({
+                "page_field_index": body.fields.index(f),
+                "profile_field": best_field,
+                "value": _normalize_field_value(best_field, profile_fields[best_field], f),
+                "confidence": best_score,
+            })
+
+    return {
+        "success": True,
+        "mappings": fills,
+        "total_page_fields": len(body.fields),
+        "mapped_count": len(fills),
+    }
+
+
+@router.get("/extension/config")
+def extension_config(user: dict = Depends(auth_module.get_current_user)):
+    """Return all data the extension needs: profiles + AI settings."""
+    profiles = _load_profiles(user["user_id"])
+    profile_list = [
+        {"id": pid, "name": p.get("name", pid), "fields": p.get("fields", {})}
+        for pid, p in profiles.items()
+    ]
+
+    cfg = database.get_user_config(user["user_id"])
+    provider = cfg.get("ai_provider") or "deepseek"
+    key_field = f"{provider}_api_key"
+    model_field = f"{provider}_model"
+    base_field = f"{provider}_base_url"
+
+    return {
+        "success": True,
+        "profiles": profile_list,
+        "server_url": "",
+        "ai_provider": provider,
+        "has_ai_key": bool(cfg.get(key_field, "")),
+        "ai_model": cfg.get(model_field, "") or {
+            "deepseek": "deepseek-v4-flash", "openai": "gpt-5.4-mini", "anthropic": "claude-sonnet-5"
+        }.get(provider, ""),
     }

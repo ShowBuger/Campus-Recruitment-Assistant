@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(fuser *)",
+      "Bash(nohup uvicorn app.main:app *)",
+      "Bash(source .venv/bin/activate *)",
+      "Bash(pip install *)",
+      "Bash(python3 -c *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git -C /home/ubuntu/Campus-Recruitment-Assistant *)",
+      "Bash(cat /tmp/uvicorn.log *)",
+      "Bash(curl -s http://localhost:8765 *)",
+      "Bash(sed -n *)",
+      "Bash(sed -i *)",
+      "Bash(grep -n *)",
+      "Bash(grep -c *)",
+      "Bash(find /home/ubuntu/Campus-Recruitment-Assistant *)",
+      "Bash(ls -la /home/ubuntu/Campus-Recruitment-Assistant *)",
+      "Bash(wc -l *)",
+      "Edit",
+      "Write",
+      "Read"
+    ]
+  }
+}
