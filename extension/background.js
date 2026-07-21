@@ -63,6 +63,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.action === "checkUpdate") {
+    checkForUpdates(false);
+    sendResponse({ ok: true });
+    return true;
+  }
+
   if (msg.action === "aiMatch") {
     (async () => {
       try {
@@ -79,7 +85,47 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
+// ── Version check / auto-update ───────────────────────────────────
+const CURRENT_VERSION = "1.0";
+
+async function checkForUpdates(silent) {
+  try {
+    const resp = await fetch(SERVER + "/api/autofill/extension/version");
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.version !== CURRENT_VERSION) {
+      chrome.action.setBadgeText({ text: "!" });
+      chrome.action.setBadgeBackgroundColor({ color: "#e11d48" });
+      if (!silent) {
+        chrome.notifications.create("update", {
+          type: "basic",
+          iconUrl: "icons/icon128.png",
+          title: "自动投递助手有新版本",
+          message: `v${data.version}：${data.changelog || "点击下载更新"}`,
+          buttons: [{ title: "下载更新" }],
+          requireInteraction: true,
+        });
+      }
+    } else {
+      chrome.action.setBadgeText({ text: "" });
+    }
+  } catch (e) { /* offline, ignore */ }
+}
+
+chrome.notifications.onButtonClicked.addListener((notifId) => {
+  if (notifId === "update") {
+    chrome.tabs.create({ url: SERVER + "/api/autofill/extension/download" });
+  }
+});
+
+// Check using chrome.alarms (reliable, survives service worker sleep)
+chrome.alarms.create("version-check", { periodInMinutes: 360 }); // every 6 hours
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "version-check") checkForUpdates(false);
+});
+
 // ── On install ────────────────────────────────────────────────────
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({ autoDetect: true, fillMode: "full" });
+  setTimeout(() => checkForUpdates(true), 5000);
 });

@@ -905,6 +905,16 @@ def extension_config(user: dict = Depends(auth_module.get_current_user)):
     }
 
 
+@router.get("/extension/version")
+def extension_version():
+    """Return latest extension version so the extension can check for updates."""
+    return {
+        "version": "1.0",
+        "download_url": "https://www.toudimianban.cloud/api/autofill/extension/download",
+        "changelog": "初始版本",
+    }
+
+
 @router.get("/extension/download")
 def download_extension():
     """Download the browser extension as a zip file."""

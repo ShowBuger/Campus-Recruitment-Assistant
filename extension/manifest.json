@@ -3,7 +3,7 @@
   "name": "校招自动投递助手",
   "version": "1.0",
   "description": "从看板服务器拉取简历模板，自动填充校招投递表单。支持规则匹配和 AI 智能匹配。",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "notifications", "alarms"],
   "host_permissions": ["<all_urls>"],
   "action": {
     "default_popup": "popup.html",

@@ -238,5 +238,12 @@ $("btn-detect").addEventListener("click", async () => {
       updateHeader("", 0);
     });
     startAutoRefresh(token);
+    // Check extension update
+    chrome.runtime.sendMessage({ action: "checkUpdate" });
+    setTimeout(() => {
+      chrome.action.getBadgeText({}).then(text => {
+        if (text === "!") log("⚠ 有新版本可用", true);
+      });
+    }, 2000);
   }
 })();
