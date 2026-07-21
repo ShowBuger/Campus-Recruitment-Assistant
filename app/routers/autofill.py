@@ -3,13 +3,15 @@ import html as html_mod
 import json
 import os
 import re
+import base64
 from pathlib import Path
 from datetime import datetime
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, quote, unquote
 
 import requests
 from bs4 import BeautifulSoup
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from app import auth as auth_module, database
@@ -306,7 +308,6 @@ FILL_BRIDGE_JS = r"""
   if (window.__autofillBridge) return;
   window.__autofillBridge = true;
 
-  // Collect all form fields on the page
   function collectFields() {
     var fields = [];
     var seen = {};
@@ -344,14 +345,12 @@ FILL_BRIDGE_JS = r"""
     return fields;
   }
 
-  // Fill a single field
   function fillField(fieldInfo, value) {
     if (!value) return false;
     var el = null;
     if (fieldInfo.id) el = document.getElementById(fieldInfo.id);
     if (!el && fieldInfo.name) el = document.querySelector('[name="' + CSS.escape(fieldInfo.name) + '"]');
     if (!el) return false;
-
     try {
       if (el.tagName === 'SELECT') {
         var opts = el.options;
@@ -366,7 +365,6 @@ FILL_BRIDGE_JS = r"""
         }
         return false;
       }
-
       var nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value') ||
                          Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
       if (nativeSetter && nativeSetter.set) {
@@ -383,31 +381,23 @@ FILL_BRIDGE_JS = r"""
     }
   }
 
-  // Listen for commands from parent
   window.addEventListener('message', function(event) {
     var data = event.data;
     if (!data || data.source !== 'autofill') return;
-
     switch(data.action) {
-      case 'ping':
-        event.source.postMessage({source: 'autofill-bridge', action: 'pong', ready: true}, '*');
-        break;
       case 'collect':
         event.source.postMessage({
           source: 'autofill-bridge', action: 'fields',
-          fields: collectFields(),
-          url: location.href,
-          title: document.title
+          fields: collectFields(), url: location.href, title: document.title
         }, '*');
         break;
       case 'fill':
         var results = (data.fields || []).map(function(item) {
-          return {field: item.field, filled: fillField(item, item.value)};
+          return {field: item.field, filled: fillField(item.field, item.value)};
         });
         event.source.postMessage({
           source: 'autofill-bridge', action: 'fill-result',
-          results: results,
-          total: results.length,
+          results: results, total: results.length,
           succeeded: results.filter(function(r) { return r.filled; }).length
         }, '*');
         break;
@@ -421,7 +411,6 @@ FILL_BRIDGE_JS = r"""
     }
   });
 
-  // Observe dynamic form changes and notify parent
   var observer = new MutationObserver(function(mutations) {
     var added = false;
     mutations.forEach(function(m) {
@@ -442,6 +431,86 @@ FILL_BRIDGE_JS = r"""
 })();
 """
 
+# Helper: rewrite resource URLs to absolute for iframe loading
+_SRC_ATTRS = [
+    ("script", "src"), ("link", "href"), ("img", "src"),
+    ("a", "href"), ("form", "action"), ("source", "src"),
+    ("iframe", "src"), ("video", "src"), ("audio", "src"),
+    ("embed", "src"), ("object", "data"), ("use", "href"),
+]
+
+
+def _abs_url(raw: str, base: str) -> str:
+    """Resolve a potentially relative URL to absolute using base."""
+    if not raw or raw.startswith("data:") or raw.startswith("#") or raw.startswith("javascript:"):
+        return raw
+    return urljoin(base, raw)
+
+
+def _fix_encoding(resp: requests.Response) -> str:
+    """Detect and return properly decoded HTML text."""
+    if resp.apparent_encoding and resp.apparent_encoding != "ascii":
+        resp.encoding = resp.apparent_encoding
+    elif not resp.encoding or resp.encoding.upper() in ("ISO-8859-1", "LATIN-1"):
+        # Try to detect from HTML meta
+        meta = re.search(rb'charset[="\'\s]+([^"\'\s;>]+)', resp.content[:2000], re.IGNORECASE)
+        if meta:
+            try:
+                resp.encoding = meta.group(1).decode("ascii")
+            except Exception:
+                resp.encoding = "utf-8"
+        else:
+            resp.encoding = "utf-8"
+    return resp.text
+
+
+def _rewrite_html(html_content: str, base_url: str, proxy_base: str) -> str:
+    """Rewrite relative URLs to absolute, inject bridge, return processed HTML."""
+    soup = BeautifulSoup(html_content, "lxml")
+    if not soup:
+        return html_content
+
+    # Add base tag
+    head = soup.find("head")
+    if not head:
+        head = soup.new_tag("head")
+        if soup.html:
+            soup.html.insert(0, head)
+        else:
+            soup.insert(0, head)
+    base_tag = soup.new_tag("base", href=base_url)
+    head.insert(0, base_tag)
+
+    # Rewrite all src/href/action attributes to absolute
+    for tag_name, attr in _SRC_ATTRS:
+        for tag in soup.find_all(tag_name):
+            val = tag.get(attr)
+            if val:
+                tag[attr] = _abs_url(val, base_url)
+
+    # Also rewrite url() in inline styles
+    for tag in soup.find_all(style=True):
+        style = tag["style"]
+        if "url(" in style:
+            def _replace_url(m):
+                u = m.group(1).strip("\"'")
+                return f"url({_abs_url(u, base_url)})"
+            tag["style"] = re.sub(r"url\(([^)]+)\)", _replace_url, style)
+
+    # Inject bridge script before </body>
+    bridge_tag = soup.new_tag("script")
+    bridge_tag.string = FILL_BRIDGE_JS
+    body = soup.find("body")
+    if body:
+        body.append(bridge_tag)
+    else:
+        if soup.html:
+            soup.html.append(bridge_tag)
+        else:
+            soup.append(bridge_tag)
+
+    return str(soup)
+
 
 class ProxyRequest(BaseModel):
     url: str = Field(min_length=5, max_length=2000)
@@ -450,18 +519,15 @@ class ProxyRequest(BaseModel):
 
 @router.post("/proxy")
 def proxy_page(body: ProxyRequest, user: dict = Depends(auth_module.get_current_user)):
-    """Fetch an external page, inject the fill bridge, and return renderable HTML."""
+    """Fetch external page, process it, return a view token for the GET endpoint."""
     target_url = body.url.strip()
     parsed = urlparse(target_url)
     if parsed.scheme not in ("http", "https"):
         raise HTTPException(status_code=400, detail="仅支持 http/https 链接")
 
-    # Block internal / private IP ranges
     try:
-        import ipaddress
+        import ipaddress, socket
         hostname = parsed.hostname or ""
-        # Resolve to check for private IPs
-        import socket
         ip = socket.gethostbyname(hostname)
         addr = ipaddress.ip_address(ip)
         if addr.is_private or addr.is_loopback or addr.is_link_local:
@@ -485,40 +551,49 @@ def proxy_page(body: ProxyRequest, user: dict = Depends(auth_module.get_current_
     if "text/html" not in content_type and not target_url.endswith((".htm", ".html")):
         raise HTTPException(status_code=415, detail="目标页面不是 HTML 格式")
 
-    html_content = resp.text
+    html_content = _fix_encoding(resp)
     if not html_content.strip():
         raise HTTPException(status_code=502, detail="目标页面返回空内容")
 
     base_url = resp.url or target_url
 
-    # Inject bridge script and base tag
-    bridge_tag = f"<script>{FILL_BRIDGE_JS}</script>"
-    base_tag = f'<base href="{html_mod.escape(base_url, quote=True)}">'
+    # Build proxy base URL for resource rewriting
+    proxy_base = f"/api/autofill/view?url={quote(target_url, safe='')}&token="
 
-    # Insert base tag in <head>
-    if "<head" in html_content.lower():
-        html_content = re.sub(
-            r"(<head[^>]*>)", rf"\1\n{base_tag}", html_content, count=1, flags=re.IGNORECASE
-        )
-    else:
-        html_content = f"<html><head>{base_tag}</head><body>{html_content}</body></html>"
+    # Process HTML
+    processed = _rewrite_html(html_content, base_url, proxy_base)
 
-    # Insert bridge before </body>
-    if "</body>" in html_content.lower():
-        html_content = re.sub(
-            r"(</body>)", f"{bridge_tag}\n\\1", html_content, count=1, flags=re.IGNORECASE
-        )
-    else:
-        html_content += bridge_tag
+    # Extract title
+    title_match = re.search(r"<title[^>]*>(.*?)</title>", processed, re.IGNORECASE | re.DOTALL)
+    title = title_match.group(1).strip() if title_match else ""
 
-    title_match = re.search(r"<title[^>]*>(.*?)</title>", html_content, re.IGNORECASE | re.DOTALL)
+    # Encode the processed HTML for URL-safe transport
+    encoded = base64.urlsafe_b64encode(processed.encode("utf-8")).decode("ascii")
 
     return {
         "success": True,
-        "html": html_content,
+        "view_url": f"/api/autofill/view?d={encoded}&base={quote(base_url, safe='')}&t={quote(title, safe='')}",
         "final_url": base_url,
-        "title": title_match.group(1).strip() if title_match else "",
+        "title": title,
     }
+
+
+@router.get("/view")
+def autofill_view(
+    d: str = Query(default="", description="Base64 encoded HTML"),
+    base: str = Query(default="", description="Original base URL"),
+    t: str = Query(default="", description="Page title"),
+):
+    """Serve the processed page for iframe loading. No auth needed — uses one-time token."""
+    if not d:
+        raise HTTPException(status_code=400, detail="缺少页面数据")
+    try:
+        html_content = base64.urlsafe_b64decode(d.encode("ascii")).decode("utf-8")
+    except Exception:
+        raise HTTPException(status_code=400, detail="页面数据无效或已过期")
+
+    # Strip X-Frame-Options from any meta equivalents (already handled by our server)
+    return HTMLResponse(content=html_content)
 
 
 # ── AI matching ──────────────────────────────────────────────────

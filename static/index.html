@@ -542,8 +542,17 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
           <div class="autofill-log" id="af-log"><div class="muted">等待操作…</div></div>
         </div>
         <div class="autofill-preview" id="autofill-preview">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--panel)">
+            <button class="btn" onclick="afZoom(-0.1)" style="height:26px;padding:0 8px;font-size:13px" title="缩小">🔍−</button>
+            <span style="font-size:11px;color:var(--muted);min-width:36px;text-align:center" id="af-zoom-label">100%</span>
+            <button class="btn" onclick="afZoom(0.1)" style="height:26px;padding:0 8px;font-size:13px" title="放大">🔍+</button>
+            <span style="flex:1"></span>
+            <button class="btn" id="af-popout-btn" onclick="afPopOut()" style="height:26px;padding:0 10px;font-size:11px;display:none" title="在新窗口打开">🔗 新窗口</button>
+          </div>
           <div class="autofill-iframe-overlay" id="af-overlay"><span>选择投递记录和网址后打开页面</span></div>
-          <iframe id="af-iframe" title="投递页面"></iframe>
+          <div id="af-iframe-wrap" style="width:100%;height:calc(100vh - 195px);overflow:auto">
+            <iframe id="af-iframe" title="投递页面" style="width:100%;height:100%;border:0;transform-origin:0 0"></iframe>
+          </div>
         </div>
       </div>
     </section>    <section class="page" id="page-admin"><div class="admin-layout">
@@ -1027,33 +1036,75 @@ function onAfUrlChange(){$('af-open-btn').disabled=!$('af-url').value.trim()}
 function onAfProfileChange(){_afProfileId=$('af-profile').value;$('af-edit-profile-btn').disabled=!_afProfileId}
 function setAfMode(mode,btn){_afMode=mode;document.querySelectorAll('.autofill-mode-row .btn').forEach(function(b){b.classList.toggle('active-mode',b===btn)})}
 /* ── Open page via proxy ── */
+var _afLoadId=0;
 async function openAutoFillPage(){
   var url=$('af-url').value.trim();if(!url){toast('请填写投递页面网址','error');return}
   if(!/^https?:\/\//i.test(url)){toast('请输入完整网址 (https://...)','error');return}
   var btn=$('af-open-btn'),overlay=$('af-overlay'),iframe=$('af-iframe');
-  btn.disabled=true;btn.classList.add('loading');overlay.classList.remove('hidden');overlay.querySelector('span').textContent='正在加载投递页面…';_afLoaded=false;_afFields=[];renderAfFields();
+  btn.disabled=true;btn.classList.add('loading');overlay.classList.remove('hidden');overlay.querySelector('span').textContent='正在加载投递页面…';_afLoaded=false;_afFields=[];renderAfFields();$('af-fill-btn').disabled=true;
+  _afLoadId++;var loadId=_afLoadId;
   try{
     var result=await api('POST','/api/autofill/proxy',{url:url,record_id:$('af-record').value});
-    iframe.srcdoc=result.html;
-    // Wait for iframe to load
-    var loaded=false,start=Date.now(),timer=setInterval(function(){
-      if(loaded||Date.now()-start>15000){clearInterval(timer);if(!loaded){overlay.classList.add('hidden');afLog('页面加载超时','warn')}}
-    },400);
-    iframe.onload=function(){loaded=true;clearInterval(timer);overlay.classList.add('hidden');_afLoaded=true;afLog('页面已加载：'+esc(result.title||result.final_url||url),'ok');setTimeout(function(){detectAutoFillFields()},800)};
-    // Force onload if already loaded
-    if(iframe.contentDocument&&iframe.contentDocument.readyState==='complete'){iframe.onload()}
+    if(loadId!==_afLoadId)return; // Stale request
+    iframe.src=result.view_url;
+    iframe.onload=function(){
+      if(loadId!==_afLoadId)return; // Stale
+      overlay.classList.add('hidden');_afLoaded=true;$('af-popout-btn').style.display='';
+      var title=decodeURIComponent(result.title||'');if(!title)title=result.final_url||url;
+      afLog('页面已加载：'+esc(title),'ok');
+      _afZoom=1.0;$('af-zoom-label').textContent='100%';var iframe=$('af-iframe');iframe.style.transform='';iframe.style.width='100%';iframe.style.height='100%';
+      setTimeout(function(){detectAutoFillFields()},700);
+    };
   }catch(err){overlay.classList.add('hidden');afLog('页面加载失败：'+err.message,'err');toast('页面加载失败：'+err.message,'error')}
   finally{btn.disabled=false;btn.classList.remove('loading')}
 }
-/* ── Detect fields via postMessage ── */
+/* ── Detect fields via direct DOM access ── */
+function _afCollectFields(doc){
+  var fields=[],seen={};
+  var inputs=doc.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="file"]), textarea, select');
+  inputs.forEach(function(el){
+    var name=(el.name||'').trim(),id=(el.id||'').trim(),label='';
+    var lbl=doc.querySelector('label[for="'+CSS.escape(id)+'"]');
+    if(!lbl&&el.closest){
+      var row=el.closest('label')||el.closest('.form-item')||el.closest('.form-group')||el.closest('tr')||el.closest('div');
+      if(row)lbl=row.querySelector('label');
+    }
+    if(lbl)label=(lbl.textContent||'').replace(/\s+/g,' ').trim();
+    var key=name+'|'+id+'|'+label;if(seen[key])return;seen[key]=true;
+    var options=[];
+    if(el.tagName==='SELECT'){Array.from(el.options).forEach(function(o){options.push({value:o.value||'',text:(o.textContent||'').trim()})})}
+    fields.push({name:name,id:id,type:el.type||el.tagName.toLowerCase(),label:label,placeholder:(el.placeholder||'').trim(),required:el.required||el.getAttribute('aria-required')==='true',options:options.slice(0,50),tagName:el.tagName});
+  });
+  return fields;
+}
+var _afDetectTimer=null,_afDetectAttempts=0;
 function detectAutoFillFields(){
   if(!_afLoaded){toast('请先打开投递页面','error');return}
-  var iframe=$('af-iframe');if(!iframe||!iframe.contentWindow){toast('无法访问页面窗口','error');return}
-  afLog('正在检测表单字段…');
+  var iframe=$('af-iframe'),doc=null;
+  try{doc=iframe.contentDocument||iframe.contentWindow.document}catch(e){}
+  if(!doc){afLog('无法访问页面（跨域限制），尝试 postMessage…','warn');detectViaPostMessage();return}
+  _afDetectAttempts=0;
+  clearInterval(_afDetectTimer);
+  function tryDetect(){
+    _afDetectAttempts++;
+    var fields=_afCollectFields(doc);
+    if(fields.length>0){
+      clearInterval(_afDetectTimer);
+      _afFields=fields;renderAfFields();
+      afLog('检测到 '+_afFields.length+' 个表单字段','ok');
+      $('af-fill-btn').disabled=false;
+      return;
+    }
+    if(_afDetectAttempts>=15){clearInterval(_afDetectTimer);afLog('未检测到表单字段（可能是SPA页面，请在新窗口打开后手动填写）','warn');renderAfFields();return}
+  }
+  tryDetect();
+  _afDetectTimer=setInterval(tryDetect,1000);
+}
+function detectViaPostMessage(){
+  var iframe=$('af-iframe');if(!iframe.contentWindow)return;
   iframe.contentWindow.postMessage({source:'autofill',action:'collect'},'*');
-  // Set timeout for response
   var start=Date.now(),timer=setInterval(function(){
-    if(Date.now()-start>8000){clearInterval(timer);afLog('字段检测超时，请确认页面已完全加载','warn');renderAfFields()}
+    if(Date.now()-start>8000){clearInterval(timer);afLog('字段检测超时','warn');renderAfFields()}
   },600);
   window._afFieldHandler=function(event){
     if(!event.data||event.data.source!=='autofill-bridge'||event.data.action!=='fields')return;
@@ -1082,12 +1133,8 @@ async function executeAutoFill(){
         _afFields[m.page_field_index]._mappedValue=m.value;
         return{field:{name:_afFields[m.page_field_index].name,id:_afFields[m.page_field_index].id,tagName:_afFields[m.page_field_index].tagName},field_label:m.profile_field,value:m.value};
       });
-      // Send incremental (only empty fields) or full
-      var modeLabel=_afMode==='incremental'?'增量':'全量';
-      afLog('开始'+modeLabel+'填充…');
       sendFillToIframe(fillData);
     }else{
-      // Rule-based mapping
       var fills=buildFieldMappings(_afFields,profileFields,_afMode==='incremental');
       renderAfFields();
       afLog('规则匹配完成：'+fills.length+' 个字段待填充','ok');
@@ -1097,15 +1144,12 @@ async function executeAutoFill(){
   finally{btn.disabled=false;btn.classList.remove('loading')}
 }
 function buildFieldMappings(pageFields,profileFields,incremental){
-  var fills=[];
+  var fills=[],aliasesMap={'姓名':['name','姓名','fullname','realname'],'邮箱':['email','邮箱','邮件','mail'],'手机':['phone','手机','电话','mobile','tel'],'性别':['gender','sex','性别'],'出生日期':['birth','生日','出生'],'学校':['school','学校','院校','university','college'],'专业':['major','专业','specialty'],'学历':['degree','学历','education'],'毕业时间':['graduation','毕业'],'英语水平':['english','英语','cet','toefl','ielts'],'实习经历':['intern','实习','work','工作经历'],'项目经历':['project','项目'],'技能':['skill','技能','技术'],'获奖情况':['award','获奖','荣誉','honor'],'自我评价':['self','自我','评价','intro','简介','介绍'],'期望城市':['city','城市','location','地点'],'期望薪资':['salary','薪资','薪酬'],'最快到岗':['available','到岗','入职'],'GitHub':['github','gitlab','gitee','博客','blog','website','主页']};
   pageFields.forEach(function(f){
     var label=(f.label||'').toLowerCase(),name=(f.name||'').toLowerCase(),id=(f.id||'').toLowerCase(),placeholder=(f.placeholder||'').toLowerCase();
-    // Use pre-detected suggestion or re-match
     var bestField=null,bestScore=0;
-    // Simple matching: check if label/name/id/placeholder contains profile field names or aliases
     for(var pk in profileFields){
       if(!profileFields[pk])continue;
-      var aliasesMap={'姓名':['name','姓名','fullname'],'邮箱':['email','邮箱','邮件','mail'],'手机':['phone','手机','电话','mobile','tel'],'性别':['gender','sex','性别'],'出生日期':['birth','生日','出生'],'学校':['school','学校','院校','university','college'],'专业':['major','专业','specialty'],'学历':['degree','学历','education'],'毕业时间':['graduation','毕业'],'英语水平':['english','英语','cet','toefl','ielts'],'实习经历':['intern','实习','work','工作经历'],'项目经历':['project','项目'],'技能':['skill','技能','技术'],'获奖情况':['award','获奖','荣誉','honor'],'自我评价':['self','自我','评价','intro','简介','介绍'],'期望城市':['city','城市','location','地点'],'期望薪资':['salary','薪资','薪酬'],'最快到岗':['available','到岗','入职'],'GitHub':['github','gitlab','gitee','博客','blog','website','主页']};
       var aliases=aliasesMap[pk]||[pk];
       for(var a=0;a<aliases.length;a++){
         var alias=aliases[a].toLowerCase();
@@ -1116,27 +1160,65 @@ function buildFieldMappings(pageFields,profileFields,incremental){
       }
       if(bestScore>=90)break;
     }
-    if(bestField&&(!incremental||true)){ // Always fill; incremental = skip already-filled handled server-side
+    if(bestField&&(!incremental||true)){
       f._mappedField=bestField;f._mappedValue=profileFields[bestField];
       fills.push({field:{name:f.name,id:f.id,tagName:f.tagName},field_label:bestField,value:profileFields[bestField]});
     }else{f._mappedField=null;f._mappedValue=null}
   });
   return fills;
 }
+var _afZoom=1.0;
+function afZoom(delta){_afZoom=Math.max(0.4,Math.min(1.5,_afZoom+delta));$('af-zoom-label').textContent=Math.round(_afZoom*100)+'%';var iframe=$('af-iframe');if(iframe){iframe.style.transform='scale('+_afZoom+')';iframe.style.width=Math.round(100/_afZoom)+'%';iframe.style.height=Math.round(100/_afZoom)+'%'}}
+function afPopOut(){var iframe=$('af-iframe');var src=iframe&&iframe.src;if(src)window.open(src,'_blank');else toast('请先打开投递页面','error')}
+function _afDirectFill(doc,fieldInfo,value){
+  if(!value)return false;
+  var el=null;
+  if(fieldInfo.id)el=doc.getElementById(fieldInfo.id);
+  if(!el&&fieldInfo.name)el=doc.querySelector('[name="'+CSS.escape(fieldInfo.name)+'"]');
+  if(!el)return false;
+  try{
+    if(el.tagName==='SELECT'){
+      for(var i=0;i<el.options.length;i++){
+        var ot=(el.options[i].textContent||'').trim(),ov=el.options[i].value;
+        if(ot.toLowerCase()===value.toLowerCase()||ov.toLowerCase()===value.toLowerCase()){el.value=ov;el.dispatchEvent(new Event('change',{bubbles:true}));return true}
+      }
+      for(var i=0;i<el.options.length;i++){
+        var ot=(el.options[i].textContent||'').trim();
+        if(ot.toLowerCase().indexOf(value.toLowerCase())>=0||value.toLowerCase().indexOf(ot.toLowerCase())>=0){el.value=el.options[i].value;el.dispatchEvent(new Event('change',{bubbles:true}));return true}
+      }
+      return false;
+    }
+    var setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')||Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value');
+    if(setter&&setter.set)setter.set.call(el,value);else el.value=value;
+    el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));
+    return true;
+  }catch(e){try{el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));return true}catch(e2){return false}}
+}
 function sendFillToIframe(fills){
-  var iframe=$('af-iframe');if(!iframe||!iframe.contentWindow){toast('无法访问页面窗口','error');return}
-  iframe.contentWindow.postMessage({source:'autofill',action:'fill',fields:fills},'*');
-  var start=Date.now(),timer=setInterval(function(){
-    if(Date.now()-start>10000){clearInterval(timer);afLog('填充响应超时','warn')}
-  },800);
-  window._afFillHandler=function(event){
-    if(!event.data||event.data.source!=='autofill-bridge'||event.data.action!=='fill-result')return;
-    clearInterval(timer);window._afFillHandler=null;
-    afLog('填充完成：'+event.data.succeeded+'/'+event.data.total+' 个字段已填入','ok');
-    (event.data.results||[]).forEach(function(r){if(r.filled)afLog('✓ '+r.field.field_label+' → 已填','ok');else afLog('✗ '+r.field.field_label+' → 未匹配','warn')});
-    toast('已填充 '+event.data.succeeded+'/'+event.data.total+' 个字段','success');
-  };
-  window.addEventListener('message',window._afFillHandler);
+  var iframe=$('af-iframe');if(!iframe){toast('无法访问页面窗口','error');return}
+  var doc=null;try{doc=iframe.contentDocument||iframe.contentWindow.document}catch(e){}
+  if(doc){
+    // Direct DOM fill (same origin)
+    var ok=0;
+    fills.forEach(function(f){
+      if(_afDirectFill(doc,f.field,f.value)){ok++;afLog('✓ '+f.field_label+' → 已填','ok')}
+      else{afLog('✗ '+f.field_label+' → 未匹配','warn')}
+    });
+    afLog('填充完成：'+ok+'/'+fills.length+' 个字段已填入','ok');
+    toast('已填充 '+ok+'/'+fills.length+' 个字段','success');
+  }else{
+    // Fallback: postMessage
+    iframe.contentWindow.postMessage({source:'autofill',action:'fill',fields:fills},'*');
+    var start=Date.now(),timer=setInterval(function(){if(Date.now()-start>10000){clearInterval(timer);afLog('填充响应超时','warn')}},800);
+    window._afFillHandler=function(event){
+      if(!event.data||event.data.source!=='autofill-bridge'||event.data.action!=='fill-result')return;
+      clearInterval(timer);window._afFillHandler=null;
+      afLog('填充完成：'+event.data.succeeded+'/'+event.data.total+' 个字段已填入','ok');
+      (event.data.results||[]).forEach(function(r){if(r.filled)afLog('✓ '+r.field.field_label+' → 已填','ok');else afLog('✗ '+r.field.field_label+' → 未匹配','warn')});
+      toast('已填充 '+event.data.succeeded+'/'+event.data.total+' 个字段','success');
+    };
+    window.addEventListener('message',window._afFillHandler);
+  }
 }
 /* ── Render field mapping UI ── */
 function renderAfFields(){
