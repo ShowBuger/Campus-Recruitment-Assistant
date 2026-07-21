@@ -3,7 +3,9 @@ import html as html_mod
 import json
 import os
 import re
-import base64
+import time
+import secrets
+import threading
 from pathlib import Path
 from datetime import datetime
 from urllib.parse import urljoin, urlparse, quote, unquote
@@ -301,7 +303,44 @@ def _normalize_field_value(profile_field: str, value: str, field_info: dict) -> 
     return value.strip()
 
 
-# ── Proxy endpoint ───────────────────────────────────────────────
+# ── In-memory page cache (TTL: 10 minutes) ──────────────────────
+
+_view_cache: dict = {}        # token -> {"html": ..., "base_url": ..., "title": ..., "expires_at": float}
+_view_cache_lock = threading.Lock()
+_VIEW_CACHE_TTL = 600          # 10 minutes
+
+
+def _cache_cleanup():
+    """Remove expired entries."""
+    now = time.time()
+    with _view_cache_lock:
+        expired = [t for t, v in _view_cache.items() if v["expires_at"] < now]
+        for t in expired:
+            del _view_cache[t]
+
+
+def _cache_put(html: str, base_url: str, title: str) -> str:
+    _cache_cleanup()
+    token = secrets.token_urlsafe(16)
+    with _view_cache_lock:
+        _view_cache[token] = {
+            "html": html,
+            "base_url": base_url,
+            "title": title,
+            "expires_at": time.time() + _VIEW_CACHE_TTL,
+        }
+    return token
+
+
+def _cache_get(token: str) -> dict | None:
+    _cache_cleanup()
+    with _view_cache_lock:
+        entry = _view_cache.get(token)
+        if entry and entry["expires_at"] >= time.time():
+            return entry
+        if entry:
+            del _view_cache[token]
+    return None
 
 FILL_BRIDGE_JS = r"""
 (function() {
@@ -567,33 +606,26 @@ def proxy_page(body: ProxyRequest, user: dict = Depends(auth_module.get_current_
     title_match = re.search(r"<title[^>]*>(.*?)</title>", processed, re.IGNORECASE | re.DOTALL)
     title = title_match.group(1).strip() if title_match else ""
 
-    # Encode the processed HTML for URL-safe transport
-    encoded = base64.urlsafe_b64encode(processed.encode("utf-8")).decode("ascii")
+    # Store in cache, return short token
+    token = _cache_put(processed, base_url, title)
 
     return {
         "success": True,
-        "view_url": f"/api/autofill/view?d={encoded}&base={quote(base_url, safe='')}&t={quote(title, safe='')}",
+        "view_url": f"/api/autofill/view?t={token}",
         "final_url": base_url,
         "title": title,
     }
 
 
 @router.get("/view")
-def autofill_view(
-    d: str = Query(default="", description="Base64 encoded HTML"),
-    base: str = Query(default="", description="Original base URL"),
-    t: str = Query(default="", description="Page title"),
-):
-    """Serve the processed page for iframe loading. No auth needed — uses one-time token."""
-    if not d:
-        raise HTTPException(status_code=400, detail="缺少页面数据")
-    try:
-        html_content = base64.urlsafe_b64decode(d.encode("ascii")).decode("utf-8")
-    except Exception:
-        raise HTTPException(status_code=400, detail="页面数据无效或已过期")
-
-    # Strip X-Frame-Options from any meta equivalents (already handled by our server)
-    return HTMLResponse(content=html_content)
+def autofill_view(t: str = Query(default="", description="View token")):
+    """Serve the processed page for iframe loading."""
+    if not t:
+        raise HTTPException(status_code=400, detail="缺少页面令牌")
+    entry = _cache_get(t)
+    if not entry:
+        raise HTTPException(status_code=400, detail="页面数据无效或已过期（10 分钟有效）")
+    return HTMLResponse(content=entry["html"])
 
 
 # ── AI matching ──────────────────────────────────────────────────
