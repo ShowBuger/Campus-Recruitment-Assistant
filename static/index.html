@@ -740,11 +740,31 @@ async function switchTotalMode(mode){
   if(shared){$('total-tbody').innerHTML='<tr><td colspan="9" class="center">正在加载共享总表…</td></tr>';await loadSharedRecords()}else renderTotalTable()
 }
 async function loadSharedRecords(silent){try{var result=await api('GET','/api/dashboard/shared/records',undefined,{silent:!!silent});_sharedRecords=arr(result.records);_sharedCanDelete=!!result.can_delete;$('shared-admin-actions').style.display=_totalMode==='shared'&&_sharedCanDelete?'flex':'none';if(_totalMode==='shared')renderTotalTable();return result}catch(err){if(!silent){toast('共享总表加载失败：'+err.message,'error',5600);$('total-tbody').innerHTML='<tr><td colspan="9" class="center">共享总表加载失败</td></tr>';throw err}return null}}
+var _totalPageSize=50,_totalPage=0;
 function renderTotalTable(){
   var shared=_totalMode==='shared',records=shared?_sharedRecords:arr(_lastData&&_lastData.main&&_lastData.main.records),query=String($('total-search')&&$('total-search').value||'').trim().toLocaleLowerCase(),sort=$('total-sort')?$('total-sort').value:'default';
   var items=records.map(function(record,index){return{record:record,index:index}}).filter(function(item){if(!query)return true;var r=item.record,haystack=[r.company,r.job,r.city,r.batch,r.type,r.priority,r.contributor,arr(r.dir).join(' '),arr(r.progress).join(' ')].join(' ').toLocaleLowerCase();return haystack.indexOf(query)>=0});
   if(!shared&&(sort==='priority-desc'||sort==='priority-asc')){items.sort(function(a,b){var pa=priorityScore(a.record),pb=priorityScore(b.record);if(pa===pb)return a.index-b.index;if(!pa)return 1;if(!pb)return-1;return sort==='priority-desc'?pb-pa:pa-pb})}
-  $('total-tbody').innerHTML=shared?renderSharedRows(items):renderTotalRows(items);$('total-record-count').textContent=(shared?'共享 · ':'个人 · ')+(query?items.length+' / ':'')+records.length+' 条记录'
+  // Paginate: show first _totalPageSize, then "load more"
+  _totalPage=0;
+  var page=items.slice(0,_totalPageSize*++_totalPage);
+  var html=shared?renderSharedRows(page):renderTotalRows(page);
+  if(items.length>_totalPageSize*_totalPage){
+    html+='<tr><td colspan="9" class="center"><button class="btn" onclick="loadMoreTotal()" style="width:100%;height:38px">显示更多 ('+Math.min(items.length-_totalPageSize*_totalPage,items.length)+' / '+items.length+')</button></td></tr>';
+  }
+  $('total-tbody').innerHTML=html;$('total-record-count').textContent=(shared?'共享 · ':'个人 · ')+(query?items.length+' / ':'')+records.length+' 条记录'
+}
+function loadMoreTotal(){
+  var shared=_totalMode==='shared',records=shared?_sharedRecords:arr(_lastData&&_lastData.main&&_lastData.main.records),query=String($('total-search')&&$('total-search').value||'').trim().toLocaleLowerCase(),sort=$('total-sort')?$('total-sort').value:'default';
+  var items=records.map(function(record,index){return{record:record,index:index}}).filter(function(item){if(!query)return true;var r=item.record,haystack=[r.company,r.job,r.city,r.batch,r.type,r.priority,r.contributor,arr(r.dir).join(' '),arr(r.progress).join(' ')].join(' ').toLocaleLowerCase();return haystack.indexOf(query)>=0});
+  if(!shared&&(sort==='priority-desc'||sort==='priority-asc')){items.sort(function(a,b){var pa=priorityScore(a.record),pb=priorityScore(b.record);if(pa===pb)return a.index-b.index;if(!pa)return 1;if(!pb)return-1;return sort==='priority-desc'?pb-pa:pa-pb})}
+  _totalPage++;
+  var page=items.slice(0,_totalPageSize*_totalPage);
+  var html=shared?renderSharedRows(page):renderTotalRows(page);
+  if(items.length>_totalPageSize*_totalPage){
+    html+='<tr><td colspan="9" class="center"><button class="btn" onclick="loadMoreTotal()" style="width:100%;height:38px">显示更多 ('+Math.min(items.length-_totalPageSize*_totalPage,items.length)+' / '+items.length+')</button></td></tr>';
+  }
+  $('total-tbody').innerHTML=html;
 }
 function renderTotalRows(items){return items.map(function(item){var r=item.record,i=item.index,applied=isApplicationRecord(r);return'<tr><td class="company"><button class="company-link" onclick="openCompanyModal(\'records\','+i+')">'+esc(r.company||'—')+'</button></td><td class="job" title="'+esc(r.job||'')+'">'+esc(r.job||'—')+'</td><td>'+tableText(r.dir)+'</td><td>'+tableText(r.type)+'</td><td>'+renderDeadline(r.deadline)+'</td><td><span class="badge bdg-b">'+esc(r.batch||'—')+'</span></td><td>'+arr(r.progress).map(progressBadge).join(' ')+'</td><td>'+link(r.url)+'</td><td class="total-action"><button class="btn" '+(applied?'disabled':'onclick="addToApplications('+i+')"')+'>'+(applied?'已投递':'加入投递')+'</button></td></tr>'}).join('')||'<tr><td colspan="9" class="center">没有匹配的记录</td></tr>'}
 function renderSharedRows(items){return items.map(function(item){var r=item.record,i=item.index,add='<button class="btn" '+(r.is_added?'disabled':'onclick="copySharedToPersonal('+i+')"')+'>'+(r.is_added?'已添加':'添加个人')+'</button>';return'<tr><td class="company">'+esc(r.company||'—')+'</td><td class="job" title="'+esc(r.job||'')+'">'+esc(r.job||'—')+'</td><td>'+tableText(r.dir)+'</td><td>'+tableText(r.type)+'</td><td>'+renderDeadline(r.deadline)+'</td><td><span class="badge bdg-b">'+esc(r.batch||'—')+'</span></td><td>'+tableText(r.contributor)+'</td><td>'+link(r.url)+'</td><td class="total-action"><div class="manager-actions">'+add+'</div></td></tr>'}).join('')||'<tr><td colspan="9" class="center">共享总表暂无匹配记录</td></tr>'}

@@ -181,7 +181,7 @@ def get_dashboard(
     user: dict = Depends(auth_module.get_current_user),
 ):
     user_id = user["user_id"]
-    cached = state.get_cache(user_id, max_age=30.0)
+    cached = state.get_cache(user_id, max_age=120.0)
     if cached:
         return cached
     try:

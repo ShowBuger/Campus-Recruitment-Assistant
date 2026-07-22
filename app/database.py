@@ -19,19 +19,27 @@ def _ensure_dir() -> None:
 _tables_initialized = False
 
 
+_thread_local = threading.local()
+
 def get_db() -> sqlite3.Connection:
-    """获取数据库连接，自动初始化表结构。"""
+    """获取数据库连接（线程级复用），自动初始化表结构。"""
     global _tables_initialized
     _ensure_dir()
+    cached = getattr(_thread_local, "conn", None)
+    if cached is not None:
+        return cached
     conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA cache_size=-8000")  # 8MB cache
     if not _tables_initialized:
         with _write_lock:
             if not _tables_initialized:
                 _init_tables(conn)
                 _tables_initialized = True
+    _thread_local.conn = conn
     return conn
 
 

@@ -364,20 +364,19 @@ def delete_record(user_id: int, record_id: str) -> bool:
 
 
 def _serialize(record: dict) -> dict:
+    """Serialize a record for list display. Heavy fields (note, job_jd) excluded."""
     fields = record["fields"]
     return {
         "record_id": record["record_id"],
-        "company": fields.get("公司名称", ""),
-        "type": (fields.get("公司/行业类型") or [""])[0],
-        "dir": fields.get("嵌入式方向", []),
-        "progress": fields.get("进展", []),
-        "job": fields.get("秋招岗位", ""),
-        "city": fields.get("城市", ""),
-        "batch": fields.get("批次", ""),
-        "priority": fields.get("优先级", ""),
-        "note": fields.get("备注", ""),
-        "job_jd": fields.get("岗位JD", ""),
-        "url": fields.get("投递链接", ""),
+        "company": fields.get("公司名称", "") or "",
+        "type": (fields.get("公司/行业类型") or [""])[0] or "",
+        "dir": fields.get("嵌入式方向") or [],
+        "progress": fields.get("进展") or [],
+        "job": fields.get("秋招岗位") or "",
+        "city": fields.get("城市") or "",
+        "batch": fields.get("批次") or "",
+        "priority": fields.get("优先级") or "",
+        "url": fields.get("投递链接") or "",
         "deadline": fields.get("投递截止时间"),
         "apply_date": fields.get("投递时间"),
         "exam_date": fields.get("机考时间"),
@@ -390,29 +389,57 @@ def _serialize(record: dict) -> dict:
 
 
 def get_dashboard_data(user_id: int) -> dict:
+    """Single-pass aggregation for better performance."""
     records = list_records(user_id)
-    rows = [record for record in records if record["fields"].get("公司名称")]
-    progress, directions, company_types = Counter(), Counter(), Counter()
-    for record in rows:
+    rows = []
+    recent = []
+    deadlines = []
+    progress = Counter()
+    directions = Counter()
+    company_types = Counter()
+    exam_count = 0
+    interview_count = 0
+
+    for record in records:
         fields = record["fields"]
-        progress.update(fields.get("进展") or [])
+        if not fields.get("公司名称"):
+            continue
+        rows.append(record)
+
+        # Counters
+        prog = fields.get("进展") or []
+        progress.update(prog)
         directions.update(fields.get("嵌入式方向") or [])
         company_types.update(fields.get("公司/行业类型") or [])
-    recent = [record for record in rows if record["fields"].get("投递时间")]
-    recent.sort(key=lambda record: record["fields"].get("投递时间") or 0, reverse=True)
-    deadlines = [record for record in rows if record["fields"].get("投递截止时间")]
-    deadlines.sort(key=lambda record: record["fields"].get("投递截止时间") or 0)
+
+        # Metrics
+        if fields.get("机考时间"):
+            exam_count += 1
+        if fields.get("一面") or fields.get("二面") or fields.get("三面"):
+            interview_count += 1
+
+        # Categorize
+        if fields.get("投递时间"):
+            recent.append(record)
+        if fields.get("投递截止时间"):
+            deadlines.append(record)
+
+    # Sort only what we need
+    recent.sort(key=lambda r: r["fields"].get("投递时间") or 0, reverse=True)
+    deadlines.sort(key=lambda r: r["fields"].get("投递截止时间") or 0)
+
+    # Serialize (only once per record)
     return {
         "main": {
             "total_companies": len(rows),
-            "exam_count": sum(bool(record["fields"].get("机考时间")) for record in rows),
-            "interview_count": sum(bool(record["fields"].get("一面") or record["fields"].get("二面") or record["fields"].get("三面")) for record in rows),
+            "exam_count": exam_count,
+            "interview_count": interview_count,
             "offer_count": progress.get("OC", 0) + progress.get("Offer", 0),
             "directions": directions.most_common(15),
             "ctypes": company_types.most_common(15),
-            "deadlines": [{"company": record["fields"].get("公司名称", ""), "job": record["fields"].get("秋招岗位", ""), "deadline": record["fields"].get("投递截止时间"), "progress": record["fields"].get("进展", [])} for record in deadlines],
-            "recent": [_serialize(record) for record in recent],
-            "records": [_serialize(record) for record in rows],
+            "deadlines": [{"company": r["fields"].get("公司名称", ""), "job": r["fields"].get("秋招岗位", ""), "deadline": r["fields"].get("投递截止时间"), "progress": r["fields"].get("进展", [])} for r in deadlines],
+            "recent": [_serialize(r) for r in recent],
+            "records": [_serialize(r) for r in rows],
         },
         "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
