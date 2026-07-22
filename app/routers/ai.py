@@ -398,6 +398,10 @@ def enrich_record(
     model = cfg.get(model_field, "") or model_default
     base_url = cfg.get(f"{provider}_base_url", "") or ai_provider_utils.DEFAULT_BASE_URLS[provider]
     api_mode = cfg.get("openai_api_mode", "") or "responses"
+
+    try:
+        try:
+            evidence = company_enrichment.search_company_job(company, job)
         except company_enrichment.EnrichmentError:
             evidence = []
         current_type = (fields.get("公司/行业类型") or [""])[0]
