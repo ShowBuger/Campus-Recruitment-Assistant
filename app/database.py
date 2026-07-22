@@ -65,6 +65,9 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             anthropic_api_key TEXT DEFAULT '',
             anthropic_model TEXT DEFAULT 'claude-sonnet-5',
             anthropic_base_url TEXT DEFAULT 'https://api.anthropic.com/v1',
+            apidock_api_key TEXT DEFAULT '',
+            apidock_model TEXT DEFAULT 'gpt-4o',
+            apidock_base_url TEXT DEFAULT 'https://apidock.ai/v1',
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
@@ -229,6 +232,9 @@ def _init_tables(conn: sqlite3.Connection) -> None:
         "anthropic_api_key": "TEXT DEFAULT ''",
         "anthropic_model": "TEXT DEFAULT 'claude-sonnet-5'",
         "anthropic_base_url": "TEXT DEFAULT 'https://api.anthropic.com/v1'",
+        "apidock_api_key": "TEXT DEFAULT ''",
+        "apidock_model": "TEXT DEFAULT 'gpt-4o'",
+        "apidock_base_url": "TEXT DEFAULT 'https://apidock.ai/v1'",
         "deepseek_base_url": "TEXT DEFAULT 'https://api.deepseek.com'",
     }
     for column, declaration in config_migrations.items():
@@ -543,6 +549,9 @@ def get_user_config(user_id: int) -> dict:
             "anthropic_api_key": "",
             "anthropic_model": "claude-sonnet-5",
             "anthropic_base_url": "https://api.anthropic.com/v1",
+            "apidock_api_key": "",
+            "apidock_model": "gpt-4o",
+            "apidock_base_url": "https://apidock.ai/v1",
             "configured": False,
         }
     d = dict(row)
@@ -564,8 +573,9 @@ def save_ai_config(user_id: int, values: dict) -> None:
             """INSERT INTO user_configs
                (user_id, ai_provider, deepseek_api_key, deepseek_model,
                 deepseek_base_url, openai_api_key, openai_model, openai_base_url,
-                openai_api_mode, anthropic_api_key, anthropic_model, anthropic_base_url)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                openai_api_mode, anthropic_api_key, anthropic_model, anthropic_base_url,
+                apidock_api_key, apidock_model, apidock_base_url)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(user_id) DO UPDATE SET
                ai_provider=excluded.ai_provider,
                deepseek_api_key=excluded.deepseek_api_key,
@@ -577,13 +587,17 @@ def save_ai_config(user_id: int, values: dict) -> None:
                openai_api_mode=excluded.openai_api_mode,
                anthropic_api_key=excluded.anthropic_api_key,
                anthropic_model=excluded.anthropic_model,
-               anthropic_base_url=excluded.anthropic_base_url""",
+               anthropic_base_url=excluded.anthropic_base_url,
+               apidock_api_key=excluded.apidock_api_key,
+               apidock_model=excluded.apidock_model,
+               apidock_base_url=excluded.apidock_base_url""",
             (
                 user_id, values["ai_provider"],
                 values["deepseek_api_key"], values["deepseek_model"], values["deepseek_base_url"],
                 values["openai_api_key"], values["openai_model"], values["openai_base_url"],
                 values["openai_api_mode"], values["anthropic_api_key"],
                 values["anthropic_model"], values["anthropic_base_url"],
+                values["apidock_api_key"], values["apidock_model"], values["apidock_base_url"],
             ),
         )
         db.commit()

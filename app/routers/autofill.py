@@ -691,12 +691,12 @@ def ai_match(body: AIMatchRequest, user: dict = Depends(auth_module.get_current_
     # Use configured AI provider
     cfg = database.get_user_config(user["user_id"])
     provider = cfg.get("ai_provider") or "deepseek"
-    if provider not in ("deepseek", "openai", "anthropic"):
+    if provider not in ("deepseek", "openai", "anthropic", "apidock"):
         provider = "deepseek"
 
     key_field = f"{provider}_api_key"
     model_field = f"{provider}_model"
-    model_default = {"deepseek": "deepseek-v4-flash", "openai": "gpt-5.4-mini", "anthropic": "claude-sonnet-5"}[provider]
+    model_default = {"deepseek": "deepseek-v4-flash", "openai": "gpt-5.4-mini", "anthropic": "claude-sonnet-5", "apidock": "gpt-4o"}[provider]
 
     api_key = cfg.get(key_field, "")
     if not api_key:
@@ -709,7 +709,9 @@ def ai_match(body: AIMatchRequest, user: dict = Depends(auth_module.get_current_
     safe_base = validate_public_base_url(base_url, provider)
 
     try:
-        if provider == "openai" and api_mode == "chat_completions":
+        if provider == "apidock":
+            api_mode = "chat_completions"
+        if (provider == "openai" or provider == "apidock") and api_mode == "chat_completions":
             resp = requests.post(
                 endpoint_url(safe_base, "chat/completions"),
                 headers=auth_headers(provider, api_key),

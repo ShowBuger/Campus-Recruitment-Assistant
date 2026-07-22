@@ -21,16 +21,19 @@ class AIConfig(BaseModel):
     anthropic_api_key: str = Field(default="", max_length=500)
     anthropic_model: str = Field(default="", max_length=100)
     anthropic_base_url: str = Field(default="", max_length=500)
+    apidock_api_key: str = Field(default="", max_length=500)
+    apidock_model: str = Field(default="", max_length=100)
+    apidock_base_url: str = Field(default="", max_length=500)
 
     @field_validator("ai_provider")
     @classmethod
     def validate_provider(cls, value: str) -> str:
         value = value.strip().lower()
-        if value not in {"deepseek", "openai", "anthropic"}:
+        if value not in {"deepseek", "openai", "anthropic", "apidock"}:
             raise ValueError("不支持的 AI 服务商")
         return value
 
-    @field_validator("deepseek_model", "openai_model", "anthropic_model")
+    @field_validator("deepseek_model", "openai_model", "anthropic_model", "apidock_model")
     @classmethod
     def validate_model(cls, value: str) -> str:
         value = value.strip()
@@ -64,6 +67,7 @@ def get_config(user: dict = Depends(auth_module.get_current_user)):
         "deepseek": "deepseek_api_key",
         "openai": "openai_api_key",
         "anthropic": "anthropic_api_key",
+        "apidock": "apidock_api_key",
     }
     key_field = key_fields.get(provider, "deepseek_api_key")
     configured = bool(cfg.get(key_field))
@@ -82,6 +86,9 @@ def get_config(user: dict = Depends(auth_module.get_current_user)):
             "anthropic_api_key_masked": _masked(cfg.get("anthropic_api_key", "")),
             "anthropic_model": cfg.get("anthropic_model", "") or "claude-sonnet-5",
             "anthropic_base_url": cfg.get("anthropic_base_url", "") or ai_provider_utils.DEFAULT_BASE_URLS["anthropic"],
+            "apidock_api_key_masked": _masked(cfg.get("apidock_api_key", "")),
+            "apidock_model": cfg.get("apidock_model", "") or "gpt-4o",
+            "apidock_base_url": cfg.get("apidock_base_url", "") or ai_provider_utils.DEFAULT_BASE_URLS["apidock"],
         },
     }
 
@@ -105,6 +112,11 @@ def _config_values(cfg: AIConfig, user_id: int) -> dict:
         "anthropic_model": cfg.anthropic_model or current.get("anthropic_model", "") or "claude-sonnet-5",
         "anthropic_base_url": ai_provider_utils.normalize_base_url(
             cfg.anthropic_base_url or current.get("anthropic_base_url", ""), "anthropic"
+        ),
+        "apidock_api_key": cfg.apidock_api_key.strip() or current.get("apidock_api_key", ""),
+        "apidock_model": cfg.apidock_model or current.get("apidock_model", "") or "gpt-4o",
+        "apidock_base_url": ai_provider_utils.normalize_base_url(
+            cfg.apidock_base_url or current.get("apidock_base_url", ""), "apidock"
         ),
     }
 

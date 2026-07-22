@@ -27,6 +27,7 @@ PROVIDER_NAMES = {
     "deepseek": "DeepSeek",
     "openai": "OpenAI GPT",
     "anthropic": "Claude",
+    "apidock": "ApiDock",
 }
 MARKDOWN_TAGS = {
     "h1", "h2", "h3", "h4", "h5", "h6", "p", "br", "hr",
@@ -273,7 +274,10 @@ def _call_ai_provider(
     max_output_tokens: int = 12_000,
 ) -> str:
     safe_base = ai_provider_utils.validate_public_base_url(base_url, provider)
-    if provider == "openai":
+    # apidock uses OpenAI-compatible API, always chat_completions
+    if provider == "apidock":
+        api_mode = "chat_completions"
+    if provider == "openai" or provider == "apidock":
         if api_mode == "chat_completions":
             response = requests.post(
                 ai_provider_utils.endpoint_url(safe_base, "chat/completions"),
@@ -386,6 +390,7 @@ def enrich_record(
         "deepseek": "deepseek-v4-flash",
         "openai": "gpt-5.4-mini",
         "anthropic": "claude-sonnet-5",
+        "apidock": "gpt-4o",
     }[provider]
     api_key = cfg.get(key_field, "")
     if not api_key:
@@ -393,10 +398,6 @@ def enrich_record(
     model = cfg.get(model_field, "") or model_default
     base_url = cfg.get(f"{provider}_base_url", "") or ai_provider_utils.DEFAULT_BASE_URLS[provider]
     api_mode = cfg.get("openai_api_mode", "") or "responses"
-
-    try:
-        try:
-            evidence = company_enrichment.search_company_job(company, job)
         except company_enrichment.EnrichmentError:
             evidence = []
         current_type = (fields.get("公司/行业类型") or [""])[0]
@@ -501,6 +502,7 @@ def analyze_resume(
         "deepseek": "deepseek-v4-flash",
         "openai": "gpt-5.4-mini",
         "anthropic": "claude-sonnet-5",
+        "apidock": "gpt-4o",
     }[provider]
     api_key = cfg.get(api_key_field, "")
     if not api_key:
