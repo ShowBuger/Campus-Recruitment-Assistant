@@ -23,10 +23,12 @@ async function loadUsers() {
 
 async function toggleAdmin(u) {
   try {
-    await fetch(`/api/admin/users/${u.id}/admin`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
+    const r = await fetch(`/api/admin/users/${u.id}/admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
       body: JSON.stringify({ is_admin: !u.is_admin })
     })
+    if (!r.ok) throw new Error('操作失败')
     u.is_admin = !u.is_admin
     toast.success(u.is_admin ? '已设为管理员' : '已取消管理员')
   } catch (e) { toast.error('操作失败') }
@@ -34,21 +36,24 @@ async function toggleAdmin(u) {
 
 async function changePw(u) {
   const pw = document.getElementById('pw-' + u.id)?.value
-  if (!pw || pw.length < 4) { toast.error('密码至少4位'); return }
+  if (!pw || pw.length < 4) { toast.error('密码至少 4 个字符'); return }
   try {
-    await fetch(`/api/admin/users/${u.id}/password`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
+    const r = await fetch(`/api/admin/users/${u.id}/password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
       body: JSON.stringify({ password: pw })
     })
+    if (!r.ok) throw new Error('修改失败')
     toast.success('密码已修改')
     document.getElementById('pw-' + u.id).value = ''
   } catch (e) { toast.error('修改失败') }
 }
 
 async function deleteUser(u) {
-  if (!confirm(`确定删除用户 ${u.username} 吗？此操作不可撤销。`)) return
+  if (!confirm(`确定删除用户 ${u.username} 吗？该用户的配置、日程、简历和分析历史也会删除。`)) return
   try {
-    await fetch(`/api/admin/users/${u.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${auth.token}` } })
+    const r = await fetch(`/api/admin/users/${u.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${auth.token}` } })
+    if (!r.ok) throw new Error('删除失败')
     toast.success('用户已删除')
     await loadUsers()
   } catch (e) { toast.error('删除失败') }
@@ -60,8 +65,13 @@ async function genInvite() {
     const r = await fetch('/api/admin/invite-codes', { method: 'POST', headers: { Authorization: `Bearer ${auth.token}` } })
     const data = await r.json()
     inviteCode.value = data.invite_code?.code || ''
-    if (inviteCode.value) { navigator.clipboard?.writeText(inviteCode.value); toast.success('已生成并复制') }
-  } catch (e) { toast.error('生成失败') }
+    if (inviteCode.value) {
+      navigator.clipboard?.writeText(inviteCode.value)
+      toast.success('邀请码已生成并复制')
+    } else {
+      toast.success('邀请码已生成')
+    }
+  } catch (e) { toast.error('邀请码生成失败') }
   finally { genLoading.value = false }
 }
 
@@ -72,63 +82,81 @@ function copyCode() {
 async function sendNotif() {
   notifSending.value = true
   try {
-    await fetch('/api/admin/notifications', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
+    const r = await fetch('/api/admin/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
       body: JSON.stringify({ title: notifTitle.value, content: notifContent.value })
     })
+    if (!r.ok) throw new Error('发送失败')
     toast.success('通知已发布')
     notifTitle.value = ''; notifContent.value = ''
   } catch (e) { toast.error('发送失败') }
   finally { notifSending.value = false }
 }
 
-function fmtTime(v) { if (!v) return ''; return new Date(v).toLocaleString('zh-CN', { hour12: false }) }
+function fmtTime(v) {
+  if (!v) return ''
+  return new Date(v).toLocaleString('zh-CN', { hour12: false })
+}
 </script>
 
 <template>
   <div class="page active" v-if="auth.isAdmin">
     <div class="admin-layout" style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px">
-      <!-- Main: Users -->
+      <!-- Left: Users -->
       <div class="card">
-        <div class="card-hd"><span class="dot"></span><div class="card-title">用户管理</div></div>
-        <div style="max-height:60vh;overflow:auto">
-          <div v-for="u in users" :key="u.id" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap">
-            <b>{{ u.username }} <i style="color:var(--sub);font-weight:400">#{{ u.id }}</i></b>
-            <span :style="{color: u.is_online ? 'var(--green)' : 'var(--muted)'}">{{ u.is_online ? '● 在线' : '○ 离线' }}</span>
-            <label style="font-size:12px">
-              <input type="checkbox" :checked="u.is_admin" :disabled="u.is_root" @change="toggleAdmin(u)"> {{ u.is_root ? 'Root' : '管理员' }}
+        <div class="card-hd"><span class="dot"></span><div class="card-title">用户账号</div><div class="card-sub">{{ users.length }}</div></div>
+        <div id="admin-user-list" style="max-height:60vh;overflow:auto">
+          <div v-if="!users.length" class="center muted" style="padding:12px">暂无用户</div>
+          <div v-for="u in users" :key="u.id" class="admin-user-card" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap">
+            <span class="uname" style="min-width:100px">
+              <b style="font-size:13px">{{ u.username }} <i style="color:var(--sub);font-weight:400;font-size:11px">#{{ u.id }}</i></b>
+              <small style="display:block;font-size:10px;color:var(--muted)">最近登录 · {{ u.last_login_at ? fmtTime(u.last_login_at) : '尚未登录' }}</small>
+            </span>
+            <span class="umeta" :style="{ color: u.is_online ? 'var(--green)' : 'var(--muted)', fontSize: '11px' }">{{ u.is_online ? '● 在线' : '○ 离线' }}</span>
+            <label class="urole" style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer">
+              <input type="checkbox" :checked="u.is_admin" :disabled="u.is_root" @change="toggleAdmin(u)">
+              {{ u.is_root ? 'Root' : '管理员' }}
             </label>
-            <span style="font-size:11px;color:var(--sub)">{{ u.last_login_at ? '最近登录 '+fmtTime(u.last_login_at) : '未登录' }}</span>
-            <input v-if="!u.is_root" type="password" :id="'pw-'+u.id" placeholder="新密码" style="width:80px;height:28px;font-size:12px" minlength="4">
-            <button v-if="!u.is_root" class="btn" style="font-size:11px;padding:2px 8px" @click="changePw(u)">改密</button>
-            <button v-if="!u.is_root" class="btn btn-danger" style="font-size:11px;padding:2px 8px" @click="deleteUser(u)">删除</button>
+            <span class="ubtns" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <template v-if="!u.is_root">
+                <input type="password" :id="'pw-'+u.id" minlength="4" maxlength="100" autocomplete="new-password" placeholder="新密码" style="width:80px;height:28px;font-size:12px;padding:0 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);outline:none">
+                <button class="btn" style="font-size:11px;padding:2px 8px;height:28px" @click="changePw(u)">改密</button>
+                <button class="btn btn-danger" style="font-size:11px;padding:2px 8px;height:28px" @click="deleteUser(u)">删除</button>
+              </template>
+            </span>
           </div>
         </div>
       </div>
 
-      <!-- Sidebar: Invite + Notifications -->
+      <!-- Right Sidebar -->
       <div style="display:flex;flex-direction:column;gap:16px">
+        <!-- Invite Code -->
         <div class="card">
-          <div class="card-hd"><span class="dot"></span><div class="card-title">邀请码</div></div>
-          <div style="padding:12px">
-            <button class="btn btn-primary" @click="genInvite" :disabled="genLoading" style="width:100%">
-              {{ genLoading ? '生成中…' : '生成邀请码' }}
-            </button>
-            <div v-if="inviteCode" style="margin-top:10px;padding:8px;background:var(--bg);border-radius:8px;text-align:center;font:700 16px var(--mono)">
-              {{ inviteCode }}
-              <button class="btn" style="margin-left:8px;font-size:11px" @click="copyCode">复制</button>
+          <div class="card-hd"><span class="dot g"></span><div class="card-title">注册邀请码</div><div class="card-sub">一次性使用</div></div>
+          <div class="card-body">
+            <div class="invite-generator" style="margin-bottom:10px">
+              <div>
+                <b style="font-size:14px">创建临时注册凭证</b>
+                <p style="margin-top:5px;color:var(--muted);font-size:11px">邀请码注册成功后自动失效。页面不会展示历史生成记录。</p>
+              </div>
+              <button class="btn btn-primary" @click="genInvite" :disabled="genLoading" style="width:100%">{{ genLoading ? '生成中…' : '生成邀请码' }}</button>
+            </div>
+            <div v-if="inviteCode" class="invite-current" style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;padding:12px;background:var(--bg);border-radius:8px">
+              <span style="color:var(--muted);font-size:11px">本次生成</span>
+              <code style="font:700 1em var(--mono,monospace);text-align:center">{{ inviteCode }}</code>
+              <button class="btn" type="button" style="font-size:11px;padding:2px 8px" @click="copyCode">复制</button>
             </div>
           </div>
         </div>
 
+        <!-- Notification Publisher -->
         <div class="card">
-          <div class="card-hd"><span class="dot"></span><div class="card-title">发布通知</div></div>
-          <div style="padding:12px">
-            <div class="form-group"><input v-model="notifTitle" placeholder="通知标题" maxlength="200"></div>
-            <div class="form-group"><textarea v-model="notifContent" placeholder="通知内容" rows="4" maxlength="5000"></textarea></div>
-            <button class="btn btn-primary" @click="sendNotif" :disabled="!notifTitle||notifSending" style="width:100%">
-              {{ notifSending ? '发送中…' : '发布通知' }}
-            </button>
+          <div class="card-hd"><span class="dot a"></span><div class="card-title">发布通知</div></div>
+          <div class="card-body">
+            <div class="form-group"><input v-model="notifTitle" class="input" maxlength="100" placeholder="通知标题"></div>
+            <div class="form-group"><textarea v-model="notifContent" class="input" maxlength="5000" rows="4" placeholder="通知内容" style="resize:vertical;min-height:60px"></textarea></div>
+            <button class="btn btn-primary" @click="sendNotif" :disabled="!notifTitle || notifSending" style="width:100%">{{ notifSending ? '发送中…' : '发布通知' }}</button>
           </div>
         </div>
       </div>
