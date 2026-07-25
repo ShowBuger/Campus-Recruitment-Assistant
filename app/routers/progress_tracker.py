@@ -134,6 +134,7 @@ class TrackerConfig(BaseModel):
 
 class EventAction(BaseModel):
     action: str
+    interview_round: int | None = None
 
     @field_validator("action")
     @classmethod
@@ -500,6 +501,20 @@ def _ai_recognize_batch(
                 record_id, company, job = proposed_id, saved_company, saved_job
         if not matched:
             record_id, company, job = _match_ai_record(company, job, records)
+        scheduled = item.get("scheduled_ms")
+        deadline = item.get("deadline_ms")
+        try:
+            scheduled_ms = int(scheduled) if scheduled is not None else None
+        except (TypeError, ValueError):
+            scheduled_ms = None
+        try:
+            deadline_ms = int(deadline) if deadline is not None else None
+        except (TypeError, ValueError):
+            deadline_ms = None
+        try:
+            interview_round = int(item.get("interview_round") or 0) or None
+        except (TypeError, ValueError):
+            interview_round = None
         results[uid] = {
             "progress": progress,
             "confidence": tier_confidence[tier],
@@ -508,6 +523,10 @@ def _ai_recognize_batch(
             "company": company,
             "job": job,
             "reason": str(item.get("reason") or "")[:200],
+            "scheduled_ms": scheduled_ms,
+            "deadline_ms": deadline_ms,
+            "interview_round": interview_round,
+            "time_reason": str(item.get("time_reason") or "")[:120],
         }
     if seen_uids != valid_uids:
         missing = sorted(valid_uids - seen_uids)
@@ -592,13 +611,22 @@ def _fetch_message_prefix(client, cfg: dict, uid: int) -> tuple[object, Message]
     raise RuntimeError(f"无法读取邮件 UID {uid}")
 
 
-def _apply_event(user_id: int, event: dict) -> None:
+def _apply_event(user_id: int, event: dict, interview_round: int | None = None) -> None:
     if not event.get("record_id"):
         raise ValueError("该邮件尚未匹配到个人总表岗位")
     fields = {"进展": [event["progress"]]}
     date_field = DATE_FIELDS.get(event["progress"])
     if date_field:
-        fields[date_field] = event.get("received_ms") or int(time.time() * 1000)
+        # Prefer AI-extracted scheduled time over email received time
+        ts = event.get("scheduled_ms") or event.get("received_ms") or int(time.time() * 1000)
+        fields[date_field] = ts
+        # For 面试, map interview_round to the correct date field
+        if event["progress"] == "面试":
+            round_field = {1: "一面", 2: "二面", 3: "三面"}.get(
+                interview_round or event.get("interview_round")
+            )
+            if round_field and round_field != date_field:
+                fields[round_field] = ts
     if not local_records.update_record(user_id, event["record_id"], fields):
         raise LookupError("对应岗位已不存在")
     state.set_cache(user_id, local_records.get_dashboard_data(user_id))
@@ -772,12 +800,15 @@ def sync_user(user_id: int, *, test_only: bool = False, progress_callback=None) 
                 db.execute(
                     """INSERT OR IGNORE INTO email_tracker_events
                        (user_id, message_uid, subject, sender, received_ms, company, job,
-                       progress, confidence, decision_tier, reason, record_id, status)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       progress, confidence, decision_tier, reason, record_id, status,
+                       scheduled_ms, deadline_ms, interview_round, time_reason)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (user_id, uid, item["subject"], item["sender"],
                      item["received_ms"], result["company"], result["job"], result["progress"],
                      result["confidence"], result.get("decision_tier", "REVIEW_LOW"),
-                     result.get("reason", "")[:200], result["record_id"], event_status),
+                     result.get("reason", "")[:200], result["record_id"], event_status,
+                     result.get("scheduled_ms"), result.get("deadline_ms"),
+                     result.get("interview_round"), result.get("time_reason", "")[:120]),
                 )
                 db.commit()
             detected += 1
@@ -1083,7 +1114,7 @@ def act_event(event_id: int, body: EventAction, user: dict = Depends(auth_module
         raise HTTPException(status_code=409, detail="该识别结果已经处理")
     if body.action == "confirm":
         try:
-            _apply_event(user["user_id"], event)
+            _apply_event(user["user_id"], event, body.interview_round)
         except (ValueError, LookupError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     elif body.action == "create":
