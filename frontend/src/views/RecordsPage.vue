@@ -268,7 +268,7 @@ async function addToPersonal(r) {
               <td v-if="showShared">{{ r.contributor || '—' }}</td>
               <td v-else><ProgressBadge :progress="(r.progress||[])[0]||'未投递'" /></td>
               <td>
-                <a v-if="r.url" :href="r.url" target="_blank" class="btn" rel="noreferrer">查看</a>
+                <a v-if="r.url" :href="r.url" target="_blank" rel="noreferrer">查看</a><span v-else class="table-date">—</span>
                 <span v-else class="table-date">—</span>
               </td>
               <td class="total-action">

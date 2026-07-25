@@ -34,8 +34,9 @@ async function toggleAdmin(u) {
   } catch (e) { toast.error('操作失败') }
 }
 
+const pwMap = ref({})
 async function changePw(u) {
-  const pw = document.getElementById('pw-' + u.id)?.value
+  const pw = pwMap.value[u.id] || ''
   if (!pw || pw.length < 4) { toast.error('密码至少 4 个字符'); return }
   try {
     const r = await fetch(`/api/admin/users/${u.id}/password`, {
@@ -45,7 +46,7 @@ async function changePw(u) {
     })
     if (!r.ok) throw new Error('修改失败')
     toast.success('密码已修改')
-    document.getElementById('pw-' + u.id).value = ''
+    pwMap.value[u.id] = ''
   } catch (e) { toast.error('修改失败') }
 }
 
@@ -120,7 +121,7 @@ function fmtTime(v) {
             </label>
             <span class="ubtns" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               <template v-if="!u.is_root">
-                <input type="password" :id="'pw-'+u.id" minlength="4" maxlength="100" autocomplete="new-password" placeholder="新密码" style="width:80px;height:28px;font-size:12px;padding:0 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);outline:none">
+                <input type="password" :value="pwMap[u.id]||''" @input="e => pwMap[u.id] = e.target.value" minlength="4" maxlength="100" autocomplete="new-password" placeholder="新密码" style="width:80px;height:28px;font-size:12px;padding:0 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);outline:none">
                 <button class="btn" style="font-size:11px;padding:2px 8px;height:28px" @click="changePw(u)">改密</button>
                 <button class="btn btn-danger" style="font-size:11px;padding:2px 8px;height:28px" @click="deleteUser(u)">删除</button>
               </template>

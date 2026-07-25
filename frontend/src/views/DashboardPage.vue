@@ -242,17 +242,17 @@ onMounted(() => { store.fetch(); loadLocalEvents() })
               <td><span class="table-date">{{ formatDate(r.result) }}</span></td>
               <td><span class="table-date">{{ formatDate(r.deadline) }}</span></td>
               <td><ProgressBadge :progress="(r.progress||[])[0]||'未投递'" /></td>
-              <td><a v-if="r.url" :href="r.url" target="_blank" rel="noreferrer" class="btn">入口</a></td>
+              <td><a v-if="r.url" :href="r.url" target="_blank" rel="noreferrer">查看</a><span v-else class="table-date">—</span></td>
             </tr>
           </tbody>
         </table>
       </div>
 
       <div class="table-actions">
-        <button class="btn btn-primary" @click="$emit('open-record-modal')">新增记录</button>
-        <button class="btn" @click="$emit('open-manager')">管理记录</button>
-        <button class="btn" @click="$emit('open-stats')">统计信息</button>
-        <button class="btn" @click="$emit('open-offer-compare')">Offer 对比</button>
+        <button class="btn btn-primary">新增记录</button>
+        <button class="btn">管理记录</button>
+        <button class="btn">统计信息</button>
+        <button class="btn">Offer 对比</button>
       </div>
     </div>
   </div>
