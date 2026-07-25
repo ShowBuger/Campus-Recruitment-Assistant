@@ -187,7 +187,7 @@ async function addToPersonal(r) {
 </script>
 
 <template>
-  <section class="page" id="page-total">
+  <section class="page active" id="page-total">
     <div class="card data-table-card">
       <div class="card-hd">
         <span class="dot"></span>

@@ -102,7 +102,7 @@ function fmtTime(v) {
 
 <template>
   <div class="page active" v-if="auth.isAdmin">
-    <div class="admin-layout" style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px">
+    <div class="grid-2" style="align-items:start">
       <!-- Left: Users -->
       <div class="card">
         <div class="card-hd"><span class="dot"></span><div class="card-title">用户账号</div><div class="card-sub">{{ users.length }}</div></div>
