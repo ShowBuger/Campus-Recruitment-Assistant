@@ -6,6 +6,8 @@ import ProgressBadge from '@/components/ProgressBadge.vue'
 const store = useDashboardStore()
 const openRecord = inject('openRecord', () => {})
 const openDetail = inject('openDetail', () => {})
+const openStats = inject('openStats', () => {})
+const openOffer = inject('openOffer', () => {})
 const showFilter = ref(false)
 const activeFilter = ref([])
 const progressOptions = ['已投递', '机考', '面试', 'OC', '已挂', '放弃']
@@ -253,8 +255,8 @@ onMounted(() => { store.fetch(); loadLocalEvents() })
       <div class="table-actions">
         <button class="btn btn-primary" @click="openRecord()">新增记录</button>
         <button class="btn">管理记录</button>
-        <button class="btn">统计信息</button>
-        <button class="btn">Offer 对比</button>
+        <button class="btn" @click="openStats()">统计信息</button>
+        <button class="btn" @click="openOffer()">Offer 对比</button>
       </div>
     </div>
   </div>
