@@ -1,9 +1,6 @@
-# 校招信息看板 → Skill
+# 校招信息看板
 
-本项目专有 skill 文档见：
+项目专有 Skill 位于 `skills/` 目录下：
 
-**`C:\Users\B1804\.claude\skills\industry-intelligence-radar\SKILL.md`**
-
-请勿在此文件继续编辑。
-
-项目代码位置不变：`D:\AI学习\embedded-job-radar\`
+- `skills/company-job-enrichment/` — AI 补全公司类型、方向、岗位 JD
+- `skills/recruitment-email-classifier/` — 邮件识别与进展分类
