@@ -15,20 +15,17 @@
       </div>
 
       <div class="modal-body">
-        <!-- AI Config Tab -->
         <section v-if="tab === 'ai'" class="settings-page active">
           <p class="center muted">AI 配置表单 — 待迁移</p>
         </section>
 
-        <!-- Tracker Tab -->
         <section v-if="tab === 'tracker'" class="settings-page tracker-settings">
-          <p class="center muted">进度跟踪配置 — 待迁移</p>
+          <TrackerSettings />
         </section>
       </div>
 
       <div class="modal-ft">
-        <button class="btn" @click="$emit('close')">取消</button>
-        <button class="btn btn-primary">保存</button>
+        <button class="btn" @click="$emit('close')">关闭</button>
       </div>
     </div>
   </div>
@@ -36,6 +33,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import TrackerSettings from '@/components/TrackerSettings.vue'
 
 const tab = ref('ai')
 </script>
