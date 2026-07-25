@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAppStore } from '@/stores/app'
 import ProgressBadge from '@/components/ProgressBadge.vue'
@@ -166,6 +166,12 @@ const dayDetailKey = ref('')
 const dayDetailItems = computed(() => dayDetailKey.value ? (events.value[dayDetailKey.value] || []) : [])
 function openDayDetail(key) { dayDetailKey.value = key }
 function closeDayDetail() { dayDetailKey.value = '' }
+
+const EVENT_TYPE_MAP = { apply: '投递', exam: '机考/笔试', interview: '面试', warm: '保温', result: '结果', deadline: '截止', other: '自定义' }
+const EVENT_BADGE_MAP = { other: 'bdg-a', deadline: 'bdg-r', exam: 'bdg-a', warm: 'bdg-a' }
+function eventBadgeClass(type) { return EVENT_BADGE_MAP[type] || 'bdg-b' }
+function eventTypeName(type) { return EVENT_TYPE_MAP[type] || type }
+
 async function deleteCalendarEvent(id, etype) {
   if (!confirm('确定删除这个日程？')) return
   try {
@@ -180,7 +186,13 @@ async function deleteCalendarEvent(id, etype) {
       })
     }
     await store.fetch(); await loadLocalEvents()
-    if (dayDetailKey.value) dayDetailKey.value = dayDetailKey.value // trigger recompute
+    // Re-render the day detail
+    if (dayDetailKey.value) {
+      const key = dayDetailKey.value
+      dayDetailKey.value = ''
+      await nextTick()
+      dayDetailKey.value = key
+    }
   } catch {}
 }
 
@@ -330,10 +342,12 @@ onMounted(() => { store.fetch(); loadLocalEvents() })
         <div class="modal-hd"><div><h2>{{ dayDetailKey }}</h2><p>{{ dayDetailItems.length }} 个日程</p></div><button class="icon-btn" @click="closeDayDetail" title="关闭">&times;</button></div>
         <div class="modal-body">
           <div v-if="!dayDetailItems.length" class="center">该日暂无日程</div>
-          <div v-for="e in dayDetailItems" :key="e.rid || e.lid || e.label">
-            <b>{{ e.label }}</b>
-            <div style="color:var(--muted);font-size:12px;margin-top:2px">{{ e.company }}{{ e.job ? ' · ' + e.job : '' }}</div>
-            <button class="btn" style="height:28px;padding:0 10px;font-size:11px;margin-top:4px" @click="deleteCalendarEvent(e.rid || e.lid, e.etype)">删除</button>
+          <div v-for="e in dayDetailItems" :key="e.rid || e.lid || e.label" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)">
+            <div>
+              <b>{{ e.label }}</b>
+              <div style="color:var(--muted);font-size:12px;margin-top:2px">{{ e.company }}{{ e.job ? ' · ' + e.job : '' }} · <span :class="'badge ' + eventBadgeClass(e.type)">{{ eventTypeName(e.type) }}</span></div>
+            </div>
+            <button class="btn" style="height:28px;padding:0 10px;font-size:11px;flex-shrink:0" @click="deleteCalendarEvent(e.rid || e.lid, e.etype)">删除</button>
           </div>
         </div>
         <div class="modal-ft">
