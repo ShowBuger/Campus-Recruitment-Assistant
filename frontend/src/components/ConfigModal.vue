@@ -47,8 +47,8 @@
             <div class="grid-2">
               <div class="form-group">
                 <label for="cfg-deepseek-key">API Key</label>
-                <input id="cfg-deepseek-key" type="password" autocomplete="off" placeholder="sk-..." v-model="config.deepseek_api_key">
-                <div class="help" id="cfg-deepseek-key-help">{{ deepseekKeyHelp }}</div>
+                <input id="cfg-deepseek-key" type="password" autocomplete="off" :placeholder="maskedKeys.deepseek ? '已保存：'+maskedKeys.deepseek : 'sk-...'" :class="{ 'secret-saved': maskedKeys.deepseek }" v-model="config.deepseek_api_key">
+                <div class="help" id="cfg-deepseek-key-help" :class="{ saved: maskedKeys.deepseek }">{{ maskedKeys.deepseek ? '已保存密钥：'+maskedKeys.deepseek : '尚未保存密钥' }}</div>
               </div>
               <div class="form-group">
                 <label for="cfg-deepseek-model-picker">模型名称</label>
@@ -80,8 +80,8 @@
             <div class="grid-2">
               <div class="form-group">
                 <label for="cfg-openai-key">API Key</label>
-                <input id="cfg-openai-key" type="password" autocomplete="off" placeholder="sk-..." v-model="config.openai_api_key">
-                <div class="help" id="cfg-openai-key-help">{{ openaiKeyHelp }}</div>
+                <input id="cfg-openai-key" type="password" autocomplete="off" :placeholder="maskedKeys.openai ? '已保存：'+maskedKeys.openai : 'sk-...'" :class="{ 'secret-saved': maskedKeys.openai }" v-model="config.openai_api_key">
+                <div class="help" id="cfg-openai-key-help" :class="{ saved: maskedKeys.openai }">{{ maskedKeys.openai ? '已保存密钥：'+maskedKeys.openai : '尚未保存密钥' }}</div>
               </div>
               <div class="form-group">
                 <label for="cfg-openai-model-picker">模型名称</label>
@@ -130,8 +130,8 @@
             <div class="grid-2">
               <div class="form-group">
                 <label for="cfg-anthropic-key">API Key</label>
-                <input id="cfg-anthropic-key" type="password" autocomplete="off" placeholder="sk-ant-..." v-model="config.anthropic_api_key">
-                <div class="help" id="cfg-anthropic-key-help">{{ anthropicKeyHelp }}</div>
+                <input id="cfg-anthropic-key" type="password" autocomplete="off" :placeholder="maskedKeys.anthropic ? '已保存：'+maskedKeys.anthropic : 'sk-ant-...'" :class="{ 'secret-saved': maskedKeys.anthropic }" v-model="config.anthropic_api_key">
+                <div class="help" id="cfg-anthropic-key-help" :class="{ saved: maskedKeys.anthropic }">{{ maskedKeys.anthropic ? '已保存密钥：'+maskedKeys.anthropic : '尚未保存密钥' }}</div>
               </div>
               <div class="form-group">
                 <label for="cfg-anthropic-model-picker">模型名称</label>
@@ -166,8 +166,8 @@
             <div class="grid-2">
               <div class="form-group">
                 <label for="cfg-kimi-key">API Key</label>
-                <input id="cfg-kimi-key" type="password" autocomplete="off" placeholder="sk-..." v-model="config.kimi_api_key">
-                <div class="help" id="cfg-kimi-key-help">{{ kimiKeyHelp }}</div>
+                <input id="cfg-kimi-key" type="password" autocomplete="off" :placeholder="maskedKeys.kimi ? '已保存：'+maskedKeys.kimi : 'sk-...'" :class="{ 'secret-saved': maskedKeys.kimi }" v-model="config.kimi_api_key">
+                <div class="help" id="cfg-kimi-key-help" :class="{ saved: maskedKeys.kimi }">{{ maskedKeys.kimi ? '已保存密钥：'+maskedKeys.kimi : '尚未保存密钥' }}</div>
               </div>
               <div class="form-group">
                 <label for="cfg-kimi-model-picker">模型名称</label>
@@ -198,11 +198,7 @@
 
         <!-- ========== Tracker Tab ========== -->
         <section id="settings-page-tracker" class="settings-page tracker-settings" :class="{ active: tab === 'tracker' }">
-          <div class="settings-section-title">
-            <div><b>进度跟踪配置</b><span>通过通用 IMAP 读取招聘邮件并匹配个人总表</span></div>
-            <span id="tracker-status-badge" class="tracker-state">未配置</span>
-          </div>
-          <TrackerSettings />
+          <TrackerSettings ref="trackerRef" />
         </section>
       </div>
 
@@ -212,10 +208,10 @@
           <button class="btn btn-primary" id="config-save" @click="saveConfig" :disabled="saving">保存 AI 配置</button>
         </div>
         <div class="settings-page-actions" :class="{ active: tab === 'tracker' }" id="settings-actions-tracker">
-          <button class="btn btn-danger" id="tracker-reset" type="button">清空同步缓存</button>
-          <button class="btn" id="tracker-test" type="button">测试同步</button>
-          <button class="btn" id="tracker-sync" type="button">立即同步</button>
-          <button class="btn btn-primary" id="tracker-save" type="button">保存跟踪配置</button>
+          <button class="btn btn-danger" id="tracker-reset" @click="trackerRef?.resetCache()">清空同步缓存</button>
+          <button class="btn" id="tracker-test" @click="trackerRef?.testSync()" :disabled="trackerRef?.syncing">测试同步</button>
+          <button class="btn" id="tracker-sync" @click="trackerRef?.startSync()" :disabled="trackerRef?.syncing">立即同步</button>
+          <button class="btn btn-primary" id="tracker-save" @click="trackerRef?.save()" :disabled="trackerRef?.saving">保存跟踪配置</button>
         </div>
       </div>
     </div>
@@ -231,6 +227,7 @@ import TrackerSettings from '@/components/TrackerSettings.vue'
 const toast = useToastStore()
 
 const tab = ref('ai')
+const trackerRef = ref(null)
 const testing = ref(false)
 const saving = ref(false)
 

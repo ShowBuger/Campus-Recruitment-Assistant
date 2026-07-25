@@ -366,8 +366,9 @@ function fmtTime(v) { if (!v) return ''; const d = new Date(v); return isNaN(d) 
 .chat-modal-window {
   display: flex;
   flex-direction: column;
-  width: min(960px, 96vw);
-  height: min(680px, 88vh);
+  width: min(1180px, 96vw);
+  height: min(780px, 94dvh);
+  min-height: 520px;
   background: var(--bg);
   border-radius: 20px;
   box-shadow: 0 24px 80px rgba(16, 24, 40, .22);

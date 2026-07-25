@@ -44,7 +44,6 @@ async function apiReq(method, url, body) {
 }
 
 async function loadAdminUsers() {
-  if (!isRoot.value) return
   try {
     const data = await apiReq('GET', '/api/admin/users')
     users.value = data.users || []
@@ -155,8 +154,9 @@ function startLogStream() {
 
 onMounted(() => {
   if (auth.isAdmin) {
-    if (isRoot.value) { activePanel.value = 'users'; loadAdminUsers() }
+    if (isRoot.value) { activePanel.value = 'users' }
     else { activePanel.value = 'invite' }
+    loadAdminUsers()
     loadSyncSchedule()
     startLogStream()
   }
@@ -169,7 +169,7 @@ onUnmounted(() => { if (logStream) { logStream.close(); logStream = null } })
   <section class="page active" id="page-admin" v-if="auth.isAdmin">
     <div class="admin-layout">
       <nav class="admin-nav-pane">
-        <button class="admin-nav-item" :class="{ active: activePanel === 'users' }" data-panel="users" id="admin-nav-users" :style="{ display: isRoot ? '' : 'none' }" @click="switchPanel('users')">用户账号</button>
+        <button class="admin-nav-item" :class="{ active: activePanel === 'users' }" data-panel="users" id="admin-nav-users" @click="switchPanel('users')">用户账号</button>
         <button class="admin-nav-item" :class="{ active: activePanel === 'invite' }" data-panel="invite" @click="switchPanel('invite')">邀请码</button>
         <button class="admin-nav-item" :class="{ active: activePanel === 'sync' }" data-panel="sync" @click="switchPanel('sync')">自动同步</button>
         <button class="admin-nav-item" :class="{ active: activePanel === 'notice' }" data-panel="notice" @click="switchPanel('notice')">发布通知</button>
@@ -184,9 +184,9 @@ onUnmounted(() => { if (logStream) { logStream.close(); logStream = null } })
               <div v-for="user in users" :key="user.id" class="admin-user-card">
                 <span class="uname"><b>{{ user.username }} <i>#{{ user.id }}</i></b><small>最近登录 · {{ user.last_login_at ? formatSystemTime(user.last_login_at) : '尚未登录' }}</small></span>
                 <span class="umeta" :style="{ color: user.is_online ? 'var(--green)' : 'var(--muted)' }">{{ user.is_online ? '● 在线' : '○ 离线' }}</span>
-                <label class="urole"><input type="checkbox" v-model="user.is_admin" :disabled="user.is_root || user.username === 'root'" @change="toggleAdmin(user)">{{ user.is_root ? 'Root Admin' : (user.is_admin ? '管理员' : '普通') }}</label>
+                <label class="urole"><input type="checkbox" v-model="user.is_admin" :disabled="!isRoot || user.is_root || user.username === 'root'" @change="toggleAdmin(user)">{{ user.is_root ? 'Root Admin' : (user.is_admin ? '管理员' : '普通') }}</label>
                 <span class="udate">{{ formatSystemTime(user.created_at) }}</span>
-                <span class="ubtns"><input type="password" :id="'admin-password-' + user.id" minlength="4" maxlength="100" autocomplete="new-password" placeholder="新密码" :value="pwMap[user.id] || ''" @input="e => pwMap[user.id] = e.target.value"><button class="btn" @click="changePassword(user)">改密</button><button v-if="!user.is_root && user.username !== 'root'" class="btn btn-danger" @click="deleteUser(user)">删除</button></span>
+                <span class="ubtns" v-if="isRoot"><input type="password" :id="'admin-password-' + user.id" minlength="4" maxlength="100" autocomplete="new-password" placeholder="新密码" :value="pwMap[user.id] || ''" @input="e => pwMap[user.id] = e.target.value"><button class="btn" @click="changePassword(user)">改密</button><button v-if="!user.is_root && user.username !== 'root'" class="btn btn-danger" @click="deleteUser(user)">删除</button></span>
               </div>
             </div>
           </div>

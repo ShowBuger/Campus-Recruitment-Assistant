@@ -29,20 +29,33 @@ const store = useToastStore()
 }
 
 .toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 800;
+  font-size: 13px;
+  white-space: nowrap;
   pointer-events: auto;
   cursor: pointer;
 }
 
 .toast-success {
-  border-left: 4px solid #22c55e;
+  background: var(--green, #059669);
+  color: #fff;
 }
 
 .toast-error {
-  border-left: 4px solid #ef4444;
+  background: var(--red, #e11d48);
+  color: #fff;
 }
 
 .toast-info {
-  border-left: 4px solid #3b82f6;
+  background: var(--blue, #2563eb);
+  color: #fff;
 }
 
 .toast-enter-active {

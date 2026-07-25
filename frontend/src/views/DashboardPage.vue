@@ -3,11 +3,13 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAppStore } from '@/stores/app'
 import ProgressBadge from '@/components/ProgressBadge.vue'
+import TooltipCell from '@/components/TooltipCell.vue'
 
 const store = useDashboardStore()
 const app = useAppStore()
 const showFilter = ref(false)
 const activeFilter = ref([])
+const draftFilter = ref(null)  // null = not editing; array = editing
 const progressOptions = ['已投递', '机考', '面试', 'OC', '已挂', '放弃']
 
 // ---- calendar event modal ----
@@ -19,16 +21,43 @@ const calEventRecord = ref('')
 
 // ---- application records (original: _lastData.main.recent) ----
 const records = computed(() => store.data?.main?.recent || [])
+
+// Table always uses committed filter (activeFilter), NOT draft
 const filteredRecords = computed(() =>
   activeFilter.value.length
     ? records.value.filter(r => activeFilter.value.includes((r.progress || [])[0]))
     : records.value
 )
 
-function applyFilter() { showFilter.value = false }
-function clearFilter() { activeFilter.value = []; showFilter.value = false }
+// Preview: what the result WOULD be if draft were applied
+const draftFilteredCount = computed(() => {
+  const f = draftFilter.value
+  if (!f || !f.length) return records.value.length
+  return records.value.filter(r => f.includes((r.progress || [])[0])).length
+})
+
+const filterSummary = computed(() => {
+  if (!showFilter.value) return ''
+  const f = draftFilter.value
+  if (!f || !f.length) return '选择状态，退出后应用'
+  return `退出后应用 · ${draftFilteredCount.value} / ${records.value.length} 条`
+})
+
+function openFilter() {
+  draftFilter.value = [...activeFilter.value]
+  showFilter.value = true
+}
+function applyFilter() {
+  if (draftFilter.value !== null) activeFilter.value = [...draftFilter.value]
+  draftFilter.value = null
+  showFilter.value = false
+}
+function clearFilter() {
+  draftFilter.value = []
+}
 
 function formatDate(ts) { if (!ts) return '—'; const d = new Date(ts); return isNaN(d) ? '—' : String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
+function formatDateFull(ts) { if (!ts) return ''; const d = new Date(ts); return isNaN(d) ? '' : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 
 // ---- Calendar (exact replica of original renderCalendar) ----
 const calendarMonth = ref(new Date())
@@ -196,8 +225,10 @@ async function deleteCalendarEvent(id, etype) {
   } catch {}
 }
 
-onMounted(() => { store.fetch(); loadLocalEvents(); store.startPolling() })
-onUnmounted(() => { store.stopPolling() })
+function onKeydown(e) { if (e.key === 'Escape' && showFilter.value) applyFilter() }
+
+onMounted(() => { store.fetch(); loadLocalEvents(); store.startPolling(); document.addEventListener('keydown', onKeydown) })
+onUnmounted(() => { store.stopPolling(); document.removeEventListener('keydown', onKeydown) })
 </script>
 
 <template>
@@ -265,24 +296,24 @@ onUnmounted(() => { store.stopPolling() })
         <div class="card-title">投递记录</div>
         <div class="record-hd-spacer"></div>
         <div class="progress-filter" :class="{ active: showFilter }">
-          <button class="progress-filter-toggle" :class="{ 'has-filter': activeFilter.length > 0 }" @click="showFilter = !showFilter" aria-haspopup="dialog" :aria-expanded="showFilter">
+          <button class="progress-filter-toggle" :class="{ 'has-filter': activeFilter.length > 0 }" @click="showFilter ? applyFilter() : openFilter()" aria-haspopup="dialog" :aria-expanded="showFilter">
             <span>{{ activeFilter.length ? activeFilter.length + ' 个状态' : '筛选进展' }}</span>
           </button>
-          <div class="progress-filter-backdrop" @click="showFilter = false" v-if="showFilter"></div>
+          <div class="progress-filter-backdrop" @click="applyFilter" v-if="showFilter"></div>
           <div class="progress-filter-menu" v-if="showFilter" role="dialog" aria-modal="true">
             <div class="progress-filter-menu-hd">
-              <div><b>筛选投递进展</b><span>选择一个或多个状态</span></div>
+              <div><b>筛选投递进展</b><span>{{ filterSummary }}</span></div>
               <div class="progress-filter-dialog-actions">
-                <button type="button" class="progress-filter-clear" :disabled="activeFilter.length === 0" @click="clearFilter">重置</button>
-                <button type="button" class="progress-filter-close" @click="showFilter = false">&times;</button>
+                <button type="button" class="progress-filter-clear" :disabled="!draftFilter || !draftFilter.length" @click="clearFilter">重置</button>
+                <button type="button" class="progress-filter-close" @click="applyFilter" aria-label="关闭筛选">&times;</button>
               </div>
             </div>
-            <div class="progress-filter-selected" v-if="activeFilter.length">
-              <span v-for="p in activeFilter" :key="p" class="progress-filter-chip"><span>{{ p }}</span><button @click="activeFilter = activeFilter.filter(x => x !== p)">&times;</button></span>
+            <div class="progress-filter-selected" :class="{ show: draftFilter && draftFilter.length }" v-if="draftFilter && draftFilter.length">
+              <span v-for="p in draftFilter" :key="p" class="progress-filter-chip">{{ p }}<button @click="draftFilter = draftFilter.filter(x => x !== p)" :aria-label="'移除 '+p">&times;</button></span>
             </div>
             <div class="progress-filter-options">
-              <label v-for="p in progressOptions" :key="p" class="progress-filter-option" :class="{ selected: activeFilter.includes(p) }">
-                <input type="checkbox" :value="p" v-model="activeFilter" @change="applyFilter">
+              <label v-for="p in progressOptions" :key="p" class="progress-filter-option" :class="{ selected: draftFilter && draftFilter.includes(p) }">
+                <input type="checkbox" :value="p" :checked="draftFilter && draftFilter.includes(p)" @change="($event.target.checked ? draftFilter.push(p) : draftFilter = draftFilter.filter(x => x !== p))">
                 <ProgressBadge :progress="p" />
               </label>
             </div>
@@ -311,17 +342,17 @@ onUnmounted(() => { store.stopPolling() })
             <tr v-else-if="!filteredRecords.length"><td colspan="14" class="center">暂无记录</td></tr>
             <tr v-for="(r, i) in filteredRecords.slice(0, 40)" :key="r.record_id">
               <td class="company"><button class="company-link" @click="app.openDetail(r.record_id)">{{ r.company || '—' }}</button></td>
-              <td class="job" :title="r.job || ''">{{ r.job || '—' }}</td>
-              <td :title="r.city || ''">{{ r.city || '—' }}</td>
+              <td class="job"><TooltipCell :text="r.job || '—'" /></td>
+              <td><TooltipCell :text="r.city || '—'" /></td>
               <td><span class="badge bdg-b">{{ r.batch || '—' }}</span></td>
-              <td><span class="table-date">{{ formatDate(r.apply_date) }}</span></td>
-              <td><span class="table-date">{{ formatDate(r.exam_date) }}</span></td>
-              <td><span class="table-date">{{ formatDate(r.interview1) }}</span></td>
-              <td><span class="table-date">{{ formatDate(r.interview2) }}</span></td>
-              <td><span class="table-date">{{ formatDate(r.interview3) }}</span></td>
-              <td><span class="table-date">{{ formatDate(r.warm) }}</span></td>
-              <td><span class="table-date">{{ formatDate(r.result) }}</span></td>
-              <td><span class="table-date">{{ formatDate(r.deadline) }}</span></td>
+              <td><span class="table-date" :title="formatDateFull(r.apply_date)">{{ formatDate(r.apply_date) }}</span></td>
+              <td><span class="table-date" :title="formatDateFull(r.exam_date)">{{ formatDate(r.exam_date) }}</span></td>
+              <td><span class="table-date" :title="formatDateFull(r.interview1)">{{ formatDate(r.interview1) }}</span></td>
+              <td><span class="table-date" :title="formatDateFull(r.interview2)">{{ formatDate(r.interview2) }}</span></td>
+              <td><span class="table-date" :title="formatDateFull(r.interview3)">{{ formatDate(r.interview3) }}</span></td>
+              <td><span class="table-date" :title="formatDateFull(r.warm)">{{ formatDate(r.warm) }}</span></td>
+              <td><span class="table-date" :title="formatDateFull(r.result)">{{ formatDate(r.result) }}</span></td>
+              <td><span class="table-date" :title="formatDateFull(r.deadline)">{{ formatDate(r.deadline) }}</span></td>
               <td><ProgressBadge :progress="(r.progress||[])[0]||'未投递'" /></td>
               <td><a v-if="r.url" :href="r.url" target="_blank" rel="noreferrer">查看</a><span v-else class="table-date">—</span></td>
             </tr>

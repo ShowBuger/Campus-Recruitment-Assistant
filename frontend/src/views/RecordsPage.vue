@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import ProgressBadge from '@/components/ProgressBadge.vue'
+import TooltipCell from '@/components/TooltipCell.vue'
 import { get, post } from '@/utils/api'
 import { useAppStore } from '@/stores/app'
 const app = useAppStore()
@@ -85,6 +86,11 @@ function fmtDate(ts) {
   if (!ts) return '—'
   const d = new Date(ts)
   return isNaN(d) ? '—' : String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+}
+function fmtDateFull(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  return isNaN(d) ? '' : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
 }
 
 onMounted(async () => {
@@ -275,10 +281,10 @@ async function addToPersonal(r) {
               <td class="company">
                 <button class="company-link" @click="openDetail(r)">{{ r.company || '—' }}</button>
               </td>
-              <td class="job" :title="r.job || ''">{{ r.job || '—' }}</td>
-              <td>{{ dirText(r.dir) }}</td>
-              <td>{{ r.type || '—' }}</td>
-              <td><span class="table-date">{{ fmtDate(r.deadline) }}</span></td>
+              <td class="job"><TooltipCell :text="r.job || '—'" /></td>
+              <td><TooltipCell :text="dirText(r.dir)" /></td>
+              <td><TooltipCell :text="r.type || '—'" /></td>
+              <td><span class="table-date" :title="fmtDateFull(r.deadline)">{{ fmtDate(r.deadline) }}</span></td>
               <td><span class="badge bdg-b">{{ r.batch || '—' }}</span></td>
               <td v-if="showShared">{{ r.contributor || '—' }}</td>
               <td v-else><ProgressBadge :progress="(r.progress||[])[0]||'未投递'" /></td>

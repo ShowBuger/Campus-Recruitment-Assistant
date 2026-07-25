@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useToastStore } from '@/stores/toast'
 import ProgressBadge from '@/components/ProgressBadge.vue'
+import TooltipCell from '@/components/TooltipCell.vue'
 import { post } from '@/utils/api'
 
 const store = useDashboardStore()
@@ -181,8 +182,8 @@ async function onDrop(e, targetCol) {
                     @dragstart="onDragStart($event, r)"
                     @dragend="onDragEnd"
                   >
-                    <td class="b-company">{{ r.company || '—' }}</td>
-                    <td>{{ r.job || '—' }}</td>
+                    <td class="b-company"><TooltipCell :text="r.company || '—'" /></td>
+                    <td><TooltipCell :text="r.job || '—'" /></td>
                     <td class="b-dwell" :class="{ stale: boardDwellFor(col, r).days >= 14 && boardDwellFor(col, r).days >= 0 }">
                       {{ boardDwellFor(col, r).text }}
                     </td>

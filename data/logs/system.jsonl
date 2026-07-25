@@ -202,3 +202,13 @@
 {"time": "2026-07-26 00:11:20", "timestamp": "2026-07-26T00:11:20+08:00", "channel": "system", "level": "info", "message": "校招信息看板已停止 · PID 79879"}
 {"time": "2026-07-26 00:11:33", "timestamp": "2026-07-26T00:11:33+08:00", "channel": "system", "level": "success", "message": "校招信息看板已启动 · PID 80360"}
 {"time": "2026-07-26 00:11:33", "timestamp": "2026-07-26T00:11:33+08:00", "channel": "system", "level": "success", "message": "校招信息看板已启动 · PID 80361"}
+{"time": "2026-07-26 00:32:07", "timestamp": "2026-07-26T00:32:07+08:00", "channel": "auth", "level": "warn", "message": "登录失败 · 用户 root · IP 127.0.0.1"}
+{"time": "2026-07-26 00:52:35", "timestamp": "2026-07-26T00:52:35+08:00", "channel": "auth", "level": "info", "message": "主动退出 · 用户 root#2 · IP 113.87.128.21"}
+{"time": "2026-07-26 00:53:16", "timestamp": "2026-07-26T00:53:16+08:00", "channel": "auth", "level": "success", "message": "登录成功 · 用户 root#2 · IP 113.87.128.21"}
+{"time": "2026-07-26 00:53:55", "timestamp": "2026-07-26T00:53:55+08:00", "channel": "auth", "level": "success", "message": "注册成功 · 用户 test#47 · IP 113.87.128.21"}
+{"time": "2026-07-26 00:55:14", "timestamp": "2026-07-26T00:55:14+08:00", "channel": "system", "level": "success", "message": "校招信息看板已启动 · PID 104146"}
+{"time": "2026-07-26 00:55:16", "timestamp": "2026-07-26T00:55:16+08:00", "channel": "system", "level": "success", "message": "校招信息看板已启动 · PID 104175"}
+{"time": "2026-07-26 00:57:05", "timestamp": "2026-07-26T00:57:05+08:00", "channel": "auth", "level": "info", "message": "主动退出 · 用户 test#47 · IP 113.87.128.21"}
+{"time": "2026-07-26 00:57:06", "timestamp": "2026-07-26T00:57:06+08:00", "channel": "auth", "level": "success", "message": "登录成功 · 用户 root#2 · IP 113.87.128.21"}
+{"time": "2026-07-26 01:01:16", "timestamp": "2026-07-26T01:01:16+08:00", "channel": "sync", "level": "info", "message": "GiveMeOC 同步已启动"}
+{"time": "2026-07-26 01:01:53", "timestamp": "2026-07-26T01:01:53+08:00", "channel": "sync", "level": "warn", "message": "GiveMeOC 同步完成：新增 11 / 跳过 128 / 无效 262"}

@@ -74,7 +74,7 @@ class NotificationRead(BaseModel):
 
 
 @router.get("/admin/users")
-def get_users(_: dict = Depends(require_root)):
+def get_users(_: dict = Depends(require_admin)):
     users = database.list_users()
     for user in users:
         user["is_admin"] = bool(user["is_admin"])

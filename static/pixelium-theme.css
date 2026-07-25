@@ -665,14 +665,14 @@ tr:hover td { background: var(--blueS); }
   justify-content: center;
   gap: 7px;
   min-width: 108px;
-  height: 36px;
+  height: 38px;
   padding: 0 16px;
   border: 2px solid var(--ink);
   border-radius: 2px;
   color: var(--ink);
   background: var(--panel);
   box-shadow: 3px 3px 0 var(--ink);
-  font: 900 12px var(--font);
+  font: 900 13px var(--font);
   letter-spacing: .06em;
 }
 .progress-filter-toggle:hover {
@@ -1446,6 +1446,8 @@ body.chat-open { overflow: hidden; }
 .tracker-state.active { border-color: var(--green); color: var(--green); background: var(--greenS); }
 .tracker-form input.secret-saved { border-color: var(--green); background: var(--greenS); }
 #tracker-code-help.saved { color: var(--green); font-weight: 800; }
+.settings-page .form-group input.secret-saved { border-color: var(--green); background: var(--greenS); box-shadow: 2px 2px 0 var(--green); }
+.settings-page .form-group .help.saved { color: var(--green); font-weight: 800; }
 .tracker-enable-group { align-self: end; }
 .tracker-toggle { display: flex !important; align-items: center; gap: 8px; min-height: 38px; margin: 0 !important; cursor: pointer; }
 .tracker-toggle input { position: absolute; opacity: 0; pointer-events: none; }
