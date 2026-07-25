@@ -216,7 +216,7 @@ async function submitRecord() {
 </script>
 
 <template>
-  <div class="modal-mask" @click="handleOverlayClick">
+  <div class="modal-mask show" @click.self="$emit('close')">
     <div class="modal" style="width:min(640px,94vw)">
       <div class="modal-hd">
         <div>

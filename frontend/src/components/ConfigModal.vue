@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" @click.self="$emit('close')">
+  <div class="modal-mask show" @click.self="$emit('close')">
     <div class="modal settings-modal">
       <div class="modal-hd">
         <div>

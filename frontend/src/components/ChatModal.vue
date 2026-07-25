@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" @click.self="$emit('close')">
+  <div class="modal-mask show" @click.self="$emit('close')">
     <div class="modal chat-modal" style="max-width:700px;height:70vh;display:flex;flex-direction:column">
       <div class="modal-hd">
         <div><h2>站内聊天</h2><p v-if="activePeer">{{ peerName }}</p></div>
