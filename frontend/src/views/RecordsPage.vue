@@ -4,8 +4,8 @@ import { useDashboardStore } from '@/stores/dashboard'
 import ProgressBadge from '@/components/ProgressBadge.vue'
 import { get, post } from '@/utils/api'
 
-import { inject } from 'vue'
-const openDetailFn = inject('openDetail', () => {})
+import { useAppStore } from '@/stores/app'
+const app = useAppStore()
 const store = useDashboardStore()
 const showShared = ref(false)
 const sharedRecords = ref([])
@@ -107,7 +107,7 @@ async function loadShared() {
 }
 
 function openDetail(r) {
-  openDetailFn(r.record_id)
+  app.openDetail(r.record_id)
 }
 
 /* ---- Personal tab actions ---- */

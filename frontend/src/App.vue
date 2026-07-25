@@ -1,6 +1,7 @@
 <script setup>
-import { ref, onMounted, provide } from 'vue'
+import { onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useAppStore } from '@/stores/app'
 import SidebarNav from '@/components/SidebarNav.vue'
 import Topbar from '@/components/Topbar.vue'
 import LoginModal from '@/components/LoginModal.vue'
@@ -11,30 +12,10 @@ import RecordDetailModal from '@/components/RecordDetailModal.vue'
 import HelpModal from '@/components/HelpModal.vue'
 import StatsModal from '@/components/StatsModal.vue'
 import OfferCompareModal from '@/components/OfferCompareModal.vue'
-import CalendarWidget from '@/components/CalendarWidget.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 
 const auth = useAuthStore()
-const showConfig = ref(false)
-const showChat = ref(false)
-
-// Modal state
-const showRecord = ref(false)
-const detailId = ref('')
-const showHelp = ref(false)
-const showStats = ref(false)
-const showOffer = ref(false)
-
-function openRecord() { showRecord.value = true }
-function closeRecord() { showRecord.value = false }
-function openDetail(id) { detailId.value = id }
-function closeDetail() { detailId.value = '' }
-
-provide('openRecord', openRecord)
-provide('openDetail', openDetail)
-provide('openStats', () => { showStats.value = true })
-provide('openOffer', () => { showOffer.value = true })
-provide('openHelp', () => { showHelp.value = true })
+const app = useAppStore()
 
 onMounted(async () => {
   try { await auth.checkSession() } catch { auth.clear() }
@@ -46,19 +27,18 @@ onMounted(async () => {
     <SidebarNav />
     <main class="main">
       <Topbar
-        @open-config="showConfig = true"
-        @open-chat="showChat = true"
+        @open-config="app.toggleConfig()"
+        @open-chat="app.toggleChat()"
       />
       <router-view />
     </main>
-    <ConfigModal v-if="showConfig" @close="showConfig = false" />
-    <ChatModal v-if="showChat" @close="showChat = false" />
-    <RecordModal v-if="showRecord" @close="closeRecord" @saved="closeRecord" />
-    <RecordDetailModal v-if="detailId" :record-id="detailId" @close="closeDetail" @saved="closeDetail" />
-    <HelpModal v-if="showHelp" @close="showHelp = false" />
-    <StatsModal v-if="showStats" @close="showStats = false" />
-    <OfferCompareModal v-if="showOffer" @close="showOffer = false" />
-    <CalendarWidget />
+    <ConfigModal v-if="app.showConfig" @close="app.showConfig = false" />
+    <ChatModal v-if="app.showChat" @close="app.showChat = false" />
+    <RecordModal v-if="app.showRecord" @close="app.closeRecord()" @saved="app.closeRecord()" />
+    <RecordDetailModal v-if="app.detailId" :record-id="app.detailId" @close="app.closeDetail()" @saved="app.closeDetail()" />
+    <HelpModal v-if="app.showHelp" @close="app.showHelp = false" />
+    <StatsModal v-if="app.showStats" @close="app.closeStats()" />
+    <OfferCompareModal v-if="app.showOffer" @close="app.closeOffer()" />
   </div>
   <LoginModal v-else />
   <ToastContainer />
