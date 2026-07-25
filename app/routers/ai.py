@@ -27,7 +27,7 @@ PROVIDER_NAMES = {
     "deepseek": "DeepSeek",
     "openai": "OpenAI GPT",
     "anthropic": "Claude",
-    "apidock": "ApiDock",
+    "kimi": "Kimi",
 }
 MARKDOWN_TAGS = {
     "h1", "h2", "h3", "h4", "h5", "h6", "p", "br", "hr",
@@ -246,7 +246,15 @@ def _response_error(response: requests.Response) -> str:
             return str(error)[:500]
         return str(payload)[:500]
     except Exception:
-        return (response.text or f"HTTP {response.status_code}")[:500]
+        text = (response.text or "").strip()
+        # Detect Cloudflare / HTML error pages and extract a readable message
+        if text.startswith("<!DOCTYPE") or text.startswith("<html"):
+            import re as _re
+            title_match = _re.search(r"<title>(.*?)</title>", text, _re.IGNORECASE)
+            if title_match:
+                return title_match.group(1).strip()[:500]
+            return f"HTTP {response.status_code}：上游服务不可达或超时"
+        return (text or f"HTTP {response.status_code}")[:500]
 
 
 def _openai_output_text(payload: dict) -> str:
@@ -271,13 +279,10 @@ def _call_ai_provider(
     user_content: str,
     base_url: str = "",
     api_mode: str = "responses",
-    max_output_tokens: int = 12_000,
+    max_output_tokens: int | None = 12_000,
 ) -> str:
     safe_base = ai_provider_utils.validate_public_base_url(base_url, provider)
-    # apidock uses OpenAI-compatible API, always chat_completions
-    if provider == "apidock":
-        api_mode = "chat_completions"
-    if provider == "openai" or provider == "apidock":
+    if provider == "openai":
         if api_mode == "chat_completions":
             response = requests.post(
                 ai_provider_utils.endpoint_url(safe_base, "chat/completions"),
@@ -296,15 +301,17 @@ def _call_ai_provider(
             if not response.ok:
                 raise HTTPException(status_code=502, detail=f"OpenAI 兼容接口请求失败：{_response_error(response)}")
             return str(response.json()["choices"][0]["message"]["content"]).strip()
+        response_payload = {
+            "model": model,
+            "instructions": system_prompt,
+            "input": user_content,
+        }
+        if max_output_tokens is not None:
+            response_payload["max_output_tokens"] = max_output_tokens
         response = requests.post(
             ai_provider_utils.endpoint_url(safe_base, "responses"),
             headers=ai_provider_utils.auth_headers(provider, api_key),
-            json={
-                "model": model,
-                "instructions": system_prompt,
-                "input": user_content,
-                "max_output_tokens": max_output_tokens,
-            },
+            json=response_payload,
             timeout=180,
             allow_redirects=False,
         )
@@ -318,7 +325,9 @@ def _call_ai_provider(
             headers=ai_provider_utils.auth_headers(provider, api_key),
             json={
                 "model": model,
-                "max_tokens": max_output_tokens,
+                # Anthropic requires this field; use a generous budget when the
+                # caller intentionally removes its own output cap.
+                "max_tokens": max_output_tokens if max_output_tokens is not None else 64_000,
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": user_content}],
             },
@@ -352,7 +361,8 @@ def _call_ai_provider(
         allow_redirects=False,
     )
     if not response.ok:
-        raise HTTPException(status_code=502, detail=f"DeepSeek API 请求失败：{_response_error(response)}")
+        label = "Kimi" if provider == "kimi" else "DeepSeek"
+        raise HTTPException(status_code=502, detail=f"{label} API 请求失败：{_response_error(response)}")
     return str(response.json()["choices"][0]["message"]["content"]).strip()
 
 
@@ -380,17 +390,19 @@ def enrich_record(
         "deepseek": "deepseek_api_key",
         "openai": "openai_api_key",
         "anthropic": "anthropic_api_key",
+        "kimi": "kimi_api_key",
     }[provider]
     model_field = {
         "deepseek": "deepseek_model",
         "openai": "openai_model",
         "anthropic": "anthropic_model",
+        "kimi": "kimi_model",
     }[provider]
     model_default = {
         "deepseek": "deepseek-v4-flash",
         "openai": "gpt-5.4-mini",
         "anthropic": "claude-sonnet-5",
-        "apidock": "gpt-4o",
+        "kimi": "kimi-k3",
     }[provider]
     api_key = cfg.get(key_field, "")
     if not api_key:
@@ -496,17 +508,19 @@ def analyze_resume(
         "deepseek": "deepseek_api_key",
         "openai": "openai_api_key",
         "anthropic": "anthropic_api_key",
+        "kimi": "kimi_api_key",
     }[provider]
     model_field = {
         "deepseek": "deepseek_model",
         "openai": "openai_model",
         "anthropic": "anthropic_model",
+        "kimi": "kimi_model",
     }[provider]
     model_default = {
         "deepseek": "deepseek-v4-flash",
         "openai": "gpt-5.4-mini",
         "anthropic": "claude-sonnet-5",
-        "apidock": "gpt-4o",
+        "kimi": "kimi-k3",
     }[provider]
     api_key = cfg.get(api_key_field, "")
     if not api_key:
@@ -557,7 +571,7 @@ def analyze_resume(
     try:
         content = _call_ai_provider(
             provider, api_key, model, system_prompt, user_content,
-            base_url=base_url, api_mode=api_mode,
+            base_url=base_url, api_mode=api_mode, max_output_tokens=8_000,
         )
     except HTTPException:
         raise

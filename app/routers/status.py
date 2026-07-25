@@ -3,8 +3,14 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from app import bus, state
+from app.version import APP_VERSION
 
 router = APIRouter(prefix="/api", tags=["status"])
+
+
+@router.get("/version")
+def get_version():
+    return {"version": APP_VERSION}
 
 
 @router.get("/status")

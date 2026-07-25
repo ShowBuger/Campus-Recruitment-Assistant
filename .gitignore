@@ -75,3 +75,6 @@ src/_tail_backup.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code 本地个人设置（含权限模式，勿提交）
+.claude/settings.local.json

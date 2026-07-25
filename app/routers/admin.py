@@ -1,4 +1,4 @@
-"""Root-only account management and global user notifications."""
+"""Administrator tools and root-only account management."""
 import shutil
 from pathlib import Path
 
@@ -89,13 +89,13 @@ def get_invite_codes(_: dict = Depends(require_admin)):
 
 
 @router.post("/admin/invite-codes")
-def generate_invite_code(user: dict = Depends(require_root)):
+def generate_invite_code(user: dict = Depends(require_admin)):
     invite = database.create_invite_code(user["user_id"])
     return {"success": True, "message": "邀请码已生成", "invite_code": invite}
 
 
 @router.post("/admin/invite-codes/{code}/revoke")
-def revoke_invite_code(code: str, _: dict = Depends(require_root)):
+def revoke_invite_code(code: str, _: dict = Depends(require_admin)):
     if not database.revoke_invite_code(code):
         raise HTTPException(status_code=409, detail="邀请码不存在、已使用或已作废")
     return {"success": True, "message": "邀请码已作废"}
@@ -159,7 +159,7 @@ def remove_user_compat(user_id: int, _: dict = Depends(require_root)):
 @router.post("/admin/notifications")
 def publish_notification(
     body: NotificationCreate,
-    user: dict = Depends(require_root),
+    user: dict = Depends(require_admin),
 ):
     notification = database.create_notification(
         body.title,

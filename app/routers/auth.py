@@ -1,8 +1,8 @@
-"""认证接口：注册、登录、获取当前用户信息。"""
-from fastapi import APIRouter, HTTPException
+"""认证接口：注册、登录、退出、获取当前用户信息。"""
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 
-from app import auth as auth_module, database
+from app import auth as auth_module, bus, database
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -44,20 +44,31 @@ class LoginBody(BaseModel):
     password: str
 
 
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    return (forwarded.split(",", 1)[0].strip() if forwarded else
+            request.client.host if request.client else "unknown")
+
+
 @router.post("/register")
-def register(body: RegisterBody):
+def register(body: RegisterBody, request: Request):
     username = body.username.strip()
     pw_hash = auth_module.hash_password(body.password)
     user, status = database.create_user_with_invite(
         username, pw_hash, body.invite_code
     )
     if status == "username_exists":
+        bus.log(f"注册失败 · 用户名已存在 · 用户 {username} · IP {_client_ip(request)}", channel="auth", level="warn")
         raise HTTPException(status_code=409, detail="用户名已存在")
     if status == "invalid_invite":
+        bus.log(f"注册失败 · 邀请码无效 · 用户 {username} · IP {_client_ip(request)}", channel="auth", level="warn")
         raise HTTPException(status_code=422, detail="邀请码无效、已使用或已作废")
     if not user:
+        bus.log(f"注册失败 · 系统错误 · 用户 {username} · IP {_client_ip(request)}", channel="auth", level="error")
         raise HTTPException(status_code=500, detail="注册失败，请重试")
     token = auth_module.create_token(user["id"], user["username"])
+    database.record_user_login(user["id"])
+    bus.log(f"注册成功 · 用户 {username}#{user['id']} · IP {_client_ip(request)}", channel="auth", level="success")
     return {
         "success": True,
         "message": "注册成功",
@@ -67,12 +78,15 @@ def register(body: RegisterBody):
 
 
 @router.post("/login")
-def login(body: LoginBody):
+def login(body: LoginBody, request: Request):
     username = body.username.strip()
     user = database.get_user_by_username(username)
     if not user or not auth_module.verify_password(body.password, user["password_hash"]):
+        bus.log(f"登录失败 · 用户 {username or '空用户名'} · IP {_client_ip(request)}", channel="auth", level="warn")
         raise HTTPException(status_code=401, detail="用户名或密码错误")
+    database.record_user_login(user["id"])
     token = auth_module.create_token(user["id"], user["username"])
+    bus.log(f"登录成功 · 用户 {user['username']}#{user['id']} · IP {_client_ip(request)}", channel="auth", level="success")
     return {
         "success": True,
         "message": "登录成功",
@@ -81,8 +95,17 @@ def login(body: LoginBody):
     }
 
 
+@router.post("/logout")
+def logout(
+    request: Request,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    bus.log(f"主动退出 · 用户 {user['username']}#{user['user_id']} · IP {_client_ip(request)}", channel="auth", level="info")
+    return {"success": True, "message": "已退出"}
+
+
 @router.get("/me")
-def get_me(user: dict = __import__("fastapi").Depends(auth_module.get_current_user)):
+def get_me(user: dict = Depends(auth_module.get_current_user)):
     """获取当前用户信息（需要登录）。"""
     db_user = database.get_user_by_id(user["user_id"])
     return {

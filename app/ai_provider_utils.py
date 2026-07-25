@@ -12,7 +12,7 @@ DEFAULT_BASE_URLS = {
     "deepseek": "https://api.deepseek.com",
     "openai": "https://api.openai.com/v1",
     "anthropic": "https://api.anthropic.com/v1",
-    "apidock": "https://apidock.ai/v1",
+    "kimi": "https://api.moonshot.cn/v1",
 }
 
 
