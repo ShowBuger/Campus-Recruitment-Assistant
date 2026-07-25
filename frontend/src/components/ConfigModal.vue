@@ -61,8 +61,8 @@
                 </div>
                 <input id="cfg-deepseek-model" list="deepseek-models" placeholder="也可直接填写中转模型 ID" style="margin-top:7px" v-model="config.deepseek_model">
                 <datalist id="deepseek-models">
-                  <option value="deepseek-v4-flash">
-                  <option value="deepseek-v4-pro">
+                  <option value="deepseek-v4-flash"></option>
+                  <option value="deepseek-v4-pro"></option>
                 </datalist>
                 <div class="help">上方直接选择官方模型；下方可填写中转服务的自定义模型 ID</div>
               </div>
@@ -94,18 +94,18 @@
                 </div>
                 <input id="cfg-openai-model" list="openai-models" placeholder="也可直接填写中转模型 ID" style="margin-top:7px" v-model="config.openai_model">
                 <datalist id="openai-models">
-                  <option value="gpt-5.6-sol">
-                  <option value="gpt-5.6-terra">
-                  <option value="gpt-5.6-luna">
-                  <option value="gpt-5.5">
-                  <option value="gpt-5.4">
-                  <option value="gpt-5.4-mini">
-                  <option value="gpt-5.4-nano">
-                  <option value="gpt-5.2">
-                  <option value="gpt-5-mini">
-                  <option value="gpt-4.1">
-                  <option value="gpt-4.1-mini">
-                  <option value="gpt-4o-mini">
+                  <option value="gpt-5.6-sol"></option>
+                  <option value="gpt-5.6-terra"></option>
+                  <option value="gpt-5.6-luna"></option>
+                  <option value="gpt-5.5"></option>
+                  <option value="gpt-5.4"></option>
+                  <option value="gpt-5.4-mini"></option>
+                  <option value="gpt-5.4-nano"></option>
+                  <option value="gpt-5.2"></option>
+                  <option value="gpt-5-mini"></option>
+                  <option value="gpt-4.1"></option>
+                  <option value="gpt-4.1-mini"></option>
+                  <option value="gpt-4o-mini"></option>
                 </datalist>
                 <div class="help">上方下拉选择模型；下方可填写中转服务的自定义模型 ID</div>
               </div>
@@ -144,11 +144,11 @@
                 </div>
                 <input id="cfg-anthropic-model" list="anthropic-models" placeholder="也可直接填写中转模型 ID" style="margin-top:7px" v-model="config.anthropic_model">
                 <datalist id="anthropic-models">
-                  <option value="claude-fable-5">
-                  <option value="claude-opus-4-8">
-                  <option value="claude-sonnet-5">
-                  <option value="claude-sonnet-4-6">
-                  <option value="claude-haiku-4-5">
+                  <option value="claude-fable-5"></option>
+                  <option value="claude-opus-4-8"></option>
+                  <option value="claude-sonnet-5"></option>
+                  <option value="claude-sonnet-4-6"></option>
+                  <option value="claude-haiku-4-5"></option>
                 </datalist>
                 <div class="help">上方下拉选择模型；下方可填写中转服务的自定义模型 ID</div>
               </div>
@@ -180,8 +180,8 @@
                 </div>
                 <input id="cfg-kimi-model" list="kimi-models" placeholder="也可直接填写模型 ID" style="margin-top:7px" v-model="config.kimi_model">
                 <datalist id="kimi-models">
-                  <option value="kimi-k3">
-                  <option value="kimi-k2.6">
+                  <option value="kimi-k3"></option>
+                  <option value="kimi-k2.6"></option>
                 </datalist>
                 <div class="help">可读取当前 Key 支持的完整模型列表</div>
               </div>
