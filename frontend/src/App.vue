@@ -1,7 +1,6 @@
 <script setup>
-import { onMounted } from 'vue'
+import { ref, onMounted, provide } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { useAppStore } from '@/stores/app'
 import SidebarNav from '@/components/SidebarNav.vue'
 import Topbar from '@/components/Topbar.vue'
 import LoginModal from '@/components/LoginModal.vue'
@@ -11,12 +10,21 @@ import RecordModal from '@/components/RecordModal.vue'
 import RecordDetailModal from '@/components/RecordDetailModal.vue'
 import CalendarWidget from '@/components/CalendarWidget.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
-import { ref } from 'vue'
 
 const auth = useAuthStore()
-const app = useAppStore()
 const showConfig = ref(false)
 const showChat = ref(false)
+
+// Modal state via provide/inject (bypasses router-view event limitation)
+const showRecord = ref(false)
+const detailId = ref('')
+function openRecord() { showRecord.value = true }
+function closeRecord() { showRecord.value = false }
+function openDetail(id) { detailId.value = id }
+function closeDetail() { detailId.value = '' }
+
+provide('openRecord', openRecord)
+provide('openDetail', openDetail)
 
 onMounted(async () => {
   try { await auth.checkSession() } catch { auth.clear() }
@@ -35,8 +43,8 @@ onMounted(async () => {
     </main>
     <ConfigModal v-if="showConfig" @close="showConfig = false" />
     <ChatModal v-if="showChat" @close="showChat = false" />
-    <RecordModal v-if="app.showRecord" @close="app.closeRecord()" @saved="app.closeRecord()" />
-    <RecordDetailModal v-if="app.detailId" :record-id="app.detailId" @close="app.closeDetail()" @saved="app.closeDetail()" />
+    <RecordModal v-if="showRecord" @close="closeRecord" @saved="closeRecord" />
+    <RecordDetailModal v-if="detailId" :record-id="detailId" @close="closeDetail" @saved="closeDetail" />
     <CalendarWidget />
   </div>
   <LoginModal v-else />
