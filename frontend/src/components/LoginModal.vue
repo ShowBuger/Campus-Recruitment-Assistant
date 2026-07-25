@@ -1,10 +1,10 @@
 <script setup>
 import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-
-const emit = defineEmits(['close'])
+import { useToastStore } from '@/stores/toast'
 
 const auth = useAuthStore()
+const toast = useToastStore()
 
 const username = ref('')
 const password = ref('')
@@ -13,12 +13,12 @@ const error = ref('')
 const loading = ref(false)
 const isRegister = ref(false)
 
-function toggleMode() {
+function toggleAuthMode() {
   isRegister.value = !isRegister.value
   error.value = ''
 }
 
-async function handleSubmit() {
+async function handleAuth() {
   error.value = ''
   loading.value = true
   try {
@@ -27,7 +27,7 @@ async function handleSubmit() {
     } else {
       await auth.login(username.value, password.value)
     }
-    emit('close')
+    // Success — auth store handles state, App.vue reacts to isLoggedIn
   } catch (e) {
     error.value = e?.response?.data?.detail || e?.message || '操作失败，请重试'
   } finally {
@@ -37,51 +37,51 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <div class="modal-mask" @click.self="$emit('close')">
+  <div class="modal-mask login-overlay" style="display:flex">
     <div class="login-card">
+      <div class="mark" style="margin:0 auto 16px;width:44px;height:44px"></div>
       <h2>{{ isRegister ? '注册账号' : '登录看板' }}</h2>
       <p>{{ isRegister ? '使用管理员提供的一次性邀请码注册' : '校招信息看板 · 多用户版' }}</p>
-      <form @submit.prevent="handleSubmit">
-        <div class="form-group">
-          <label>用户名</label>
-          <input
-            v-model="username"
-            required
-            minlength="2"
-            maxlength="50"
-            autocomplete="username"
-          >
-        </div>
-        <div class="form-group">
-          <label>密码</label>
-          <input
-            v-model="password"
-            type="password"
-            required
-            minlength="4"
-            maxlength="100"
-            :autocomplete="isRegister ? 'new-password' : 'current-password'"
-          >
-        </div>
-        <div class="form-group" v-if="isRegister">
-          <label>邀请码</label>
-          <input
-            v-model="inviteCode"
-            required
-            placeholder="CRA-XXXX-XXXX"
-            style="text-transform:uppercase"
-          >
-        </div>
-        <p class="login-error" v-if="error">{{ error }}</p>
+      <div class="login-error">{{ error }}</div>
+      <form @submit.prevent="handleAuth">
+        <input
+          id="login-username"
+          v-model.trim="username"
+          placeholder="用户名"
+          required
+          minlength="2"
+          maxlength="50"
+          autocomplete="username"
+        >
+        <input
+          id="login-password"
+          v-model="password"
+          type="password"
+          placeholder="密码"
+          required
+          minlength="4"
+          maxlength="100"
+          :autocomplete="isRegister ? 'new-password' : 'current-password'"
+        >
+        <input
+          id="login-invite-code"
+          v-if="isRegister"
+          v-model.trim="inviteCode"
+          placeholder="CRA-XXXX-XXXX"
+          autocomplete="off"
+          maxlength="32"
+          style="text-transform:uppercase"
+        >
         <button
           class="btn btn-primary"
+          id="login-submit"
           type="submit"
           :disabled="loading"
         >
           {{ loading ? '...' : (isRegister ? '注 册' : '登 录') }}
         </button>
       </form>
-      <button class="toggle" @click="toggleMode">
+      <button class="toggle" id="login-toggle" type="button" @click="toggleAuthMode">
         {{ isRegister ? '已有账号？点击登录' : '没有账号？点击注册' }}
       </button>
     </div>
