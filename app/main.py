@@ -57,10 +57,6 @@ app.include_router(progress_tracker.router)
 
 @app.get("/")
 def index():
-    # Serve Vue SPA if built, otherwise fallback to original
-    dist_index = os.path.join(STATIC_DIR, "dist", "index.html")
-    if os.path.isfile(dist_index):
-        return FileResponse(dist_index, headers={"Cache-Control": "no-cache"})
     return FileResponse(os.path.join(STATIC_DIR, "index.html"), headers={"Cache-Control": "no-cache"})
 
 
@@ -69,22 +65,23 @@ def guide():
     return FileResponse(os.path.join(STATIC_DIR, "docs.html"))
 
 
+# Vue SPA（开发/预览用，访问 /vue）
+@app.get("/vue")
+def vue_spa():
+    dist_index = os.path.join(STATIC_DIR, "dist", "index.html")
+    if os.path.isfile(dist_index):
+        return FileResponse(dist_index, headers={"Cache-Control": "no-cache"})
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="Vue 前端未构建，请运行 cd frontend && npm run build")
+
+
 # 静态资源
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 if os.path.isdir(os.path.join(PROJECT_DIR, "assets")):
     app.mount("/assets", StaticFiles(directory=os.path.join(PROJECT_DIR, "assets")), name="assets")
 
-
-# Vue SPA 构建产物
+# Vue SPA 构建产物（/vue 路径）
 _DIST_DIR = os.path.join(PROJECT_DIR, "static", "dist")
 if os.path.isdir(_DIST_DIR):
-    app.mount("/dist", StaticFiles(directory=_DIST_DIR), name="vue-dist")
-
-    # SPA fallback: 非 API/静态 路径回退到 Vue index.html
-    @app.get("/{full_path:path}")
-    async def spa_fallback(full_path: str):
-        if full_path.startswith(("api/", "static/", "dist/", "guide")):
-            from fastapi import HTTPException
-            raise HTTPException(status_code=404)
-        return FileResponse(os.path.join(_DIST_DIR, "index.html"), headers={"Cache-Control": "no-cache"})
+    app.mount("/vue", StaticFiles(directory=_DIST_DIR, html=True), name="vue-spa")
