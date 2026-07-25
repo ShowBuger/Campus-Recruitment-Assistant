@@ -17,6 +17,7 @@ data/backups/
 data/logs/
 data/dashboard.pid
 data/dashboard.log
+data/*.log
 
 # Python
 __pycache__/
