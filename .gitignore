@@ -13,6 +13,8 @@ analysis_history/*
 data/app.db
 data/app.db-*
 data/users/
+data/backups/
+data/logs/
 data/dashboard.pid
 data/dashboard.log
 
