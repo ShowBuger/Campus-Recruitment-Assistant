@@ -29,38 +29,48 @@ Ignore newsletters, recruitment campaigns, campus events, job subscriptions, sur
 
 ## Time Extraction
 
-Extract date/time information from the operative body text. Use the email's `received_date` as fallback only when no explicit time is found. Return all times as **Unix milliseconds (UTC)**.
+Each email has a `received_ms` field (Unix milliseconds UTC) indicating when it was received. Use this as the reference point for relative time calculations. Return all extracted times as **Unix milliseconds (UTC)**. Assume UTC+8 (China Standard Time) unless otherwise specified.
+
+### Input reference
+- `received_ms`: the timestamp when the email was delivered to the mailbox. Use this to compute relative deadlines.
 
 ### scheduled_ms
 The scheduled time of the recruitment event:
-- **面试**: The interview date/time mentioned in the email (e.g., "面试时间：2026年8月15日 14:00"). If multiple slots are offered, use the earliest available.
-- **机考**: The assessment start time or the time the link becomes available (e.g., "请在8月20日 9:00前完成" → 使用 8月20日 9:00).
-- For 已投递 / OC / 已挂, use the email's `received_date` if no explicit event time is mentioned.
+- **面试**: The interview date/time mentioned in the email. If multiple slots are offered, use the earliest available slot time. If only a date is given without a specific time, use 09:00 (UTC+8) of that date.
+- **机考**: The assessment start time or the earliest time the link can be accessed.
+- For 已投递 / OC / 已挂, set to `received_ms` (the email receipt itself is the event).
 
 ### deadline_ms
-The deadline for completing an action:
-- **机考**: The deadline to complete the assessment (e.g., "测评有效期至8月22日 23:59").
-- **面试**: If a slot selection deadline is mentioned (e.g., "请在8月10日前选择面试时间").
-- Set to `null` when no deadline is explicitly stated.
+The deadline for completing an action. **Calculate carefully**:
+- **Explicit date/time**: Use the stated time directly. Example: "测评有效期至8月22日 23:59" → parse as `2026-08-22T23:59:00+08:00` → Unix ms.
+- **Relative time from received**: When the email says "请在 X 时间内完成", calculate `deadline = received_ms + duration_ms`. Examples:
+  - "72小时内完成" → `received_ms + 72 * 3600 * 1000`
+  - "5个工作日内" → `received_ms + 7 * 24 * 3600 * 1000` (5 business days ≈ 7 calendar days)
+  - "3天内" → `received_ms + 3 * 24 * 3600 * 1000`
+  - "请在48h内" → `received_ms + 48 * 3600 * 1000`
+  - "一周内" → `received_ms + 7 * 24 * 3600 * 1000`
+- **Business day adjustment**: When "工作日" is specified, add 2 extra days per 5 business days to account for weekends. Example: "5个工作日" = 7 calendar days.
+- **Default behavior**: If no deadline is stated, set `deadline_ms` to `null`.
 
 ### interview_round
 For 面试 stage, determine the interview round:
-- `1` — 一面 / 初试 / 第一轮面试
-- `2` — 二面 / 复试 / 第二轮面试
-- `3` — 三面 / 终面 / HR面 / 最终面试
-- `null` — unable to determine
+- `1` — 一面 / 初试 / 第一轮面试 / 初次面试
+- `2` — 二面 / 复试 / 第二轮面试 / 技术面
+- `3` — 三面 / 终面 / HR面 / 最终面试 / 综合面
+- `null` — unable to determine from the email text. Set to `null` when uncertain.
 
 ### time_reason
-A brief explanation of how the time was extracted, under 60 Chinese characters. Examples:
+A brief explanation of how the time was extracted, under 60 Chinese characters. Include the calculation method for relative times. Examples:
 - "邮件明确面试时间为8月15日14:00"
-- "测评有效期至8月22日"
-- "使用邮件接收时间作为投递时间"
+- "测评有效期至8月22日23:59"
+- "邮件72小时内有效，截止=received_ms+72h"
+- "使用邮件接收时间作为投递确认时间"
 
 ### Time parsing rules
-- Chinese date formats: "2026年8月15日", "8月15日", "08/15"
-- Time formats: "14:00", "下午2点", "下午两点"
-- Relative times: "3天内完成" → calculate deadline from email received_date
-- Timezone: Assume UTC+8 (China Standard Time) unless otherwise specified
+- Chinese date formats: "2026年8月15日", "8月15日", "08/15", "08.15"
+- Time formats: "14:00", "下午2点", "下午两点", "14时"
+- Relative durations: "X天", "X小时/h", "X个工作日", "一周内"
+- Always convert to UTC Unix milliseconds for output
 - If time string is ambiguous or unparseable, leave the field as `null` and explain in `time_reason`
 
 ## Company and record matching

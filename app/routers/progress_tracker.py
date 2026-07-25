@@ -424,6 +424,7 @@ def _ai_recognize_batch(
             "subject": item["subject"][:500],
             "sender": item["sender"][:300],
             "body": item["body"][:3500],
+            "received_ms": item.get("received_ms"),
         }
         for item in messages
     ]
