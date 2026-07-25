@@ -103,7 +103,7 @@ function fmtShortDate(v) {
   if (isNaN(d)) return String(v).slice(0, 10)
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
-  return mm + '/' + dd
+  return mm + '-' + dd
 }
 
 const records = computed(() => store.records || [])

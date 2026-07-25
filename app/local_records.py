@@ -518,7 +518,7 @@ def get_dashboard_data(user_id: int) -> dict:
     # Serialize (only once per record)
     return {
         "main": {
-            "total_companies": len(rows),
+            "total_companies": len(recent),
             "exam_count": exam_count,
             "interview_count": interview_count,
             "offer_count": progress.get("OC", 0) + progress.get("Offer", 0),

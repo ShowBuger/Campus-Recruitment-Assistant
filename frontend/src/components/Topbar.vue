@@ -28,6 +28,8 @@ function updateLiveClock() {
 const showNotifications = ref(false)
 const notifications = ref([])
 const backendUnread = ref(0)
+const reminders = ref([])
+let notifPollTimer = null
 
 async function loadNotifications(markRead) {
   try {
@@ -42,19 +44,34 @@ async function loadNotifications(markRead) {
         notifications.value.forEach(n => { n.is_read = true })
       }
     }
-  } catch (_) { /* silent */ }
+  } catch (_) {}
+}
+
+async function loadReminders() {
+  try {
+    const data = await api('GET', '/api/dashboard/calendar/local-events', undefined, { silent: true })
+    const events = data?.events || data || []
+    const today = new Date().toISOString().slice(0, 10)
+    reminders.value = (Array.isArray(events) ? events : []).filter(e => e.date >= today).slice(0, 5)
+  } catch (_) { reminders.value = [] }
 }
 
 function toggleNotifications(event) {
   event.stopPropagation()
   const opening = !showNotifications.value
   showNotifications.value = opening
-  if (opening) loadNotifications(true)
+  if (opening) { loadNotifications(true); loadReminders() }
 }
+
+function startNotifPoll() {
+  stopNotifPoll()
+  notifPollTimer = setInterval(() => { loadNotifications(false); loadReminders() }, 30000)
+}
+function stopNotifPoll() { if (notifPollTimer) { clearInterval(notifPollTimer); notifPollTimer = null } }
 
 // ---- Style switcher ----
 const showStylePanel = ref(false)
-const currentStyle = ref(document.documentElement.dataset.style || 'classic')
+const currentStyle = ref(document.documentElement.dataset.style || 'pixelium')
 
 function toggleStylePanel(event) {
   event.stopPropagation()
@@ -96,11 +113,15 @@ onMounted(() => {
   updateLiveClock()
   clockTimer = setInterval(updateLiveClock, 1000)
   document.addEventListener('click', onDocumentClick)
+  loadNotifications(false)
+  loadReminders()
+  startNotifPoll()
 })
 
 onUnmounted(() => {
   if (clockTimer) clearInterval(clockTimer)
   document.removeEventListener('click', onDocumentClick)
+  stopNotifPoll()
 })
 </script>
 
@@ -128,9 +149,14 @@ onUnmounted(() => {
         <span class="notification-dot"></span>
       </button>
       <div class="notification-panel" id="notification-panel" :class="{ show: showNotifications }">
-        <div class="reminder-block" id="reminder-block" style="display:none">
-          <div class="reminder-head"><span>📌 待办提醒</span><span class="reminder-sub" id="reminder-sub"></span></div>
-          <div id="reminder-list"></div>
+        <div class="reminder-block" id="reminder-block" v-if="reminders.length">
+          <div class="reminder-head"><span>📌 待办提醒</span><span class="reminder-sub">{{ reminders.length }} 项</span></div>
+          <div id="reminder-list">
+            <div v-for="r in reminders" :key="r.date+r.label" style="padding:4px 0;font-size:12px;line-height:1.4">
+              <span style="color:var(--blue);font-weight:800">{{ r.date }}</span>
+              <span style="margin-left:6px">{{ r.label }}</span>
+            </div>
+          </div>
         </div>
         <div class="notification-head">最新通知</div>
         <div id="notification-list">
@@ -164,14 +190,6 @@ onUnmounted(() => {
         <div class="notification-head">界面风格</div>
         <div class="style-item" :class="{ active: currentStyle === 'classic' }" data-style="classic" @click="applyStyle('classic')">
           <div>经典风格<small>看板原始设计</small></div>
-          <span class="style-check">✓</span>
-        </div>
-        <div class="style-item" :class="{ active: currentStyle === 'antd' }" data-style="antd" @click="applyStyle('antd')">
-          <div>Ant Design<small>蚂蚁企业级设计体系</small></div>
-          <span class="style-check">✓</span>
-        </div>
-        <div class="style-item" :class="{ active: currentStyle === 'glass' }" data-style="glass" @click="applyStyle('glass')">
-          <div>Liquid Glass<small>液态玻璃 · 真实位移滤镜</small></div>
           <span class="style-check">✓</span>
         </div>
         <div class="style-item" :class="{ active: currentStyle === 'pixelium' }" data-style="pixelium" @click="applyStyle('pixelium')">

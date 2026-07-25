@@ -42,7 +42,7 @@
           </div>
 
           <!-- DeepSeek -->
-          <div class="provider-panel" id="provider-deepseek" v-show="config.ai_provider === 'deepseek'">
+          <div class="provider-panel" id="provider-deepseek" :class="{ active: config.ai_provider === 'deepseek' }">
             <div class="provider-name">DeepSeek</div>
             <div class="grid-2">
               <div class="form-group">
@@ -75,7 +75,7 @@
           </div>
 
           <!-- OpenAI -->
-          <div class="provider-panel" id="provider-openai" v-show="config.ai_provider === 'openai'">
+          <div class="provider-panel" id="provider-openai" :class="{ active: config.ai_provider === 'openai' }">
             <div class="provider-name">OpenAI GPT</div>
             <div class="grid-2">
               <div class="form-group">
@@ -125,7 +125,7 @@
           </div>
 
           <!-- Anthropic -->
-          <div class="provider-panel" id="provider-anthropic" v-show="config.ai_provider === 'anthropic'">
+          <div class="provider-panel" id="provider-anthropic" :class="{ active: config.ai_provider === 'anthropic' }">
             <div class="provider-name">Anthropic Claude</div>
             <div class="grid-2">
               <div class="form-group">
@@ -161,7 +161,7 @@
           </div>
 
           <!-- Kimi -->
-          <div class="provider-panel" id="provider-kimi" v-show="config.ai_provider === 'kimi'">
+          <div class="provider-panel" id="provider-kimi" :class="{ active: config.ai_provider === 'kimi' }">
             <div class="provider-name">Kimi</div>
             <div class="grid-2">
               <div class="form-group">
@@ -202,7 +202,7 @@
             <div><b>进度跟踪配置</b><span>通过通用 IMAP 读取招聘邮件并匹配个人总表</span></div>
             <span id="tracker-status-badge" class="tracker-state">未配置</span>
           </div>
-          <div class="center muted" style="padding: 2rem 0;">进度跟踪组件正在重构中，敬请期待</div>
+          <TrackerSettings />
         </section>
       </div>
 
@@ -226,6 +226,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { get, post } from '@/utils/api'
 import { useToastStore } from '@/stores/toast'
+import TrackerSettings from '@/components/TrackerSettings.vue'
 
 const toast = useToastStore()
 

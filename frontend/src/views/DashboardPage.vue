@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAppStore } from '@/stores/app'
 import ProgressBadge from '@/components/ProgressBadge.vue'
@@ -28,7 +28,7 @@ const filteredRecords = computed(() =>
 function applyFilter() { showFilter.value = false }
 function clearFilter() { activeFilter.value = []; showFilter.value = false }
 
-function formatDate(ts) { if (!ts) return '—'; const d = new Date(ts); return isNaN(d) ? '—' : (d.getMonth() + 1) + '/' + d.getDate() }
+function formatDate(ts) { if (!ts) return '—'; const d = new Date(ts); return isNaN(d) ? '—' : String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 
 // ---- Calendar (exact replica of original renderCalendar) ----
 const calendarMonth = ref(new Date())
@@ -196,7 +196,8 @@ async function deleteCalendarEvent(id, etype) {
   } catch {}
 }
 
-onMounted(() => { store.fetch(); loadLocalEvents() })
+onMounted(() => { store.fetch(); loadLocalEvents(); store.startPolling() })
+onUnmounted(() => { store.stopPolling() })
 </script>
 
 <template>

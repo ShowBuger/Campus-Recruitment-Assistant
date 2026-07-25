@@ -15537,3 +15537,71 @@ INFO:     Shutting down
 INFO:     Waiting for application shutdown.
 INFO:     Application shutdown complete.
 INFO:     Finished server process [3036044]
+
+[2026-07-25T23:08:38] starting dashboard
+INFO:     Started server process [46424]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8765 (Press CTRL+C to quit)
+INFO:     127.0.0.1:46600 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46616 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46628 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:0 - "GET / HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET / HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /static/base.css?v=1 HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /static/components-extra.css?v=1 HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /static/pixelium-font.css?v=1 HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /static/pixelium-vue.css?v=1 HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /static/pixelium-theme.css?v=1 HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /static/app-layout.css?v=1 HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /dist/assets/index-Bs7iOfBI.css HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /dist/assets/index-qcyIoDTT.js HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /static/fusion-pixel-12px-proportional-zh_hans.ttf.woff2 HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /dist/assets/DashboardPage-RzlRNHX1.js HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /dist/assets/ProgressBadge-BR1cLy76.css HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /dist/assets/ProgressBadge-DPizDwDJ.js HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/dashboard/calendar/local-events HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /static/favicon.svg?v=brand-4 HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /dist/assets/BoardPage-hECk4wwm.js HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /dist/assets/RecordsPage-HaoL9BF9.js HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/dashboard/calendar/local-events HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /dist/assets/ResumePage-BeXKh1wq.js HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/resumes HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /dist/assets/AnalysisPage-CUafWU7m.js HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/resumes HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/ai/history HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/dashboard/calendar/local-events HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /dist/assets/AdminPage-npp-68yf.js HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/dashboard/admin/sync-schedule HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/admin/users HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/stream?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6InJvb3QiLCJpYXQiOjE3ODQ5ODg5NzQsImV4cCI6MTc4NTI0ODE3NH0.JyWKVnEVqAMZ51MRQiSQ8uNoYMBmCFVew5DY4SjH-oY HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/logs/history HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/resumes HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/ai/history HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/resumes HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/resumes HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/ai/history HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/dashboard/calendar/local-events HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /api/resumes HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /board HTTP/1.1" 404 Not Found
+INFO:     113.87.128.21:0 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     43.165.198.5:0 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:0 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36692 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36706 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     113.87.128.21:0 - "GET / HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /assets/index-moy0Tdg9.js HTTP/1.1" 404 Not Found
+INFO:     113.87.128.21:0 - "GET /assets/index-Bs7iOfBI.css HTTP/1.1" 404 Not Found
+INFO:     113.87.128.21:0 - "GET / HTTP/1.1" 200 OK
+INFO:     113.87.128.21:0 - "GET /assets/index-Bs7iOfBI.css HTTP/1.1" 404 Not Found
+INFO:     113.87.128.21:0 - "GET /assets/index-moy0Tdg9.js HTTP/1.1" 404 Not Found
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [46424]

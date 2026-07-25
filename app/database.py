@@ -3,6 +3,7 @@ import sqlite3
 import os
 import secrets
 import threading
+import time
 from pathlib import Path
 
 DATA_DIR = Path(__file__).parent.parent / "data"
@@ -10,6 +11,10 @@ DB_PATH = DATA_DIR / "app.db"
 
 # 写锁，防止并发写入冲突
 _write_lock = threading.Lock()
+
+# 写操作最大重试次数（应对跨进程 WAL 锁冲突）
+_MAX_WRITE_RETRIES = 3
+_RETRY_DELAY = 0.3  # 重试间隔（秒）
 
 
 def _ensure_dir() -> None:
@@ -28,12 +33,13 @@ def get_db() -> sqlite3.Connection:
     cached = getattr(_thread_local, "conn", None)
     if cached is not None:
         return cached
-    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA cache_size=-8000")  # 8MB cache
+    conn.execute("PRAGMA busy_timeout=5000")  # 等待 5 秒而非立即抛出 database locked
     if not _tables_initialized:
         with _write_lock:
             if not _tables_initialized:
@@ -406,6 +412,21 @@ def _init_tables(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _retry_write(db_fn, *args, **kwargs):
+    """在持有 _write_lock 的前提下执行写操作，遭遇 database-locked 时自动重试。"""
+    last_exc = None
+    for attempt in range(1, _MAX_WRITE_RETRIES + 1):
+        try:
+            return db_fn(*args, **kwargs)
+        except sqlite3.OperationalError as exc:
+            last_exc = exc
+            if "locked" in str(exc).lower() and attempt < _MAX_WRITE_RETRIES:
+                time.sleep(_RETRY_DELAY)
+                continue
+            raise
+    raise last_exc  # type: ignore[misc]
+
+
 # ── 系统配置 ─────────────────────────────────────────
 
 def get_system_config(key: str) -> str | None:
@@ -562,17 +583,19 @@ def list_users() -> list[dict]:
 
 def touch_user_last_seen(user_id: int) -> None:
     """Record authenticated activity, throttled to at most one write per 30 seconds."""
-    with _write_lock:
-        db = get_db()
-        db.execute(
-            """UPDATE users SET last_seen_at = datetime('now')
-               WHERE id = ? AND (
-                   last_seen_at IS NULL OR
-                   last_seen_at < datetime('now', '-30 seconds')
-               )""",
-            (user_id,),
-        )
-        db.commit()
+    def _do_update():
+        with _write_lock:
+            db = get_db()
+            db.execute(
+                """UPDATE users SET last_seen_at = datetime('now')
+                   WHERE id = ? AND (
+                       last_seen_at IS NULL OR
+                       last_seen_at < datetime('now', '-30 seconds')
+                   )""",
+                (user_id,),
+            )
+            db.commit()
+    _retry_write(_do_update)
 
 
 def record_user_login(user_id: int) -> None:

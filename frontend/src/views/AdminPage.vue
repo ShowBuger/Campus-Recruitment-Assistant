@@ -53,7 +53,7 @@ async function loadAdminUsers() {
 
 async function toggleAdmin(user) {
   try {
-    await apiReq('POST', '/api/admin/users/' + user.id + '/admin', { is_admin: !user.is_admin })
+    await apiReq('POST', '/api/admin/users/' + user.id + '/admin', { is_admin: user.is_admin })
     toast.success('管理员权限已更新')
     await loadAdminUsers()
   } catch (e) {

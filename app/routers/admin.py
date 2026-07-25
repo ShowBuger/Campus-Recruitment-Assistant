@@ -102,6 +102,7 @@ def revoke_invite_code(code: str, _: dict = Depends(require_admin)):
 
 
 @router.patch("/admin/users/{user_id}/password")
+@router.post("/admin/users/{user_id}/password")
 @router.post("/admin/users/{user_id}/password/update")
 def change_password(
     user_id: int,
@@ -114,6 +115,7 @@ def change_password(
 
 
 @router.patch("/admin/users/{user_id}/admin")
+@router.post("/admin/users/{user_id}/admin")
 @router.post("/admin/users/{user_id}/admin/update")
 def change_admin(
     user_id: int,

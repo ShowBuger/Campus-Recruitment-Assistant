@@ -1,6 +1,11 @@
 <script setup>
+import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 const auth = useAuthStore()
+const version = ref('')
+onMounted(async () => {
+  try { const r = await fetch('/api/version'); const d = await r.json(); version.value = d.version || '' } catch {}
+})
 </script>
 
 <template>
@@ -18,7 +23,10 @@ const auth = useAuthStore()
         <span style="font-weight:800;font-size:13px">{{ auth.user?.username || '—' }}</span>
         <button class="btn" style="height:28px;padding:0 10px;font-size:11px" @click="auth.logout()">退出</button>
       </div>
-      <div class="conn"><span class="pulse"></span><span>云端存储</span></div>
+      <div class="conn" style="display:flex;align-items:center;gap:6px">
+        <span class="pulse"></span><span>云端存储</span>
+        <span v-if="version" style="margin-left:auto;font-size:10px;color:var(--muted)">v{{ version }}</span>
+      </div>
     </div>
   </aside>
 </template>

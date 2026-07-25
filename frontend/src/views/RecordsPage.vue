@@ -1,17 +1,24 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
+import { useAuthStore } from '@/stores/auth'
 import ProgressBadge from '@/components/ProgressBadge.vue'
 import { get, post } from '@/utils/api'
-
 import { useAppStore } from '@/stores/app'
 const app = useAppStore()
 const store = useDashboardStore()
+const auth = useAuthStore()
 const showShared = ref(false)
 const sharedRecords = ref([])
 const sharedCanDelete = ref(false)
 const searchQuery = ref('')
 const sortValue = ref('default')
+const importLoading = ref(false)
+const feishuSyncing = ref(false)
+const givemeocSyncing = ref(false)
+const givemeocProgress = ref('')
+function isRoot() { return auth.user?.username === 'root' }
+function isAdmin() { return auth.isAdmin }
 
 const displayRecords = computed(() => {
   const records = showShared.value ? sharedRecords.value : store.records
@@ -77,7 +84,7 @@ function dirText(dir) {
 function fmtDate(ts) {
   if (!ts) return '—'
   const d = new Date(ts)
-  return isNaN(d) ? '—' : (d.getMonth() + 1) + '/' + d.getDate()
+  return isNaN(d) ? '—' : String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
 }
 
 onMounted(async () => {
@@ -111,13 +118,8 @@ function openDetail(r) {
 }
 
 /* ---- Personal tab actions ---- */
-function newRecord() {
-  /* placeholder - will open create modal */
-}
-
-function manageRecords() {
-  /* placeholder - will open record manager */
-}
+function newRecord() { app.openRecord() }
+function manageRecords() { app.showManager = true }
 
 function downloadTemplate() {
   const a = document.createElement('a')
@@ -142,21 +144,33 @@ function triggerImport() {
   if (el) el.click()
 }
 
-function handleImport(event) {
-  const file = event.target.files && event.target.files[0]
-  if (!file) return
-  /* full implementation will be added later */
-  event.target.value = ''
+async function handleImport(event) {
+  const file = event.target.files?.[0]; if (!file) return
+  importLoading.value = true
+  try {
+    const fd = new FormData(); fd.append('file', file)
+    const r = await fetch('/api/dashboard/records/import', { method: 'POST', headers: { Authorization: `Bearer ${auth.token}` }, body: fd })
+    const data = await r.json()
+    if (data.imported > 0) { await store.refresh() }
+    if (data.errors?.length) { alert(data.errors.slice(0, 3).join('\n')) }
+  } catch (e) { alert('导入失败: ' + e.message) }
+  finally { importLoading.value = false; event.target.value = '' }
 }
 
-/* ---- Shared tab actions ---- */
-function sharedNewRecord() {
-  /* placeholder - will open shared create modal */
+async function feishuSync() {
+  feishuSyncing.value = true
+  try { await post('/api/dashboard/records/feishu-sync'); await store.refresh() } catch {}
+  finally { feishuSyncing.value = false }
 }
 
-function sharedManageRecords() {
-  /* placeholder - will open shared record manager */
+async function givemeocSync() {
+  givemeocSyncing.value = true; givemeocProgress.value = '同步中...'
+  try { await post('/api/dashboard/sync-from-givemeoc'); givemeocProgress.value = '已启动' } catch {}
+  finally { givemeocSyncing.value = false }
 }
+
+function sharedNewRecord() { app.openRecord() }
+function sharedManageRecords() { app.showManager = true }
 
 /* ---- Row actions ---- */
 async function addToApplications(r) {
@@ -295,7 +309,9 @@ async function addToPersonal(r) {
         <button class="btn" @click="downloadTemplate">下载模板</button>
         <button class="btn" @click="exportExcel">导出 Excel</button>
         <input id="total-import-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden @change="handleImport">
-        <button class="btn" @click="triggerImport">导入 Excel</button>
+        <button class="btn" @click="triggerImport" :disabled="importLoading">{{ importLoading ? '导入中...' : '导入 Excel' }}</button>
+        <button v-if="isRoot()" class="btn" @click="feishuSync" :disabled="feishuSyncing">{{ feishuSyncing ? '同步中...' : '飞书同步' }}</button>
+        <button v-if="isAdmin()" class="btn" @click="givemeocSync" :disabled="givemeocSyncing">{{ givemeocSyncing ? givemeocProgress : 'GiveMeOC 同步' }}</button>
       </div>
       <div class="table-actions" v-else>
         <div

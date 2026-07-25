@@ -37,5 +37,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     await fetch()
   }
 
-  return { data, loading, error, records, recentRecords, kpi, stats, deadlines, lastUpdated, fetch, refresh }
+  let pollTimer = null
+  function startPolling(ms = 30000) { stopPolling(); pollTimer = setInterval(() => { get('/api/dashboard').then(d => { if (d) data.value = d }).catch(() => {}) }, ms) }
+  function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null } }
+  return { data, loading, error, records, recentRecords, kpi, stats, deadlines, lastUpdated, fetch, refresh, startPolling, stopPolling }
 })

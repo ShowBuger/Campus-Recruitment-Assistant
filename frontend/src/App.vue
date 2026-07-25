@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import SidebarNav from '@/components/SidebarNav.vue'
@@ -18,8 +18,34 @@ import ToastContainer from '@/components/ToastContainer.vue'
 const auth = useAuthStore()
 const app = useAppStore()
 
+// Error modal
+const showError = ref(false)
+const errorMsg = ref('')
+const errorDetail = ref('')
+window.__showError = (msg, detail) => { errorMsg.value = msg || '未知错误'; errorDetail.value = detail || ''; showError.value = true }
+function copyError() { navigator.clipboard?.writeText(`${errorMsg.value}\n${errorDetail.value}`) }
+
+// Card hover parallax
+function onCardMouseMove(e) {
+  const card = e.currentTarget; const rect = card.getBoundingClientRect()
+  card.style.setProperty('--mx', `${((e.clientX-rect.left)/rect.width)*100}%`)
+  card.style.setProperty('--my', `${((e.clientY-rect.top)/rect.height)*100}%`)
+}
+function onCardMouseLeave(e) { e.currentTarget.style.removeProperty('--mx'); e.currentTarget.style.removeProperty('--my') }
+function bindCardHover() {
+  document.querySelectorAll('.kpi-card,.metric').forEach(el => {
+    el.addEventListener('mousemove', onCardMouseMove); el.addEventListener('mouseleave', onCardMouseLeave)
+  })
+}
+
 onMounted(async () => {
   try { await auth.checkSession() } catch { auth.clear() }
+  if (auth.isLoggedIn) {
+    const seen = localStorage.getItem('radar_help_seen')
+    if (!seen) { setTimeout(() => { app.showHelp = true; localStorage.setItem('radar_help_seen', '1') }, 800) }
+  }
+  setTimeout(bindCardHover, 500)
+  new MutationObserver(() => { setTimeout(bindCardHover, 100) }).observe(document.body, { childList: true, subtree: true })
 })
 </script>
 
@@ -27,11 +53,7 @@ onMounted(async () => {
   <div class="app" v-if="auth.isLoggedIn">
     <SidebarNav />
     <main class="main">
-      <Topbar
-        @open-config="app.toggleConfig()"
-        @open-chat="app.toggleChat()"
-        @open-help="app.toggleHelp()"
-      />
+      <Topbar @open-config="app.toggleConfig()" @open-chat="app.toggleChat()" @open-help="app.toggleHelp()" />
       <router-view />
     </main>
     <ConfigModal v-if="app.showConfig" @close="app.showConfig = false" />
@@ -42,6 +64,9 @@ onMounted(async () => {
     <HelpModal v-if="app.showHelp" @close="app.showHelp = false" />
     <StatsModal v-if="app.showStats" @close="app.closeStats()" />
     <OfferCompareModal v-if="app.showOffer" @close="app.closeOffer()" />
+    <div v-if="showError" class="error-overlay" @click.self="showError = false">
+      <div class="error-modal"><h3>&#9888; {{ errorMsg }}</h3><pre>{{ errorDetail }}</pre><div class="btn-row"><button class="btn" @click="copyError">复制详情</button><button class="btn" style="background:var(--blue);color:#fff" @click="showError = false">关闭</button></div></div>
+    </div>
   </div>
   <LoginModal v-else />
   <ToastContainer />
