@@ -1,5 +1,7 @@
 #!/bin/bash
 cd /root/Campus-Recruitment-Assistant
+# 同步静态资源到 nginx 目录
+cp -r static/* /var/www/campus-dashboard/
 gunicorn app.main:app \
   -w 2 \
   -k uvicorn.workers.UvicornWorker \

@@ -14,8 +14,14 @@ export async function api(method, path, body, opts = {}) {
     signal: opts.timeout ? AbortSignal.timeout(opts.timeout) : undefined
   })
   if (!res.ok) {
-    if (res.status === 401) { setToken(''); throw new Error('登录已过期') }
     const data = await res.json().catch(() => ({}))
+    if (res.status === 401) {
+      // 区分：auth/me 返回"登录已过期"，login 返回"用户名或密码错误"
+      if (String(data.detail || '').includes('登录已过期')) {
+        setToken('')
+        throw new Error('登录已过期')
+      }
+    }
     throw new Error(data.detail || `HTTP ${res.status}`)
   }
   if (opts.raw) return res
