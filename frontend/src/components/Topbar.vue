@@ -7,7 +7,7 @@ const route = useRoute()
 const titleMap = { dashboard: '投递信息', board: '投递看板', records: '总表信息', resumes: '简历管理', analysis: '简历分析', admin: '管理页面' }
 const title = computed(() => titleMap[route.name] || '校招信息看板')
 
-const emit = defineEmits(['open-config', 'open-chat'])
+const emit = defineEmits(['open-config', 'open-chat', 'open-help'])
 
 // ---- Live clock ----
 const lastUpdatedHtml = ref('—')
@@ -110,6 +110,7 @@ onUnmounted(() => {
     <div class="spacer"></div>
     <span class="muted" id="last-updated" style="font-size:12px" v-html="lastUpdatedHtml"></span>
 
+    <button class="icon-btn" @click="emit('open-help')" title="使用帮助" aria-label="使用帮助">?</button>
     <button class="icon-btn chat-top-btn" id="chat-top-btn" @click="emit('open-chat')" title="站内聊天" aria-label="站内聊天">
       <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M4 5h16v12H9l-5 4V5Z"/>

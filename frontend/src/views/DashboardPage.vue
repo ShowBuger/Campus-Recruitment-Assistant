@@ -252,7 +252,7 @@ onMounted(() => { store.fetch(); loadLocalEvents() })
 
       <div class="table-actions">
         <button class="btn btn-primary" @click="app.openRecord()">新增记录</button>
-        <button class="btn">管理记录</button>
+        <button class="btn" @click="app.openManager()">管理记录</button>
         <button class="btn" @click="app.openStats()">统计信息</button>
         <button class="btn" @click="app.openOffer()">Offer 对比</button>
       </div>
