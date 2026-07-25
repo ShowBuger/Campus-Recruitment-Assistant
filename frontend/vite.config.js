@@ -15,6 +15,7 @@ export default defineConfig({
       '/guide': 'http://localhost:8765'
     }
   },
+  base: '/dist/',
   build: {
     outDir: '../static/dist',
     emptyOutDir: true
