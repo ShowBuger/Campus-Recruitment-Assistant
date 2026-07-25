@@ -77,7 +77,7 @@ function fmtTime(v) { if (!v) return ''; return new Date(v).toLocaleString('zh-C
 </script>
 
 <template>
-  <div class="page">
+  <div class="page active">
     <!-- Config Row -->
     <div class="card" style="margin-bottom:16px">
       <div style="display:flex;gap:12px;align-items:flex-end;padding:16px;flex-wrap:wrap">

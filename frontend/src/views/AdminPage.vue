@@ -86,7 +86,7 @@ function fmtTime(v) { if (!v) return ''; return new Date(v).toLocaleString('zh-C
 </script>
 
 <template>
-  <div class="page" v-if="auth.isAdmin">
+  <div class="page active" v-if="auth.isAdmin">
     <div class="admin-layout" style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px">
       <!-- Main: Users -->
       <div class="card">

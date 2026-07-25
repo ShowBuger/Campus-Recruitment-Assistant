@@ -51,7 +51,7 @@ onMounted(() => store.fetch())
 </script>
 
 <template>
-  <div class="page">
+  <div class="page active">
     <!-- KPI Cards Row -->
     <div class="kpis">
       <div class="kpi b">

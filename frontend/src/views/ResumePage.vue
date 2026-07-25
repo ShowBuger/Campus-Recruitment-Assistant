@@ -65,7 +65,7 @@ function fmtSize(bytes) {
 </script>
 
 <template>
-  <div class="page">
+  <div class="page active">
     <div class="grid-2" style="grid-template-columns:280px minmax(0,1fr)">
       <!-- Left: upload + file list -->
       <div class="card">

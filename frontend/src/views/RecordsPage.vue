@@ -43,7 +43,7 @@ function newRecord() {
 </script>
 
 <template>
-  <div class="page">
+  <div class="page active">
     <div class="card">
       <div class="card-hd">
         <span class="dot"></span>
