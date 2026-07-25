@@ -10,6 +10,13 @@ const showFilter = ref(false)
 const activeFilter = ref([])
 const progressOptions = ['已投递', '机考', '面试', 'OC', '已挂', '放弃']
 
+// ---- calendar event modal ----
+const showEventModal = ref(false)
+const calEventDate = ref('')
+const calEventType = ref('apply')
+const calEventLabel = ref('')
+const calEventRecord = ref('')
+
 // ---- application records (original: _lastData.main.recent) ----
 const records = computed(() => store.data?.main?.recent || [])
 const filteredRecords = computed(() =>
@@ -94,6 +101,41 @@ const countdownItems = computed(() => {
 function changeMonth(delta) { const d = new Date(calendarMonth.value); d.setMonth(d.getMonth() + delta); calendarMonth.value = d }
 function goToday() { calendarMonth.value = new Date() }
 
+function inputDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
+
+function openCalendarEventModal(dateStr) {
+  calEventDate.value = dateStr || inputDate(new Date())
+  calEventType.value = 'apply'
+  calEventLabel.value = ''
+  calEventRecord.value = ''
+  showEventModal.value = true
+}
+
+async function submitCalendarEvent() {
+  if (!calEventDate.value) return
+  if (calEventType.value === 'other') {
+    if (!calEventLabel.value.trim()) return
+    try {
+      await fetch('/api/dashboard/calendar/local-event', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('rb_token')}` },
+        body: JSON.stringify({ date: calEventDate.value, label: calEventLabel.value.trim() })
+      })
+      await loadLocalEvents()
+      showEventModal.value = false
+    } catch {}
+    return
+  }
+  if (!calEventRecord.value) return
+  try {
+    await fetch('/api/dashboard/calendar/event', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('rb_token')}` },
+      body: JSON.stringify({ record_id: calEventRecord.value, event_type: calEventType.value, date: calEventDate.value })
+    })
+    await store.fetch()
+    showEventModal.value = false
+  } catch {}
+}
+
 async function loadLocalEvents() {
   try {
     const r = await fetch('/api/dashboard/calendar/local-events', { headers: { Authorization: `Bearer ${localStorage.getItem('rb_token')}` } })
@@ -164,6 +206,7 @@ onMounted(() => { store.fetch(); loadLocalEvents() })
           <h2>{{ calendarTitle }}</h2>
           <button class="icon-btn" @click="changeMonth(1)" title="下个月">&#8250;</button>
           <button class="btn" @click="goToday">今天</button>
+          <button class="btn btn-primary" @click="openCalendarEventModal()">新建日程</button>
           <div class="calendar-legend">
             <span class="lg-apply">投递</span><span class="lg-exam">机考/笔试</span><span>面试</span><span class="lg-warm">保温</span><span class="lg-result">结果</span><span class="lg-deadline">截止</span><span class="lg-other">其他</span>
           </div>
@@ -293,6 +336,25 @@ onMounted(() => { store.fetch(); loadLocalEvents() })
             <button class="btn" style="height:28px;padding:0 10px;font-size:11px;margin-top:4px" @click="deleteCalendarEvent(e.rid || e.lid, e.etype)">删除</button>
           </div>
         </div>
+        <div class="modal-ft">
+          <button class="btn btn-primary" @click="openCalendarEventModal(dayDetailKey); closeDayDetail()">新建日程</button>
+          <button class="btn" @click="closeDayDetail">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendar Event Modal -->
+    <div class="modal-mask show" v-if="showEventModal" @click.self="showEventModal = false">
+      <div class="modal" style="width:min(520px,94vw)">
+        <div class="modal-hd"><div><h2>新建日程</h2><p>{{ calEventDate || '—' }}</p></div><button class="icon-btn" @click="showEventModal = false" title="关闭">&times;</button></div>
+        <div class="modal-body">
+          <div class="form-group"><label for="cal-event-date">日程日期</label><input id="cal-event-date" type="date" v-model="calEventDate"></div>
+          <div class="form-group"><label for="cal-event-type">事件类型</label><select id="cal-event-type" v-model="calEventType"><option value="apply">投递</option><option value="exam">机考 / 笔试</option><option value="interview1">一面</option><option value="interview2">二面</option><option value="interview3">三面</option><option value="warm">保温</option><option value="result">结果</option><option value="deadline">截止</option><option value="other">其他（自定义）</option></select></div>
+          <div class="form-group" v-show="calEventType === 'other'"><label for="cal-event-label">自定义内容</label><input id="cal-event-label" v-model="calEventLabel" maxlength="200" placeholder="例如：HR 电话沟通、宣讲会、补充材料截止"></div>
+          <div class="form-group" v-show="calEventType !== 'other'"><label for="cal-event-record">关联公司</label><select id="cal-event-record" v-model="calEventRecord"><option value="">请选择公司</option><option v-for="r in records" :key="r.record_id" :value="r.record_id">{{ r.company || '—' }} · {{ r.job || '—' }}</option></select></div>
+          <div class="help" style="margin-top:6px" v-show="calEventType !== 'other'">选择公司后自动带入对应岗位与城市信息。</div>
+        </div>
+        <div class="modal-ft"><button class="btn" @click="showEventModal = false">取消</button><button class="btn btn-primary" @click="submitCalendarEvent">保存日程</button></div>
       </div>
     </div>
   </div>
