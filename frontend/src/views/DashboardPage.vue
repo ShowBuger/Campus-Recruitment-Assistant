@@ -32,6 +32,21 @@ function formatDate(ts) {
   return isNaN(d) ? '—' : (d.getMonth() + 1) + '/' + d.getDate()
 }
 
+function deadlineDays(item) {
+  if (!item.deadline) return null
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const dl = new Date(item.deadline)
+  return Math.ceil((dl - today) / 86400000)
+}
+
+function formatDeadlineText(days) {
+  if (days === null || days === undefined) return '—'
+  if (days <= 0) return '今日'
+  if (days === 1) return '明天'
+  return '剩 ' + days + ' 天'
+}
+
 onMounted(() => store.fetch())
 </script>
 
@@ -39,50 +54,87 @@ onMounted(() => store.fetch())
   <div class="page">
     <!-- KPI Cards Row -->
     <div class="kpis">
-      <div class="kpi-card">
-        <span class="kpi-value">{{ store.kpi.total_companies }}</span>
-        <span class="kpi-label">投递公司</span>
+      <div class="kpi b">
+        <div class="kpi-label">投递岗位</div>
+        <div class="kpi-value">{{ store.kpi.total_companies }}</div>
+        <div class="kpi-sub">已进入投递流程</div>
       </div>
-      <div class="kpi-card">
-        <span class="kpi-value">{{ store.kpi.exam_count }}</span>
-        <span class="kpi-label">笔试/机考</span>
+      <div class="kpi a">
+        <div class="kpi-label">笔试 / 机考</div>
+        <div class="kpi-value">{{ store.kpi.exam_count }}</div>
+        <div class="kpi-sub">有笔试或机考记录</div>
       </div>
-      <div class="kpi-card">
-        <span class="kpi-value">{{ store.kpi.interview_count }}</span>
-        <span class="kpi-label">面试中</span>
+      <div class="kpi c">
+        <div class="kpi-label">面试</div>
+        <div class="kpi-value">{{ store.kpi.interview_count }}</div>
+        <div class="kpi-sub">进入面试流程</div>
       </div>
-      <div class="kpi-card">
-        <span class="kpi-value">{{ store.kpi.offer_count }}</span>
-        <span class="kpi-label">Offer</span>
+      <div class="kpi g">
+        <div class="kpi-label">Offer</div>
+        <div class="kpi-value">{{ store.kpi.offer_count }}</div>
+        <div class="kpi-sub">OC 或已录用</div>
       </div>
     </div>
 
     <!-- Main content: table + deadlines sidebar -->
-    <div style="display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:16px">
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start;margin-bottom:22px">
+
       <!-- Records Table Card -->
       <div class="card data-table-card">
         <div class="card-hd record-card-hd">
           <span class="dot"></span>
           <div class="card-title">投递记录</div>
           <div class="record-hd-spacer"></div>
+
           <!-- Progress Filter -->
-          <div class="progress-filter">
-            <button class="progress-filter-toggle" @click="showFilter = !showFilter">
+          <div class="progress-filter" :class="{ active: showFilter }">
+            <button
+              class="progress-filter-toggle"
+              :class="{ 'has-filter': activeFilter.length > 0 }"
+              @click="showFilter = !showFilter"
+              aria-haspopup="dialog"
+              :aria-expanded="showFilter"
+            >
               <span>{{ activeFilter.length ? activeFilter.length + ' 个状态' : '筛选进展' }}</span>
             </button>
-            <div class="progress-filter-menu" v-if="showFilter">
-              <label v-for="p in progressOptions" :key="p" class="progress-filter-option">
-                <input type="checkbox" :value="p" v-model="activeFilter" @change="applyFilter">
-                <ProgressBadge :progress="p" />
-              </label>
+            <div class="progress-filter-backdrop" @click="showFilter = false" v-if="showFilter"></div>
+            <div class="progress-filter-menu" v-if="showFilter" role="dialog" aria-modal="true" aria-labelledby="progress-filter-dialog-title">
+              <div class="progress-filter-menu-hd">
+                <div>
+                  <b id="progress-filter-dialog-title">筛选投递进展</b>
+                  <span>选择一个或多个状态</span>
+                </div>
+                <div class="progress-filter-dialog-actions">
+                  <button type="button" class="progress-filter-clear" :disabled="activeFilter.length === 0" @click="activeFilter = []; showFilter = false">重置</button>
+                  <button type="button" class="progress-filter-close" @click="showFilter = false" aria-label="关闭筛选">&times;</button>
+                </div>
+              </div>
+              <div class="progress-filter-selected" v-if="activeFilter.length">
+                <span v-for="p in activeFilter" :key="p" class="progress-filter-chip">
+                  <span>{{ p }}</span>
+                  <button @click="activeFilter = activeFilter.filter(x => x !== p)" aria-label="移除筛选">&times;</button>
+                </span>
+              </div>
+              <div class="progress-filter-options">
+                <label v-for="p in progressOptions" :key="p" class="progress-filter-option" :class="{ selected: activeFilter.includes(p) }">
+                  <input type="checkbox" :value="p" v-model="activeFilter" @change="applyFilter">
+                  <ProgressBadge :progress="p" />
+                </label>
+              </div>
             </div>
           </div>
+
           <div class="card-sub">{{ filteredRecords.length }} 条</div>
         </div>
 
         <!-- Table -->
         <div class="tbl" style="max-height:440px">
           <table class="data-table records-table">
+            <colgroup>
+              <col style="width:120px"><col style="width:145px"><col style="width:68px"><col style="width:88px">
+              <col style="width:68px"><col style="width:58px"><col style="width:58px"><col style="width:58px"><col style="width:58px">
+              <col style="width:58px"><col style="width:58px"><col style="width:68px"><col style="width:76px"><col style="width:58px">
+            </colgroup>
             <thead>
               <tr>
                 <th>公司</th><th>目标岗位</th><th>城市</th><th>批次</th>
@@ -118,12 +170,16 @@ onMounted(() => store.fetch())
       <!-- Deadlines Sidebar -->
       <div class="card">
         <div class="card-hd"><span class="dot"></span><div class="card-title">即将截止</div></div>
-        <div class="countdown-list">
-          <div v-if="!upcomingDeadlines.length" class="center muted">暂无临近截止</div>
+        <div class="countdown-list" style="max-height:440px;overflow:auto">
+          <div v-if="!upcomingDeadlines.length" class="center" style="padding:18px">暂无临近截止</div>
           <div v-for="d in upcomingDeadlines" :key="d.company + d.job" class="countdown-item">
-            <b>{{ d.company }}</b>
-            <span>{{ d.job }}</span>
-            <em>{{ formatDate(d.deadline) }}</em>
+            <div>
+              <b>{{ d.company }}</b>
+              <span>{{ d.job || '' }}</span>
+            </div>
+            <div class="countdown-days" :class="{ urgent: deadlineDays(d) <= 3 }">
+              {{ formatDeadlineText(deadlineDays(d)) }}
+            </div>
           </div>
         </div>
       </div>

@@ -48,16 +48,37 @@ function newRecord() {
       <div class="card-hd">
         <span class="dot"></span>
         <div class="card-title">总表信息</div>
-        <div class="card-sub">{{ showShared ? sharedRecords.length : store.records.length }} 条</div>
-        <div style="display:flex;gap:8px;margin-left:auto">
-          <button class="btn" :class="{ active: !showShared }" @click="showShared = false">个人总表</button>
-          <button class="btn" :class="{ active: showShared }" @click="showShared = true">共享总表</button>
+        <div class="card-sub">{{ displayRecords.length }} 条</div>
+        <div class="total-view-switch" role="tablist" aria-label="总表范围">
+          <button
+            :class="{ active: !showShared }"
+            role="tab"
+            :aria-selected="!showShared"
+            @click="showShared = false"
+          >个人总表</button>
+          <button
+            :class="{ active: showShared }"
+            role="tab"
+            :aria-selected="showShared"
+            @click="showShared = true"
+          >共享总表</button>
         </div>
         <button v-if="!showShared" class="btn btn-primary" @click="newRecord">新建记录</button>
       </div>
 
       <div class="tbl" style="max-height:calc(100vh - 160px)">
         <table class="data-table master-table">
+          <colgroup>
+            <col style="width:14%">
+            <col style="width:18%">
+            <col style="width:13%">
+            <col style="width:11%">
+            <col style="width:9%">
+            <col style="width:8%">
+            <col style="width:10%">
+            <col style="width:7%">
+            <col style="width:10%">
+          </colgroup>
           <thead>
             <tr>
               <th>公司</th><th>目标岗位</th><th>方向</th><th>公司类型</th>
@@ -75,7 +96,7 @@ function newRecord() {
               <td><span class="table-date">{{ fmtDate(r.deadline) }}</span></td>
               <td>{{ r.batch || '—' }}</td>
               <td><ProgressBadge :progress="(r.progress||[])[0]||'未投递'" /></td>
-              <td><a v-if="r.url" :href="r.url" target="_blank" class="btn">入口</a></td>
+              <td><a v-if="r.url" :href="r.url" target="_blank" class="btn">入口</a><span v-else class="btn" style="opacity:0.35;pointer-events:none">入口</span></td>
               <td>
                 <button class="btn" @click="openDetail(r)">详情</button>
               </td>
