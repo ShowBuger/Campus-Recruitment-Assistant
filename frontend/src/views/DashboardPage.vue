@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import ProgressBadge from '@/components/ProgressBadge.vue'
 
+const emit = defineEmits(['open-record', 'open-detail'])
 const store = useDashboardStore()
 const showFilter = ref(false)
 const activeFilter = ref([])
@@ -229,7 +230,7 @@ onMounted(() => { store.fetch(); loadLocalEvents() })
             <tr v-else-if="store.error"><td colspan="14" class="center" style="color:var(--red)">{{ store.error }}</td></tr>
             <tr v-else-if="!filteredRecords.length"><td colspan="14" class="center">暂无记录</td></tr>
             <tr v-for="(r, i) in filteredRecords.slice(0, 40)" :key="r.record_id">
-              <td class="company"><button class="company-link">{{ r.company || '—' }}</button></td>
+              <td class="company"><button class="company-link" @click="emit('open-detail', r.record_id)">{{ r.company || '—' }}</button></td>
               <td class="job" :title="r.job || ''">{{ r.job || '—' }}</td>
               <td :title="r.city || ''">{{ r.city || '—' }}</td>
               <td><span class="badge bdg-b">{{ r.batch || '—' }}</span></td>
@@ -249,7 +250,7 @@ onMounted(() => { store.fetch(); loadLocalEvents() })
       </div>
 
       <div class="table-actions">
-        <button class="btn btn-primary">新增记录</button>
+        <button class="btn btn-primary" @click="$emit('open-record')">新增记录</button>
         <button class="btn">管理记录</button>
         <button class="btn">统计信息</button>
         <button class="btn">Offer 对比</button>

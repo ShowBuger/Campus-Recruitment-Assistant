@@ -6,16 +6,19 @@ import Topbar from '@/components/Topbar.vue'
 import LoginModal from '@/components/LoginModal.vue'
 import ConfigModal from '@/components/ConfigModal.vue'
 import ChatModal from '@/components/ChatModal.vue'
+import RecordModal from '@/components/RecordModal.vue'
+import RecordDetailModal from '@/components/RecordDetailModal.vue'
 import CalendarWidget from '@/components/CalendarWidget.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 
 const auth = useAuthStore()
 const showConfig = ref(false)
 const showChat = ref(false)
+const showRecord = ref(false)
+const detailId = ref('')
 
-onMounted(async () => {
-  try { await auth.checkSession() } catch { auth.clear() }
-})
+function openDetail(id) { detailId.value = id }
+function closeDetail() { detailId.value = '' }
 </script>
 
 <template>
@@ -26,12 +29,17 @@ onMounted(async () => {
         @open-config="showConfig = true"
         @open-chat="showChat = true"
       />
-      <router-view />
+      <router-view
+        @open-detail="openDetail"
+        @open-record="showRecord = true"
+      />
     </main>
     <ConfigModal v-if="showConfig" @close="showConfig = false" />
     <ChatModal v-if="showChat" @close="showChat = false" />
+    <RecordModal v-if="showRecord" @close="showRecord = false" @saved="showRecord = false" />
+    <RecordDetailModal v-if="detailId" :record-id="detailId" @close="closeDetail" @saved="closeDetail" />
     <CalendarWidget />
   </div>
-  <LoginModal v-else @close="() => {}" />
+  <LoginModal v-else />
   <ToastContainer />
 </template>
