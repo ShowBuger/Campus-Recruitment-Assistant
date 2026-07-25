@@ -1,9 +1,14 @@
 """Per-user local job records and dashboard aggregation."""
 import json
 import hashlib
+import time
 import uuid
 from collections import Counter
 from datetime import datetime
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
 
 from app import database
 
@@ -28,6 +33,11 @@ FIELD_COLUMNS = {
     "三面": "interview3",
     "保温": "warm",
     "结果": "result",
+    "Offer总包": "offer_total",
+    "Offerbase": "offer_base",
+    "Offer奖金": "offer_bonus",
+    "Offer决策截止": "offer_deadline",
+    "简历版本": "resume_version",
 }
 JSON_FIELDS = {"嵌入式方向", "进展"}
 
@@ -80,6 +90,12 @@ def _row_fields(row: dict) -> dict:
         "三面": row["interview3"],
         "保温": row["warm"],
         "结果": result,
+        "Offer总包": row["offer_total"] if "offer_total" in row.keys() else "",
+        "Offerbase": row["offer_base"] if "offer_base" in row.keys() else "",
+        "Offer奖金": row["offer_bonus"] if "offer_bonus" in row.keys() else "",
+        "Offer决策截止": row["offer_deadline"] if "offer_deadline" in row.keys() else None,
+        "简历版本": row["resume_version"] if "resume_version" in row.keys() else "",
+        "progress_updated_at": row["progress_updated_at"] if "progress_updated_at" in row.keys() else None,
     }
 
 
@@ -104,6 +120,7 @@ def get_record(user_id: int, record_id: str) -> dict | None:
 def create_record(user_id: int, fields: dict) -> dict:
     record_id = "rec" + uuid.uuid4().hex
     values = {FIELD_COLUMNS[key]: _db_value(key, value) for key, value in fields.items() if key in FIELD_COLUMNS}
+    values["progress_updated_at"] = _now_ms()
     columns = ["id", "user_id", *values.keys()]
     params = [record_id, user_id, *values.values()]
     placeholders = ", ".join("?" for _ in columns)
@@ -239,6 +256,59 @@ def create_shared_record(user_id: int, fields: dict) -> tuple[dict, bool]:
     return _serialize_shared(dict(row), False), created
 
 
+def create_shared_records(user_id: int, records: list[dict]) -> tuple[int, int]:
+    """Validate and insert shared records in one transaction.
+
+    Returns ``(added, skipped)``. The unique fingerprint constraint handles both
+    records already in the database and duplicates inside the incoming batch.
+    """
+    prepared = []
+    for fields in records:
+        missing = shared_missing_fields(fields)
+        if missing:
+            raise ValueError("缺少共享必填项：" + "、".join(missing))
+        values = _shared_values(fields)
+        canonical = json.dumps({
+            "company": values["company"].casefold(),
+            "company_type": values["company_type"].casefold(),
+            "job": values["job"].casefold(),
+            "directions": sorted(item.casefold() for item in values["directions"]),
+            "url": values["url"].casefold(),
+        }, ensure_ascii=False, sort_keys=True)
+        prepared.append((
+            "shr" + uuid.uuid4().hex,
+            values["company"],
+            values["company_type"],
+            json.dumps(values["directions"], ensure_ascii=False),
+            values["job"],
+            values["city"],
+            values["batch"],
+            values["url"],
+            values["deadline"],
+            hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+            user_id,
+        ))
+    if not prepared:
+        return 0, 0
+    with database._write_lock:
+        db = database.get_db()
+        before = db.total_changes
+        try:
+            db.executemany(
+                """INSERT OR IGNORE INTO shared_job_records
+                   (id, company, company_type, directions, job, city, batch, url,
+                    deadline, fingerprint, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                prepared,
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        added = db.total_changes - before
+    return added, len(prepared) - added
+
+
 def _serialize_shared(row: dict, is_added: bool) -> dict:
     return {
         "record_id": row["id"],
@@ -341,6 +411,15 @@ def update_record(user_id: int, record_id: str, fields: dict) -> bool:
     values = {FIELD_COLUMNS[key]: _db_value(key, value) for key, value in fields.items() if key in FIELD_COLUMNS}
     if not values:
         return bool(get_record(user_id, record_id))
+    # 进展发生变化时，刷新"进入当前进展的时间"
+    if "进展" in fields:
+        current = get_record(user_id, record_id)
+        old_progress = (current["fields"].get("进展") or []) if current else []
+        new_progress = fields.get("进展") or []
+        if not isinstance(new_progress, list):
+            new_progress = [new_progress] if new_progress else []
+        if old_progress != new_progress:
+            values["progress_updated_at"] = _now_ms()
     assignments = ", ".join(f"{column} = ?" for column in values)
     with database._write_lock:
         db = database.get_db()
@@ -364,7 +443,7 @@ def delete_record(user_id: int, record_id: str) -> bool:
 
 
 def _serialize(record: dict) -> dict:
-    """Serialize a record for list display. Heavy fields (note, job_jd) excluded."""
+    """Serialize a record for list display and detail views."""
     fields = record["fields"]
     return {
         "record_id": record["record_id"],
@@ -376,6 +455,8 @@ def _serialize(record: dict) -> dict:
         "city": fields.get("城市") or "",
         "batch": fields.get("批次") or "",
         "priority": fields.get("优先级") or "",
+        "note": fields.get("备注") or "",
+        "job_jd": fields.get("岗位JD") or "",
         "url": fields.get("投递链接") or "",
         "deadline": fields.get("投递截止时间"),
         "apply_date": fields.get("投递时间"),
@@ -385,6 +466,12 @@ def _serialize(record: dict) -> dict:
         "interview3": fields.get("三面"),
         "warm": fields.get("保温"),
         "result": fields.get("结果"),
+        "offer_total": fields.get("Offer总包") or "",
+        "offer_base": fields.get("Offerbase") or "",
+        "offer_bonus": fields.get("Offer奖金") or "",
+        "offer_deadline": fields.get("Offer决策截止"),
+        "resume_version": fields.get("简历版本") or "",
+        "progress_updated_at": fields.get("progress_updated_at"),
     }
 
 

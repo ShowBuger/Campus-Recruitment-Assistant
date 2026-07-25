@@ -7,14 +7,17 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import bus
-from app.routers import dashboard, status, config, resume, ai, auth, admin, chat, autofill
+from app.routers import dashboard, status, config, resume, ai, auth, admin, chat, progress_tracker
+from app.version import APP_VERSION
 
 # Start background sync scheduler
 dashboard.start_sync_scheduler()
+progress_tracker.start_scheduler()
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 PROJECT_DIR = os.path.join(os.path.dirname(__file__), "..")
@@ -22,11 +25,15 @@ PROJECT_DIR = os.path.join(os.path.dirname(__file__), "..")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    bus.log("校招信息看板已启动", channel="system", level="success")
-    yield
+    bus.log(f"校招信息看板已启动 · PID {os.getpid()}", channel="system", level="success")
+    try:
+        yield
+    finally:
+        bus.log(f"校招信息看板已停止 · PID {os.getpid()}", channel="system", level="info")
 
 
-app = FastAPI(title="校招信息看板", version="0.5", lifespan=lifespan)
+app = FastAPI(title="校招信息看板", version=APP_VERSION, lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=800, compresslevel=6)
 
 # CORS for browser extension
 app.add_middleware(
@@ -45,12 +52,17 @@ app.include_router(config.router)
 app.include_router(resume.router)
 app.include_router(ai.router)
 app.include_router(chat.router)
-app.include_router(autofill.router)
+app.include_router(progress_tracker.router)
 
 
 @app.get("/")
 def index():
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+
+@app.get("/guide")
+def guide():
+    return FileResponse(os.path.join(STATIC_DIR, "docs.html"))
 
 
 # 静态资源

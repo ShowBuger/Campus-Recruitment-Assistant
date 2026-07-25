@@ -1,5 +1,6 @@
 """看板数据接口：per-user SQLite 职位记录与本地日程。"""
 import re
+import threading
 import time as _time_module
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -84,6 +85,11 @@ class TotalRecordUpdate(BaseModel):
     interview3: date | None = None
     warm: date | None = None
     result_date: date | None = None
+    offer_total: str = Field(default="", max_length=100)
+    offer_base: str = Field(default="", max_length=100)
+    offer_bonus: str = Field(default="", max_length=200)
+    offer_deadline: date | None = None
+    resume_version: str = Field(default="", max_length=200)
 
 
 class CalendarEventCreate(BaseModel):
@@ -160,6 +166,11 @@ def _total_record_fields(record: TotalRecordUpdate) -> dict:
         "三面": date_ms(record.interview3),
         "保温": date_ms(record.warm),
         "结果": date_ms(record.result_date),
+        "Offer总包": record.offer_total.strip(),
+        "Offerbase": record.offer_base.strip(),
+        "Offer奖金": record.offer_bonus.strip(),
+        "Offer决策截止": date_ms(record.offer_deadline),
+        "简历版本": record.resume_version.strip(),
     }
 
 
@@ -337,12 +348,14 @@ GIVEMEOC_HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Referer": "https://www.givemeoc.com/",
 }
-GIVEMEOC_MAX_WORKERS = 8
+GIVEMEOC_MAX_WORKERS = 16
 
 DATE_PATTERN = re.compile(r"(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})")
 
 # In-memory sync progress store
 _sync_progress: "dict[str, dict]" = {}
+_sync_guard = threading.Lock()
+_active_sync_id: str | None = None
 
 def _parse_givemeoc_deadline(deadline_str: str) -> int | None:
     """Convert givemeoc deadline string to millisecond timestamp."""
@@ -420,15 +433,16 @@ def _to_shared_fields(givemeoc_detail: dict) -> dict:
     }
 
 
-@router.post("/sync-from-givemeoc")
-def sync_from_givemeoc(user: dict = Depends(auth_module.get_current_user)):
-    """Root-only: start sync from givemeoc.com in background. Poll /progress for status."""
-    if not user.get("is_root"):
-        raise HTTPException(status_code=403, detail="仅 root 用户可以同步 GiveMeOC 数据")
-
-    import threading
-
-    sync_id = uuid.uuid4().hex[:12]
+def _new_sync(user_id: int, automatic: bool = False) -> tuple[str, bool]:
+    """Start one shared sync task, or return the currently running task."""
+    global _active_sync_id
+    with _sync_guard:
+        if _active_sync_id:
+            active = _sync_progress.get(_active_sync_id)
+            if active is None or not active.get("finished"):
+                return _active_sync_id, False
+        sync_id = uuid.uuid4().hex[:12]
+        _active_sync_id = sync_id
     _sync_progress[sync_id] = {
         "phase": "scanning",
         "found": 0,
@@ -437,22 +451,25 @@ def sync_from_givemeoc(user: dict = Depends(auth_module.get_current_user)):
         "added": 0,
         "skipped": 0,
         "errors": 0,
+        "failed": False,
         "finished": False,
-        "message": "正在扫描 givemeoc…",
+        "started_at": datetime.now().isoformat(timespec="seconds"),
+        "message": "正在扫描 GiveMeOC 岗位…",
     }
 
     def _run_sync():
+        global _active_sync_id
         pid = _sync_progress[sync_id]
-        bus.log("GiveMeOC 同步已启动", channel="sync", level="info")
+        label = "自动同步" if automatic else "同步"
+        bus.log(f"GiveMeOC {label}已启动", channel="sync", level="info")
         try:
-            # Phase 1: collect IDs
             ids: list[int] = []
             page = 1
             while True:
                 try:
                     rows = _fetch_givemeoc_page(page)
-                except Exception:
-                    break
+                except Exception as exc:
+                    raise RuntimeError(f"扫描第 {page} 页失败：{exc}") from exc
                 if not rows:
                     break
                 for row in rows:
@@ -462,8 +479,6 @@ def sync_from_givemeoc(user: dict = Depends(auth_module.get_current_user)):
                         ids.append(row["id"])
                 page += 1
                 pid["found"] = len(ids)
-                if page % 10 == 0:
-                    _time_module.sleep(0.2)
 
             if not ids:
                 pid["finished"] = True
@@ -472,51 +487,73 @@ def sync_from_givemeoc(user: dict = Depends(auth_module.get_current_user)):
 
             pid["phase"] = "syncing"
             pid["total"] = len(ids)
-            pid["message"] = f"找到 {len(ids)} 条，正在获取详情…"
+            pid["message"] = f"已找到 {len(ids)} 条，正在并发获取岗位详情…"
+            valid_records: list[dict] = []
 
-            # Phase 2: fetch details and insert
-            def _sync_one(cid: int) -> tuple[int, int, int]:
+            def _fetch_one(cid: int) -> dict | None:
                 detail = _fetch_givemeoc_detail(cid)
                 if not detail:
-                    return 0, 0, 1
+                    return None
                 fields = _to_shared_fields(detail)
                 if not fields["公司名称"] or not fields["秋招岗位"] or not fields["投递链接"]:
-                    return 0, 0, 1
-                missing = local_records.shared_missing_fields(fields)
-                if missing:
-                    return 0, 0, 1
-                try:
-                    _, created = local_records.create_shared_record(user["user_id"], fields)
-                    return (1, 0, 0) if created else (0, 1, 0)
-                except Exception:
-                    return 0, 0, 1
+                    return None
+                return None if local_records.shared_missing_fields(fields) else fields
 
             with ThreadPoolExecutor(max_workers=GIVEMEOC_MAX_WORKERS) as executor:
-                futures_map = {executor.submit(_sync_one, cid): cid for cid in ids}
+                futures_map = {executor.submit(_fetch_one, cid): cid for cid in ids}
                 for future in as_completed(futures_map):
-                    a, s, e = future.result()
-                    pid["added"] += a
-                    pid["skipped"] += s
-                    pid["errors"] += e
+                    try:
+                        fields = future.result()
+                        if fields:
+                            valid_records.append(fields)
+                        else:
+                            pid["errors"] += 1
+                    except Exception:
+                        pid["errors"] += 1
                     pid["done"] += 1
-                    if pid["done"] % 50 == 0:
-                        _time_module.sleep(0.15)
+
+            pid["phase"] = "writing"
+            pid["message"] = f"正在批量去重并写入 {len(valid_records)} 条有效岗位…"
+            pid["added"], pid["skipped"] = local_records.create_shared_records(
+                user_id, valid_records
+            )
 
             pid["finished"] = True
-            pid["message"] = f"同步完成：新增 {pid['added']} 条，跳过重复 {pid['skipped']} 条"
+            pid["finished_at"] = datetime.now().isoformat(timespec="seconds")
+            pid["message"] = f"{label}完成：新增 {pid['added']} 条，跳过重复 {pid['skipped']} 条"
             if pid["errors"]:
-                pid["message"] += f"，失败 {pid['errors']} 条"
+                pid["message"] += f"，无效或获取失败 {pid['errors']} 条"
             bus.log(
-                f"GiveMeOC 同步完成：新增 {pid['added']} / 跳过 {pid['skipped']} / 失败 {pid['errors']}",
+                f"GiveMeOC {label}完成：新增 {pid['added']} / 跳过 {pid['skipped']} / 无效 {pid['errors']}",
                 channel="sync", level="success" if pid["errors"] == 0 else "warn",
             )
         except Exception as exc:
             pid["finished"] = True
-            pid["message"] = f"同步异常：{exc}"
-            bus.log(f"GiveMeOC 同步异常：{exc}", channel="sync", level="error")
+            pid["failed"] = True
+            pid["finished_at"] = datetime.now().isoformat(timespec="seconds")
+            pid["message"] = f"{label}异常：{exc}"
+            bus.log(f"GiveMeOC {label}异常：{exc}", channel="sync", level="error")
+        finally:
+            with _sync_guard:
+                if _active_sync_id == sync_id:
+                    _active_sync_id = None
 
     threading.Thread(target=_run_sync, daemon=True).start()
-    return {"success": True, "sync_id": sync_id, "message": "同步已启动"}
+    return sync_id, True
+
+
+@router.post("/sync-from-givemeoc")
+def sync_from_givemeoc(user: dict = Depends(auth_module.get_current_user)):
+    """Start a shared-table sync. Administrators can poll its progress."""
+    if not (user.get("is_root") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="仅管理员可以同步 GiveMeOC 数据")
+    sync_id, started = _new_sync(user["user_id"])
+    return {
+        "success": True,
+        "sync_id": sync_id,
+        "started": started,
+        "message": "同步已启动" if started else "已有同步任务正在运行，已连接当前进度",
+    }
 
 
 @router.get("/sync-from-givemeoc/progress")
@@ -540,7 +577,6 @@ _scheduler_started = False
 
 def _sync_scheduler_loop():
     """Background thread: check every 60s if auto-sync should fire."""
-    import threading as _thr
     while True:
         _time_module.sleep(60)
         try:
@@ -550,76 +586,10 @@ def _sync_scheduler_loop():
             sync_time = database.get_system_config("sync_time") or "04:00"
             now = datetime.now().strftime("%H:%M")
             if now == sync_time:
-                # Run a full sync
-                sync_id = uuid.uuid4().hex[:12]
-                _sync_progress[sync_id] = {
-                    "phase": "scanning", "found": 0, "done": 0, "total": 0,
-                    "added": 0, "skipped": 0, "errors": 0,
-                    "finished": False, "message": "自动同步中…",
-                }
-                # Reuse the same sync logic inline
-                def _auto_sync():
-                    pid = _sync_progress[sync_id]
-                    bus.log("GiveMeOC 自动同步触发", channel="sync", level="info")
-                    try:
-                        ids = []
-                        page = 1
-                        while True:
-                            try:
-                                rows = _fetch_givemeoc_page(page)
-                            except Exception:
-                                break
-                            if not rows:
-                                break
-                            for row in rows:
-                                target = str(row.get("target_candidates") or "")
-                                rec_type = str(row.get("recruitment_type") or "")
-                                if "2027届" in target and "秋招" in rec_type and "春招" not in rec_type and "实习" not in rec_type:
-                                    ids.append(row["id"])
-                            page += 1
-                            pid["found"] = len(ids)
-                            if page % 10 == 0:
-                                _time_module.sleep(0.2)
-                        if not ids:
-                            pid["finished"] = True
-                            pid["message"] = "自动同步：未找到 2027届 岗位"
-                            return
-                        pid["phase"] = "syncing"
-                        pid["total"] = len(ids)
-                        def _sync_one(cid):
-                            detail = _fetch_givemeoc_detail(cid)
-                            if not detail:
-                                return 0, 0, 1
-                            fields = _to_shared_fields(detail)
-                            if not fields["公司名称"] or not fields["秋招岗位"] or not fields["投递链接"]:
-                                return 0, 0, 1
-                            missing = local_records.shared_missing_fields(fields)
-                            if missing:
-                                return 0, 0, 1
-                            try:
-                                _, created = local_records.create_shared_record(2, fields)
-                                return (1, 0, 0) if created else (0, 1, 0)
-                            except Exception:
-                                return 0, 0, 1
-                        with ThreadPoolExecutor(max_workers=GIVEMEOC_MAX_WORKERS) as executor:
-                            futures_map = {executor.submit(_sync_one, cid): cid for cid in ids}
-                            for future in as_completed(futures_map):
-                                a, s, e = future.result()
-                                pid["added"] += a
-                                pid["skipped"] += s
-                                pid["errors"] += e
-                                pid["done"] += 1
-                        pid["finished"] = True
-                        pid["message"] = f"自动同步完成：新增 {pid['added']} 条，跳过 {pid['skipped']} 条"
-                        bus.log(
-                            f"自动同步完成：新增 {pid['added']} / 跳过 {pid['skipped']} / 失败 {pid['errors']}",
-                            channel="sync", level="success" if pid["errors"] == 0 else "warn",
-                        )
-                    except Exception as exc:
-                        pid["finished"] = True
-                        pid["message"] = f"自动同步异常：{exc}"
-                        bus.log(f"自动同步异常：{exc}", channel="sync", level="error")
-                _thr.Thread(target=_auto_sync, daemon=True).start()
+                root = database.get_user_by_username("root")
+                if root:
+                    _new_sync(root["id"], automatic=True)
+                _time_module.sleep(61)
         except Exception:
             pass
 
@@ -656,9 +626,9 @@ def set_sync_schedule(
     user: dict = Depends(auth_module.get_current_user),
 ):
     """Set auto-sync schedule."""
-    if not user.get("is_root"):
-        raise HTTPException(status_code=403, detail="仅 root 用户可以修改同步计划")
-    if not re.match(r"^\d{2}:\d{2}$", body.time):
+    if not (user.get("is_root") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="仅管理员可以修改同步计划")
+    if not re.match(r"^(?:[01]\d|2[0-3]):[0-5]\d$", body.time):
         raise HTTPException(status_code=422, detail="时间格式需为 HH:MM")
     database.set_system_config("sync_enabled", "1" if body.enabled else "0")
     database.set_system_config("sync_time", body.time)
@@ -677,7 +647,7 @@ def get_shared_records(
 ):
     return {
         "records": local_records.list_shared_records(user["user_id"]),
-        "can_delete": bool(user.get("is_admin")),
+        "can_delete": bool(user.get("is_root") or user.get("is_admin")),
     }
 
 
@@ -686,7 +656,7 @@ def create_shared_record(
     record: TotalRecordUpdate,
     user: dict = Depends(auth_module.get_current_user),
 ):
-    if not user.get("is_admin"):
+    if not (user.get("is_root") or user.get("is_admin")):
         raise HTTPException(status_code=403, detail="普通用户无权直接新建共享记录")
     try:
         shared_record, created = local_records.create_shared_record(
@@ -761,7 +731,7 @@ def remove_shared_record(
     shared_id: str,
     user: dict = Depends(auth_module.get_current_user),
 ):
-    if not user.get("is_admin"):
+    if not (user.get("is_root") or user.get("is_admin")):
         raise HTTPException(status_code=403, detail="普通用户无权删除共享总表记录")
     if not shared_id.startswith("shr"):
         raise HTTPException(status_code=422, detail="无效的共享记录 ID")
@@ -865,6 +835,69 @@ def edit_total_record(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"本地记录更新失败：{exc}") from exc
     return {"success": True, "message": "总表记录已更新", "dashboard": data}
+
+
+class ProgressUpdate(BaseModel):
+    progress: Literal["未投递", "已投递", "机考", "面试", "OC", "已挂", "放弃"]
+    date_field: str = Field(default="", max_length=50)
+    date_value: int | None = None
+    old_progress: str = Field(default="")
+
+
+_PROGRESS_ORDER = ["未投递", "已投递", "机考", "面试", "OC", "已挂", "放弃"]
+# Date fields that should be cleared when rolling back past each stage
+_PROGRESS_CLEAR_FIELDS: dict[str, list[str]] = {
+    "已投递": ["投递时间"],
+    "机考":   ["机考时间"],
+    "面试":   ["一面", "二面", "三面"],
+    "OC":     ["结果"],
+    "已挂":   ["结果"],
+}
+
+
+@router.post("/records/{record_id}/progress")
+def update_record_progress(
+    record_id: str,
+    payload: ProgressUpdate,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    """Lightweight progress-only update, used by the kanban board drag-and-drop."""
+    if not record_id.startswith("rec"):
+        raise HTTPException(status_code=422, detail="无效的本地记录 ID")
+    try:
+        fields: dict = {"进展": [payload.progress]}
+        if payload.date_field and payload.date_value is not None:
+            fields[payload.date_field] = payload.date_value
+
+        # Backward progress: clear date fields for rolled-back stages
+        old_progress = payload.old_progress.strip()
+        if old_progress and old_progress in _PROGRESS_ORDER and payload.progress in _PROGRESS_ORDER:
+            old_idx = _PROGRESS_ORDER.index(old_progress)
+            new_idx = _PROGRESS_ORDER.index(payload.progress)
+            if new_idx < old_idx:
+                for stage, date_fields in _PROGRESS_CLEAR_FIELDS.items():
+                    stage_idx = _PROGRESS_ORDER.index(stage) if stage in _PROGRESS_ORDER else -1
+                    if new_idx < stage_idx <= old_idx:
+                        for df in date_fields:
+                            fields[df] = None
+
+        if not local_records.update_record(
+            user["user_id"], record_id, fields
+        ):
+            raise HTTPException(status_code=404, detail="未找到对应的本地记录")
+        data = local_records.get_dashboard_data(user["user_id"])
+        state.set_cache(user["user_id"], data)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"进展更新失败：{exc}") from exc
+
+    direction = "回退" if (
+        payload.old_progress.strip() in _PROGRESS_ORDER
+        and payload.progress in _PROGRESS_ORDER
+        and _PROGRESS_ORDER.index(payload.progress) < _PROGRESS_ORDER.index(payload.old_progress.strip())
+    ) else "更新"
+    return {"success": True, "message": f"已{direction}为「{payload.progress}」", "dashboard": data}
 
 
 @router.post("/records/{record_id}/apply")

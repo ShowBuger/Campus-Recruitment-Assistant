@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>使用文档 · 校招信息看板</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=brand-4">
+<link rel="shortcut icon" href="/static/favicon.svg?v=brand-4">
+<meta name="theme-color" content="#386a57">
+<link rel="stylesheet" href="/static/pixelium-theme.css">
+<link rel="stylesheet" href="/static/pixelium-vue.css">
+<style>
+.docs-page { max-width: 820px; margin: 0 auto; padding: 40px 24px 80px; }
+.docs-page h1 { font-size: 24px; margin-bottom: 4px; }
+.docs-page .subtitle { color: var(--sub); margin-bottom: 32px; }
+.docs-nav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 36px; }
+.docs-nav a { padding: 5px 13px; border-radius: 99px; font-size: 12px; color: var(--muted); text-decoration: none; border: 1px solid var(--line); transition: all .18s var(--ease); }
+.docs-nav a:hover { color: var(--blue); border-color: var(--blue); background: var(--blueS); }
+.docs-section { margin-bottom: 44px; }
+.docs-section h2 { font-size: 18px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.docs-section h3 { font-size: 14px; margin: 16px 0 6px; }
+.docs-section p { color: var(--muted); line-height: 1.7; margin-bottom: 8px; }
+.docs-section ul, .docs-section ol { color: var(--muted); padding-left: 20px; margin-bottom: 10px; line-height: 1.7; }
+.docs-section code { font-family: var(--mono); font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--line); }
+.docs-section .tip { padding: 10px 14px; border-radius: 8px; background: var(--blueS); color: var(--blue); font-size: 12px; line-height: 1.6; margin: 10px 0; }
+.docs-section .warn { background: var(--amberS); color: var(--amber); }
+.docs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.docs-header .back { font-size: 13px; color: var(--muted); text-decoration: none; }
+.docs-header .back:hover { color: var(--blue); }
+.stage-tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
+.stage-tag { padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; }
+.stage-tag.auto { background: #05966918; color: #059669; }
+.stage-tag.high { background: #d9770618; color: #d97706; }
+.stage-tag.low { background: #8b5cf618; color: #7c3aed; }
+.stage-tag.ignore { background: var(--line); color: var(--sub); }
+</style>
+</head>
+<body>
+<div class="docs-page">
+
+<div class="docs-header">
+  <div><h1>使用文档</h1><p class="subtitle">校招信息看板完整功能指南</p></div>
+  <a href="/" class="back">← 返回看板</a>
+</div>
+
+<div class="docs-nav">
+  <a href="#quickstart">快速开始</a>
+  <a href="#records">岗位管理</a>
+  <a href="#email">邮箱跟踪</a>
+  <a href="#ai">AI 功能</a>
+  <a href="#calendar">日历与提醒</a>
+  <a href="#share">共享与聊天</a>
+  <a href="#faq">常见问题</a>
+</div>
+
+<!-- ── 快速开始 ── -->
+<div class="docs-section" id="quickstart">
+  <h2>快速开始</h2>
+
+  <h3>界面入口总览</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;margin:8px 0 16px">
+    <tr style="background:var(--line)"><th style="padding:6px 10px;text-align:left">功能</th><th style="padding:6px 10px;text-align:left">入口位置</th></tr>
+    <tr><td style="padding:5px 10px">岗位管理</td><td style="padding:5px 10px">左侧导航 → <b>总表信息</b></td></tr>
+    <tr><td style="padding:5px 10px">投递记录 / 投递看板</td><td style="padding:5px 10px">左侧导航 → <b>投递信息</b> / <b>投递看板</b></td></tr>
+    <tr><td style="padding:5px 10px">邮箱进度跟踪</td><td style="padding:5px 10px">右上角 ⚙️ → <b>进度跟踪</b> 标签页</td></tr>
+    <tr><td style="padding:5px 10px">AI 配置</td><td style="padding:5px 10px">右上角 ⚙️ → <b>AI 配置</b> 标签页</td></tr>
+    <tr><td style="padding:5px 10px">日历</td><td style="padding:5px 10px">右下角 📅 悬浮按钮</td></tr>
+    <tr><td style="padding:5px 10px">通知</td><td style="padding:5px 10px">右上角 🔔 图标</td></tr>
+    <tr><td style="padding:5px 10px">聊天</td><td style="padding:5px 10px">右上角 💬 图标</td></tr>
+    <tr><td style="padding:5px 10px">使用文档</td><td style="padding:5px 10px">右上角 ? 帮助 → 底部「使用文档」按钮</td></tr>
+  </table>
+
+  <h3>使用流程</h3>
+  <ol>
+    <li><b>注册账号</b> — 联系管理员获取邀请码完成注册</li>
+    <li><b>添加岗位</b> — 在「总表信息」中手动新建，或从共享总表中一键复制</li>
+    <li><b>跟踪进展</b> — 将岗位状态改为"已投递"后，在看板和日历中维护后续进展</li>
+    <li><b>配置邮箱</b>（可选）— 在「进度跟踪」面板绑定邮箱，自动从邮件识别投递状态</li>
+    <li><b>使用 AI</b>（可选）— 在右上角 AI 配置中填写 API Key，解锁公司补全和简历分析</li>
+  </ol>
+</div>
+
+<!-- ── 岗位管理 ── -->
+<div class="docs-section" id="records">
+  <h2>岗位管理</h2>
+  <h3>新建岗位</h3>
+  <p>点击「新建记录」按钮，填写公司名称、岗位名称、城市、批次等基本信息。建议同时填写投递链接和岗位 JD，方便后续 AI 分析使用。</p>
+
+  <h3>进展字段</h3>
+  <p>每个岗位的「进展」字段支持多选，可选值包括：未投递、已投递、机考、面试、OC、Offer、已挂。系统会根据进展自动归类到看板对应区域。</p>
+
+  <h3>字段说明</h3>
+  <ul>
+    <li><b>公司/行业类型</b> — 用于看板分类统计，如"互联网""芯片/半导体""车企"</li>
+    <li><b>嵌入式方向</b> — 多选，如"Linux驱动""RTOS""AI芯片"</li>
+    <li><b>投递链接</b> — 岗位入口 URL，共享岗位必须填写此项</li>
+    <li><b>时间字段</b> — 投递时间、机考时间、面试时间、保温等均为毫秒时间戳，日历自动解析</li>
+  </ul>
+
+  <h3>导入导出</h3>
+  <p>支持 Excel (.xlsx) 批量导入导出。导入时会自动根据公司+岗位去重，已存在的记录不会被覆盖。</p>
+</div>
+
+<!-- ── 邮箱进度跟踪 ── -->
+<div class="docs-section" id="email">
+  <h2>邮箱进度跟踪</h2>
+
+  <h3>功能概述</h3>
+  <p>系统通过 IMAP 协议连接你的邮箱，拉取最近邮件并用<em>本地关键词规则</em>自动判断每封邮件对应的招聘阶段，支持识别以下五种进展：</p>
+
+  <div class="stage-tags">
+    <span class="stage-tag auto">已投递</span>
+    <span class="stage-tag auto">机考</span>
+    <span class="stage-tag auto">面试</span>
+    <span class="stage-tag auto">OC</span>
+    <span class="stage-tag auto">已挂</span>
+  </div>
+
+  <h3>配置步骤</h3>
+  <ol>
+    <li>登录你的邮箱网页版，进入「设置 → POP3/SMTP/IMAP」</li>
+    <li>开启 IMAP 服务，获取<em>客户端授权码</em>（非邮箱登录密码）</li>
+    <li>在看板「进度跟踪」面板填写邮箱地址、授权码和 IMAP 服务器地址</li>
+    <li>点击「测试连接」预览最近 10 封邮件的识别结果</li>
+    <li>确认无误后，将模式切换为「自动确认」并启用自动跟踪</li>
+  </ol>
+
+  <h3>QQ 邮箱详细配置教程</h3>
+  <ol>
+    <li>浏览器登录 <a href="https://mail.qq.com" target="_blank">QQ邮箱网页版</a> → 右上角齿轮图标 → <b>设置 → 账户 → 安全</b></li>
+    <li>向下滚动找到 <b>「POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV服务」</b></li>
+    <li>点击 <b>「IMAP/SMTP服务」</b> → <b>「开启」</b></li>
+    <li>按提示使用绑定的密保手机<b>发送指定短信</b>到指定号码，发送后点击「我已发送」</li>
+    <li>页面将显示一个<b>16 位授权码</b>（字母+数字），<b style="color:var(--red)">立即复制保存</b>——只显示一次</li>
+  </ol>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;margin:8px 0">
+    <tr style="background:var(--line)"><th style="padding:6px 10px;text-align:left">配置项</th><th style="padding:6px 10px;text-align:left">填写内容</th></tr>
+    <tr><td style="padding:5px 10px">接收邮件服务器</td><td style="padding:5px 10px"><code>imap.qq.com</code></td></tr>
+    <tr><td style="padding:5px 10px">接收端口</td><td style="padding:5px 10px"><code>993</code>（加密方式 SSL/TLS）</td></tr>
+    <tr><td style="padding:5px 10px">用户名</td><td style="padding:5px 10px">完整 QQ 邮箱地址</td></tr>
+    <tr><td style="padding:5px 10px">密码</td><td style="padding:5px 10px"><b>16 位授权码</b>（非 QQ 登录密码）</td></tr>
+  </table>
+  <div class="tip">发送短信前需确保 QQ 邮箱已绑定手机号。授权码遗失后需在设置中重新生成（旧码自动失效）。</div>
+
+  <h3>163 邮箱详细配置教程</h3>
+  <ol>
+    <li>浏览器登录 <a href="https://mail.163.com" target="_blank">163邮箱网页版</a> → 右上角齿轮图标 → <b>POP3/SMTP/IMAP</b></li>
+    <li>在「IMAP/SMTP服务」旁点击 <b>「开启」</b>，弹出安全提示后点击「继续开启」</li>
+    <li>使用手机扫描二维码发送短信验证，发送成功后点击「我已发送」</li>
+    <li>系统生成<b>客户端授权码</b>，<b style="color:var(--red)">立即复制保存</b>——仅显示一次，关闭页面后无法再次查看</li>
+  </ol>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;margin:8px 0">
+    <tr style="background:var(--line)"><th style="padding:6px 10px;text-align:left">配置项</th><th style="padding:6px 10px;text-align:left">填写内容</th></tr>
+    <tr><td style="padding:5px 10px">接收邮件服务器</td><td style="padding:5px 10px"><code>imap.163.com</code></td></tr>
+    <tr><td style="padding:5px 10px">接收端口</td><td style="padding:5px 10px"><code>993</code>（加密方式 SSL/TLS）</td></tr>
+    <tr><td style="padding:5px 10px">用户名</td><td style="padding:5px 10px">完整 163 邮箱地址</td></tr>
+    <tr><td style="padding:5px 10px">密码</td><td style="padding:5px 10px"><b>客户端授权码</b>（非邮箱登录密码）</td></tr>
+  </table>
+  <div class="tip">163 邮箱授权码有效期为 180 天，到期后需重新获取。免费账户最多同时保留 2 个授权码。</div>
+
+  <h3>常见邮箱 IMAP 配置</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;margin:8px 0">
+    <tr style="background:var(--line)"><th style="padding:6px 10px;text-align:left">邮箱</th><th style="padding:6px 10px;text-align:left">IMAP 地址</th><th style="padding:6px 10px;text-align:left">端口</th></tr>
+    <tr><td style="padding:5px 10px">163 邮箱</td><td style="padding:5px 10px"><code>imap.163.com</code></td><td style="padding:5px 10px">993</td></tr>
+    <tr><td style="padding:5px 10px">QQ 邮箱</td><td style="padding:5px 10px"><code>imap.qq.com</code></td><td style="padding:5px 10px">993</td></tr>
+    <tr><td style="padding:5px 10px">Gmail</td><td style="padding:5px 10px"><code>imap.gmail.com</code></td><td style="padding:5px 10px">993</td></tr>
+    <tr><td style="padding:5px 10px">Outlook</td><td style="padding:5px 10px"><code>outlook.office365.com</code></td><td style="padding:5px 10px">993</td></tr>
+  </table>
+
+  <h3>识别置信度层级</h3>
+  <div class="stage-tags">
+    <span class="stage-tag auto">AUTO · 97%</span>
+    <span class="stage-tag high">REVIEW_HIGH · 88%</span>
+    <span class="stage-tag low">REVIEW_LOW · 68%</span>
+    <span class="stage-tag ignore">IGNORE · 跳过</span>
+  </div>
+  <p>AUTO 级别的识别结果（关键词明确 + 公司/岗位匹配成功）可在「自动确认」模式下直接更新岗位进展，无需手动确认。</p>
+
+  <h3>本地关键词规则</h3>
+  <p>系统按优先级扫描邮件主题和正文中的关键词，匹配逻辑如下：</p>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;margin:8px 0">
+    <tr style="background:var(--line)"><th style="padding:6px 10px;text-align:left">阶段</th><th style="padding:6px 10px;text-align:left">正向关键词（命中即匹配）</th><th style="padding:6px 10px;text-align:left">负向关键词（命中排除）</th></tr>
+    <tr><td style="padding:5px 10px">已投递</td><td style="padding:5px 10px">投递成功、网申成功、申请已提交、简历已收到、感谢您投递</td><td style="padding:5px 10px">—</td></tr>
+    <tr><td style="padding:5px 10px">机考</td><td style="padding:5px 10px">笔试邀请、测评邀请、AI测评、在线测评、机考通知</td><td style="padding:5px 10px">测评已过期、测评完成</td></tr>
+    <tr><td style="padding:5px 10px">面试</td><td style="padding:5px 10px">面试邀请、面试通知、确认面试时间、一面/二面/三面、复试通知</td><td style="padding:5px 10px">面试结果将在之后、面试未通过</td></tr>
+    <tr><td style="padding:5px 10px">OC</td><td style="padding:5px 10px">录用通知、录取通知、意向书、入职邀请、offer letter</td><td style="padding:5px 10px">—</td></tr>
+    <tr><td style="padding:5px 10px">已挂</td><td style="padding:5px 10px">很遗憾、未能通过、未通过、岗位已关闭、流程终止</td><td style="padding:5px 10px">—</td></tr>
+  </table>
+
+  <div class="tip">测试同步不会修改任何岗位数据，仅预览识别结果。确认邮件识别正确后，再开启自动跟踪。</div>
+
+  <h3>AI 增强识别</h3>
+  <p>在进度跟踪配置中开启「AI 自动识别」后，系统将使用大模型逐批分析邮件，判断逻辑更接近 SKILL.md 中的完整 SOP。AI 不可用时自动降级为本地关键词识别。</p>
+</div>
+
+<!-- ── AI 功能 ── -->
+<div class="docs-section" id="ai">
+  <h2>AI 功能</h2>
+  <h3>配置 AI 服务商</h3>
+  <p>在右上角齿轮图标进入「AI 配置」，支持 DeepSeek、OpenAI、Claude、Kimi 四种服务商。填写 API Key 后即可使用以下功能：</p>
+  <ul>
+    <li><b>公司信息补全</b> — 在岗位详情中点击「AI 补全」，自动查询公司业务、行业类型和嵌入式方向</li>
+    <li><b>简历分析</b> — 上传简历后，选择匹配、技术面、HR 面、简历优化等分析模式</li>
+  </ul>
+
+  <h3>简历分析模式</h3>
+  <ul>
+    <li><b>综合匹配分析</b> — 简历与 JD 的匹配度评估、优势、缺口和改进建议</li>
+    <li><b>技术面试训练</b> — 生成 10 道针对性技术面试题及参考回答</li>
+    <li><b>HR 面试训练</b> — 8 道校招 HR 面专项问题</li>
+    <li><b>完整面试流程</b> — 模拟四面完整流程（一面到 HR 面）</li>
+    <li><b>简历定向优化</b> — 逐段诊断并提供修改建议</li>
+  </ul>
+</div>
+
+<!-- ── 日历与提醒 ── -->
+<div class="docs-section" id="calendar">
+  <h2>日历与提醒</h2>
+  <h3>校招日历</h3>
+  <p>日历视图自动汇总所有岗位的投递截止、机考、面试等时间节点。点击日历中的事件可跳转对应岗位详情。</p>
+
+  <h3>自定义日程</h3>
+  <p>在日历面板中可以添加个人日程（如宣讲会、面试备忘），支持日期和标签。</p>
+
+  <h3>提醒</h3>
+  <p>系统会根据投递截止时间和面试时间在通知栏显示即将到来的重要事件。</p>
+</div>
+
+<!-- ── 共享与聊天 ── -->
+<div class="docs-section" id="share">
+  <h2>共享与聊天</h2>
+  <h3>共享总表</h3>
+  <p>将个人岗位共享到「共享总表」后，其他用户可以看到并一键复制到自己的总表中。共享岗位包含公司、岗位、方向、城市、链接等基本信息。</p>
+
+  <h3>即时聊天</h3>
+  <p>右上角聊天功能支持文本消息、图片和岗位转发。转发岗位时，接收方可以直接复制到自己的总表。</p>
+</div>
+
+<!-- ── 常见问题 ── -->
+<div class="docs-section" id="faq">
+  <h2>常见问题</h2>
+
+  <h3>Q: 授权码和邮箱密码有什么区别？</h3>
+  <p>授权码是邮箱服务商为第三方客户端生成的专用密码，与登录密码不同。使用授权码可以避免暴露主密码，也更安全。在邮箱设置的「POP3/SMTP/IMAP」中可以生成。</p>
+
+  <h3>Q: AI 补全和简历分析需要付费吗？</h3>
+  <p>系统本身免费，但使用 AI 功能需要你自己向服务商（如 DeepSeek、OpenAI）购买 API 额度。建议先用便宜的模型（如 DeepSeek V4 Flash）测试。</p>
+
+  <h3>Q: 邮箱跟踪会读取所有邮件吗？</h3>
+  <p>系统只读取收件箱中最近 20 封未读邮件（按 UID 增量），且仅缓存主题、发件人和正文摘要用于本地关键词匹配。邮件内容不会上传到任何第三方服务。</p>
+</div>
+
+</div></body></html>

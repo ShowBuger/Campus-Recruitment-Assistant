@@ -65,9 +65,9 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             anthropic_api_key TEXT DEFAULT '',
             anthropic_model TEXT DEFAULT 'claude-sonnet-5',
             anthropic_base_url TEXT DEFAULT 'https://api.anthropic.com/v1',
-            apidock_api_key TEXT DEFAULT '',
-            apidock_model TEXT DEFAULT 'gpt-4o',
-            apidock_base_url TEXT DEFAULT 'https://apidock.ai/v1',
+            kimi_api_key TEXT DEFAULT '',
+            kimi_model TEXT DEFAULT 'kimi-k3',
+            kimi_base_url TEXT DEFAULT 'https://api.moonshot.cn/v1',
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
@@ -201,11 +201,32 @@ def _init_tables(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
     if "last_seen_at" not in columns:
         conn.execute("ALTER TABLE users ADD COLUMN last_seen_at TEXT")
+    if "last_login_at" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN last_login_at TEXT")
     record_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(job_records)")
     }
     if "source_shared_id" not in record_columns:
         conn.execute("ALTER TABLE job_records ADD COLUMN source_shared_id TEXT")
+    job_record_migrations = {
+        "offer_total": "TEXT NOT NULL DEFAULT ''",
+        "offer_base": "TEXT NOT NULL DEFAULT ''",
+        "offer_bonus": "TEXT NOT NULL DEFAULT ''",
+        "offer_deadline": "INTEGER",
+        "progress_updated_at": "INTEGER",
+    }
+    for column, declaration in job_record_migrations.items():
+        if column not in record_columns:
+            conn.execute(f"ALTER TABLE job_records ADD COLUMN {column} {declaration}")
+    if "resume_version" not in record_columns:
+        conn.execute("ALTER TABLE job_records ADD COLUMN resume_version TEXT NOT NULL DEFAULT ''")
+    if "progress_updated_at" not in record_columns:
+        # 已有记录：用 updated_at（UTC 文本）回填进展变更时间（毫秒）
+        conn.execute(
+            "UPDATE job_records SET progress_updated_at = "
+            "CAST(strftime('%s', COALESCE(updated_at, created_at)) AS INTEGER) * 1000 "
+            "WHERE progress_updated_at IS NULL"
+        )
     conn.execute(
         """CREATE UNIQUE INDEX IF NOT EXISTS idx_job_records_shared_source
            ON job_records(user_id, source_shared_id)
@@ -232,9 +253,9 @@ def _init_tables(conn: sqlite3.Connection) -> None:
         "anthropic_api_key": "TEXT DEFAULT ''",
         "anthropic_model": "TEXT DEFAULT 'claude-sonnet-5'",
         "anthropic_base_url": "TEXT DEFAULT 'https://api.anthropic.com/v1'",
-        "apidock_api_key": "TEXT DEFAULT ''",
-        "apidock_model": "TEXT DEFAULT 'gpt-4o'",
-        "apidock_base_url": "TEXT DEFAULT 'https://apidock.ai/v1'",
+        "kimi_api_key": "TEXT DEFAULT ''",
+        "kimi_model": "TEXT DEFAULT 'kimi-k3'",
+        "kimi_base_url": "TEXT DEFAULT 'https://api.moonshot.cn/v1'",
         "deepseek_base_url": "TEXT DEFAULT 'https://api.deepseek.com'",
     }
     for column, declaration in config_migrations.items():
@@ -246,7 +267,135 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL DEFAULT ''
         );
+        CREATE TABLE IF NOT EXISTS email_tracker_configs (
+            user_id INTEGER PRIMARY KEY,
+            email TEXT NOT NULL DEFAULT '',
+            authorization_code TEXT NOT NULL DEFAULT '',
+            imap_host TEXT NOT NULL DEFAULT 'imap.163.com',
+            imap_port INTEGER NOT NULL DEFAULT 993,
+            enabled INTEGER NOT NULL DEFAULT 0,
+            mode TEXT NOT NULL DEFAULT 'confirm',
+            ai_enabled INTEGER NOT NULL DEFAULT 0,
+            tracker_ai_provider TEXT NOT NULL DEFAULT '',
+            tracker_ai_model TEXT NOT NULL DEFAULT '',
+            sync_interval_minutes INTEGER NOT NULL DEFAULT 30,
+            last_uid INTEGER NOT NULL DEFAULT 0,
+            last_sync_at TEXT,
+            last_error TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS email_tracker_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            message_uid INTEGER NOT NULL,
+            subject TEXT NOT NULL DEFAULT '',
+            sender TEXT NOT NULL DEFAULT '',
+            received_ms INTEGER,
+            company TEXT NOT NULL DEFAULT '',
+            job TEXT NOT NULL DEFAULT '',
+            progress TEXT NOT NULL,
+            confidence REAL NOT NULL DEFAULT 0,
+            decision_tier TEXT NOT NULL DEFAULT 'REVIEW_LOW',
+            reason TEXT NOT NULL DEFAULT '',
+            scheduled_ms INTEGER,
+            deadline_ms INTEGER,
+            interview_round INTEGER,
+            time_reason TEXT NOT NULL DEFAULT '',
+            record_id TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(user_id, message_uid),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS email_tracker_cache (
+            user_id INTEGER NOT NULL,
+            mailbox TEXT NOT NULL,
+            message_uid INTEGER NOT NULL,
+            subject TEXT NOT NULL DEFAULT '',
+            sender TEXT NOT NULL DEFAULT '',
+            body_excerpt TEXT NOT NULL DEFAULT '',
+            received_ms INTEGER,
+            content_hash TEXT NOT NULL DEFAULT '',
+            fetched_at TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (user_id, mailbox, message_uid),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS email_tracker_tasks (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'queued',
+            stage TEXT NOT NULL DEFAULT '等待开始',
+            progress INTEGER NOT NULL DEFAULT 0,
+            total INTEGER NOT NULL DEFAULT 0,
+            result_json TEXT NOT NULL DEFAULT '{}',
+            error TEXT NOT NULL DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_email_tracker_cache_fetched
+            ON email_tracker_cache(user_id, fetched_at);
+        CREATE INDEX IF NOT EXISTS idx_email_tracker_tasks_user
+            ON email_tracker_tasks(user_id, created_at DESC);
+        CREATE TABLE IF NOT EXISTS ai_model_cache (
+            user_id INTEGER NOT NULL,
+            provider TEXT NOT NULL,
+            models_json TEXT NOT NULL DEFAULT '[]',
+            updated_at TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (user_id, provider),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
     """)
+    tracker_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(email_tracker_configs)")
+    }
+    if "ai_enabled" not in tracker_columns:
+        conn.execute(
+            "ALTER TABLE email_tracker_configs ADD COLUMN ai_enabled INTEGER NOT NULL DEFAULT 0"
+        )
+    if "sync_interval_minutes" not in tracker_columns:
+        conn.execute(
+            "ALTER TABLE email_tracker_configs ADD COLUMN sync_interval_minutes INTEGER NOT NULL DEFAULT 30"
+        )
+    if "tracker_ai_provider" not in tracker_columns:
+        conn.execute(
+            "ALTER TABLE email_tracker_configs ADD COLUMN tracker_ai_provider TEXT NOT NULL DEFAULT ''"
+        )
+    if "tracker_ai_model" not in tracker_columns:
+        conn.execute(
+            "ALTER TABLE email_tracker_configs ADD COLUMN tracker_ai_model TEXT NOT NULL DEFAULT ''"
+        )
+    event_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(email_tracker_events)")
+    }
+    if "decision_tier" not in event_columns:
+        conn.execute(
+            "ALTER TABLE email_tracker_events ADD COLUMN decision_tier TEXT NOT NULL DEFAULT 'REVIEW_LOW'"
+        )
+        conn.execute(
+            """UPDATE email_tracker_events SET decision_tier =
+               CASE WHEN confidence >= 0.94 THEN 'AUTO'
+                    WHEN confidence >= 0.80 THEN 'REVIEW_HIGH'
+                    ELSE 'REVIEW_LOW' END"""
+        )
+    if "reason" not in event_columns:
+        conn.execute(
+            "ALTER TABLE email_tracker_events ADD COLUMN reason TEXT NOT NULL DEFAULT ''"
+        )
+    event_migrations = {
+        "scheduled_ms": "INTEGER",
+        "deadline_ms": "INTEGER",
+        "interview_round": "INTEGER",
+        "time_reason": "TEXT NOT NULL DEFAULT ''",
+    }
+    for column, declaration in event_migrations.items():
+        if column not in event_columns:
+            conn.execute(
+                f"ALTER TABLE email_tracker_events ADD COLUMN {column} {declaration}"
+            )
+    # Processed entries are operational history; pending entries remain actionable.
+    conn.execute("DELETE FROM email_tracker_events WHERE status != 'pending'")
     # Default sync schedule
     conn.execute(
         "INSERT OR IGNORE INTO system_config (key, value) VALUES ('sync_enabled', '0')"
@@ -403,7 +552,7 @@ def get_user_by_id(user_id: int) -> dict | None:
 def list_users() -> list[dict]:
     db = get_db()
     rows = db.execute(
-        """SELECT id, username, is_admin, created_at, last_seen_at,
+        """SELECT id, username, is_admin, created_at, last_seen_at, last_login_at,
                   CASE WHEN last_seen_at >= datetime('now', '-2 minutes')
                        THEN 1 ELSE 0 END AS is_online
            FROM users ORDER BY id"""
@@ -421,6 +570,17 @@ def touch_user_last_seen(user_id: int) -> None:
                    last_seen_at IS NULL OR
                    last_seen_at < datetime('now', '-30 seconds')
                )""",
+            (user_id,),
+        )
+        db.commit()
+
+
+def record_user_login(user_id: int) -> None:
+    """Persist the most recent successful account login."""
+    with _write_lock:
+        db = get_db()
+        db.execute(
+            "UPDATE users SET last_login_at = datetime('now'), last_seen_at = datetime('now') WHERE id = ?",
             (user_id,),
         )
         db.commit()
@@ -549,9 +709,9 @@ def get_user_config(user_id: int) -> dict:
             "anthropic_api_key": "",
             "anthropic_model": "claude-sonnet-5",
             "anthropic_base_url": "https://api.anthropic.com/v1",
-            "apidock_api_key": "",
-            "apidock_model": "gpt-4o",
-            "apidock_base_url": "https://apidock.ai/v1",
+            "kimi_api_key": "",
+            "kimi_model": "kimi-k3",
+            "kimi_base_url": "https://api.moonshot.cn/v1",
             "configured": False,
         }
     d = dict(row)
@@ -561,6 +721,7 @@ def get_user_config(user_id: int) -> dict:
         "deepseek": "deepseek_api_key",
         "openai": "openai_api_key",
         "anthropic": "anthropic_api_key",
+        "kimi": "kimi_api_key",
     }.get(provider, "deepseek_api_key")
     d["configured"] = bool(d.get(key_field))
     return d
@@ -574,7 +735,7 @@ def save_ai_config(user_id: int, values: dict) -> None:
                (user_id, ai_provider, deepseek_api_key, deepseek_model,
                 deepseek_base_url, openai_api_key, openai_model, openai_base_url,
                 openai_api_mode, anthropic_api_key, anthropic_model, anthropic_base_url,
-                apidock_api_key, apidock_model, apidock_base_url)
+                kimi_api_key, kimi_model, kimi_base_url)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(user_id) DO UPDATE SET
                ai_provider=excluded.ai_provider,
@@ -588,16 +749,16 @@ def save_ai_config(user_id: int, values: dict) -> None:
                anthropic_api_key=excluded.anthropic_api_key,
                anthropic_model=excluded.anthropic_model,
                anthropic_base_url=excluded.anthropic_base_url,
-               apidock_api_key=excluded.apidock_api_key,
-               apidock_model=excluded.apidock_model,
-               apidock_base_url=excluded.apidock_base_url""",
+               kimi_api_key=excluded.kimi_api_key,
+               kimi_model=excluded.kimi_model,
+               kimi_base_url=excluded.kimi_base_url""",
             (
                 user_id, values["ai_provider"],
                 values["deepseek_api_key"], values["deepseek_model"], values["deepseek_base_url"],
                 values["openai_api_key"], values["openai_model"], values["openai_base_url"],
                 values["openai_api_mode"], values["anthropic_api_key"],
                 values["anthropic_model"], values["anthropic_base_url"],
-                values["apidock_api_key"], values["apidock_model"], values["apidock_base_url"],
+                values["kimi_api_key"], values["kimi_model"], values["kimi_base_url"],
             ),
         )
         db.commit()
