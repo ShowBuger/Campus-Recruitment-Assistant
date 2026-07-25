@@ -1,0 +1,189 @@
+/*
+ * Ant Design adaptation layer
+ * Tokens and component geometry follow Ant Design v5 (light + dark algorithms)
+ * while preserving the dashboard's existing DOM and JavaScript contracts.
+ * Loaded on demand by the style switcher (radar_style = "antd").
+ */
+
+/* ---- design tokens: light ---- */
+:root {
+  --bg: #f5f5f5;
+  --panel: #ffffff;
+  --ink: #1f1f1f;
+  --muted: #595959;
+  --sub: #8c8c8c;
+  --line: #f0f0f0;
+  --line2: #d9d9d9;
+  --blue: #1677ff;
+  --blue2: #0958d9;
+  --green: #52c41a;
+  --amber: #faad14;
+  --red: #ff4d4f;
+  --cyan: #13c2c2;
+  --blueS: rgba(22, 119, 255, .08);
+  --greenS: rgba(82, 196, 26, .10);
+  --amberS: rgba(250, 173, 20, .10);
+  --redS: rgba(255, 77, 79, .10);
+  --cyanS: rgba(19, 194, 194, .10);
+  --shadow: 0 1px 2px 0 rgba(0, 0, 0, .03), 0 1px 6px -1px rgba(0, 0, 0, .02), 0 2px 4px 0 rgba(0, 0, 0, .02);
+  --shadow2: 0 6px 16px 0 rgba(0, 0, 0, .08), 0 3px 6px -4px rgba(0, 0, 0, .12), 0 9px 28px 8px rgba(0, 0, 0, .05);
+  --sidebar: #ffffff;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+/* ---- design tokens: dark ---- */
+[data-theme="dark"] {
+  --bg: #141414;
+  --panel: #1f1f1f;
+  --ink: rgba(255, 255, 255, .85);
+  --muted: rgba(255, 255, 255, .65);
+  --sub: rgba(255, 255, 255, .45);
+  --line: #303030;
+  --line2: #424242;
+  --blue: #1668dc;
+  --blue2: #3c89e8;
+  --green: #49aa19;
+  --amber: #d89614;
+  --red: #dc4446;
+  --cyan: #13a8a8;
+  --blueS: rgba(22, 104, 220, .18);
+  --greenS: rgba(73, 170, 25, .18);
+  --amberS: rgba(216, 150, 20, .18);
+  --redS: rgba(220, 68, 70, .18);
+  --cyanS: rgba(19, 168, 168, .18);
+  --shadow: 0 1px 2px 0 rgba(0, 0, 0, .3), 0 1px 6px -1px rgba(0, 0, 0, .2), 0 2px 4px 0 rgba(0, 0, 0, .2);
+  --shadow2: 0 6px 16px 0 rgba(0, 0, 0, .32), 0 3px 6px -4px rgba(0, 0, 0, .48), 0 9px 28px 8px rgba(0, 0, 0, .2);
+  --sidebar: #141414;
+}
+
+/* ---- flat canvas: no animated backdrop ---- */
+body:before,
+body:after,
+.bg-orbits { display: none }
+
+/* ---- geometry: antd border-radius scale ---- */
+.card,
+.kpi,
+.funnel-step,
+.modal,
+.login-card,
+.notification-panel,
+.progress-filter-menu,
+.chat-shell,
+.autofill-preview,
+.admin-user-card { border-radius: 8px }
+
+.btn,
+.icon-btn,
+.total-tools input,
+.total-tools select,
+.form-group input,
+.form-group select,
+.ai-config-card .form-group input,
+.ai-config-card .form-group select,
+.autofill-side select,
+.autofill-side input,
+.login-card input,
+.record-manager-search input,
+.admin-user-card .ubtns input,
+.sidebar a,
+.progress-filter-toggle,
+.progress-filter-chip,
+.tracker-pending-btn { border-radius: 6px }
+
+.tag,
+.badge,
+.state,
+.version-badge { border-radius: 4px }
+
+/* ---- motion: antd has no springy hover lifts ---- */
+.btn,
+.icon-btn,
+.card,
+.kpi,
+.funnel-step { transition: border-color .2s cubic-bezier(.645, .045, .355, 1), box-shadow .2s cubic-bezier(.645, .045, .355, 1), background .2s cubic-bezier(.645, .045, .355, 1), color .2s cubic-bezier(.645, .045, .355, 1) }
+.btn:hover,
+.icon-btn:hover,
+.card:hover,
+.kpi:hover,
+.funnel-step:hover { transform: none; box-shadow: var(--shadow) }
+.card:before,
+.card:after { display: none }
+.fill:after { display: none; animation: none }
+
+/* ---- buttons ---- */
+.btn { height: 32px; padding: 0 15px; font-weight: 400; font-size: 14px; border-color: var(--line2) }
+.btn:hover { border-color: #4096ff; color: #4096ff }
+.btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; box-shadow: 0 2px 0 rgba(5, 145, 255, .1) }
+.btn-primary:hover { background: #4096ff; border-color: #4096ff; color: #fff }
+.btn-primary:active { background: var(--blue2); border-color: var(--blue2) }
+.btn-danger { background: transparent; border-color: var(--red); color: var(--red) }
+.btn-danger:hover { border-color: #ff7875; color: #ff7875; background: transparent }
+.icon-btn { width: 32px; height: 32px }
+.icon-btn:hover { border-color: #4096ff; color: #4096ff }
+
+/* ---- typography ---- */
+.topbar h1 { letter-spacing: 0; font-weight: 600 }
+.brand b { font-weight: 600 }
+.nav-sec { text-transform: none; letter-spacing: 0; font-weight: 400 }
+.card-title { font-weight: 600 }
+
+/* ---- sidebar menu ---- */
+.sidebar a { font-weight: 400; color: var(--ink) }
+.sidebar a:hover { background: rgba(0, 0, 0, .04); color: var(--ink) }
+.sidebar a.active { background: #e6f4ff; color: #1677ff; box-shadow: none; font-weight: 600 }
+[data-theme="dark"] .sidebar a:hover { background: rgba(255, 255, 255, .08) }
+[data-theme="dark"] .sidebar a.active { background: #1668dc; color: #fff }
+
+/* ---- tables ---- */
+th { background: #fafafa; color: var(--ink); font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0 }
+[data-theme="dark"] th { background: #1d1d1d }
+.data-table tbody tr:hover td { background: #fafafa }
+[data-theme="dark"] .data-table tbody tr:hover td { background: #262626 }
+
+/* ---- inputs ---- */
+.total-tools input:hover,
+.total-tools select:hover,
+.form-group input:hover,
+.form-group select:hover,
+.autofill-side select:hover,
+.autofill-side input:hover,
+.login-card input:hover,
+.record-manager-search input:hover { border-color: #4096ff }
+
+/* ---- toast: antd message style ---- */
+.toast { border-radius: 8px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow2); font-weight: 400 }
+
+/* ---- modal mask: lighter blur-less overlay ---- */
+.modal-mask { background: rgba(0, 0, 0, .45); backdrop-filter: none }
+
+/* ---- progress bars: solid antd fills ---- */
+.fill { background: var(--blue) }
+.fill.g { background: var(--green) }
+
+/* ---- shared components (components-extra.css): antd geometry ---- */
+.chat-modal-window,
+.settings-page,
+.help-intro,
+.help-grid article,
+.invite-current,
+.shared-sync-status,
+.tracker-event,
+.tracker-task { border-radius: 8px }
+.settings-tabs button { border-radius: 6px 6px 0 0 }
+.chat-search,
+.chat-job-search,
+.tracker-cycle button,
+.tracker-round-picker select,
+.progress-filter-close,
+.tracker-state,
+.tracker-event-main em,
+.ai-jd-reminder { border-radius: 6px }
+.chat-modal-bar { border-bottom-color: var(--line) }
+.settings-tabs button.active,
+.tracker-cycle button.active { box-shadow: none }
+.help-grid article i { border-radius: 6px; box-shadow: none }
+.chat-job-picker-summary,
+.chat-job-group-head,
+.help-note,
+.tracker-ai-notice { border-radius: 4px }
