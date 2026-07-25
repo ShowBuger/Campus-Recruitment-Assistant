@@ -35,7 +35,3 @@ onMounted(async () => {
   <LoginModal v-else @close="() => {}" />
   <ToastContainer />
 </template>
-
-<style>
-@import '@/styles/global.css';
-</style>
