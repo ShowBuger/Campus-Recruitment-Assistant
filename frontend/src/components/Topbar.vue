@@ -26,10 +26,8 @@ const title = computed(() => {
   <header class="topbar">
     <h1>{{ title }}</h1>
     <div class="spacer"></div>
-    <button class="icon-btn" title="通知">
-      🔔<span class="notification-dot"></span>
-    </button>
+    <button class="icon-btn" @click="$emit('open-chat')" title="聊天">💬</button>
+    <button class="icon-btn" title="通知">🔔<span class="notification-dot"></span></button>
     <button class="icon-btn" @click="$emit('open-config')" title="设置">⚙️</button>
-    <button class="icon-btn" @click="$emit('toggle-theme')" title="主题">🌙</button>
   </header>
 </template>

@@ -5,11 +5,13 @@ import SidebarNav from '@/components/SidebarNav.vue'
 import Topbar from '@/components/Topbar.vue'
 import LoginModal from '@/components/LoginModal.vue'
 import ConfigModal from '@/components/ConfigModal.vue'
+import ChatModal from '@/components/ChatModal.vue'
+import CalendarWidget from '@/components/CalendarWidget.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 
 const auth = useAuthStore()
 const showConfig = ref(false)
-const showHelp = ref(false)
+const showChat = ref(false)
 
 onMounted(async () => {
   try { await auth.checkSession() } catch { auth.clear() }
@@ -22,11 +24,13 @@ onMounted(async () => {
     <main class="main">
       <Topbar
         @open-config="showConfig = true"
-        @open-help="showHelp = true"
+        @open-chat="showChat = true"
       />
       <router-view />
     </main>
     <ConfigModal v-if="showConfig" @close="showConfig = false" />
+    <ChatModal v-if="showChat" @close="showChat = false" />
+    <CalendarWidget />
   </div>
   <LoginModal v-else @close="() => {}" />
   <ToastContainer />
