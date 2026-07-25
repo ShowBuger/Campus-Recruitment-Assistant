@@ -1,0 +1,241 @@
+/*
+ * Liquid Glass adaptation layer
+ * Recreates the iOS "Liquid Glass" aesthetic (ref. liquid-glass-react) with
+ * CSS-native techniques: backdrop blur + saturation, specular edge highlights,
+ * pill geometry and elastic motion, over a vibrant aurora canvas.
+ * True refraction / chromatic aberration require the React lib's SVG filters;
+ * this layer approximates the look while preserving the dashboard's DOM/JS.
+ * Loaded on demand by the style switcher (radar_style = "glass").
+ */
+
+/* ---- design tokens: light ---- */
+:root {
+  --bg: #eef1f8;
+  --panel: rgba(255, 255, 255, .55);
+  --ink: #1c1c1e;
+  --muted: rgba(60, 60, 67, .72);
+  --sub: rgba(60, 60, 67, .5);
+  --line: rgba(0, 0, 0, .07);
+  --line2: rgba(0, 0, 0, .14);
+  --blue: #007aff;
+  --blue2: #0066d6;
+  --green: #34c759;
+  --amber: #ff9500;
+  --red: #ff3b30;
+  --cyan: #5ac8fa;
+  --blueS: rgba(0, 122, 255, .10);
+  --greenS: rgba(52, 199, 89, .12);
+  --amberS: rgba(255, 149, 0, .12);
+  --redS: rgba(255, 59, 48, .12);
+  --cyanS: rgba(90, 200, 250, .12);
+  --shadow: 0 8px 32px rgba(31, 38, 135, .10);
+  --shadow2: 0 18px 60px rgba(31, 38, 135, .18);
+  --sidebar: rgba(255, 255, 255, .45);
+  --glass-hi: inset 0 1px 0 rgba(255, 255, 255, .55), inset 0 -1px 0 rgba(0, 0, 0, .03);
+  --glass-blur: blur(22px) saturate(1.6);
+}
+
+/* ---- design tokens: dark ---- */
+[data-theme="dark"] {
+  --bg: #0a0c18;
+  --panel: rgba(30, 32, 44, .55);
+  --ink: #f2f2f7;
+  --muted: rgba(235, 235, 245, .72);
+  --sub: rgba(235, 235, 245, .45);
+  --line: rgba(255, 255, 255, .10);
+  --line2: rgba(255, 255, 255, .18);
+  --blue: #0a84ff;
+  --blue2: #409cff;
+  --green: #30d158;
+  --amber: #ff9f0a;
+  --red: #ff453a;
+  --cyan: #64d2ff;
+  --blueS: rgba(10, 132, 255, .18);
+  --greenS: rgba(48, 209, 88, .16);
+  --amberS: rgba(255, 159, 10, .16);
+  --redS: rgba(255, 69, 58, .16);
+  --cyanS: rgba(100, 210, 255, .16);
+  --shadow: 0 8px 32px rgba(0, 0, 0, .4);
+  --shadow2: 0 18px 60px rgba(0, 0, 0, .55);
+  --sidebar: rgba(22, 24, 36, .45);
+  --glass-hi: inset 0 1px 0 rgba(255, 255, 255, .14), inset 0 -1px 0 rgba(0, 0, 0, .2);
+}
+
+/* ---- vibrant aurora canvas: glass needs something to refract ---- */
+body:before {
+  background:
+    radial-gradient(900px circle at 12% -8%, rgba(0, 122, 255, .30), transparent 46%),
+    radial-gradient(820px circle at 88% 6%, rgba(191, 90, 242, .26), transparent 44%),
+    radial-gradient(760px circle at 50% 108%, rgba(90, 200, 250, .24), transparent 46%),
+    radial-gradient(620px circle at 80% 78%, rgba(255, 55, 146, .12), transparent 48%);
+}
+[data-theme="dark"] body:before {
+  background:
+    radial-gradient(900px circle at 12% -8%, rgba(10, 132, 255, .34), transparent 46%),
+    radial-gradient(820px circle at 88% 6%, rgba(191, 90, 242, .30), transparent 44%),
+    radial-gradient(760px circle at 50% 108%, rgba(100, 210, 255, .22), transparent 46%),
+    radial-gradient(620px circle at 80% 78%, rgba(255, 55, 146, .16), transparent 48%);
+}
+.bg-orbits { opacity: .5; mix-blend-mode: normal }
+
+/* ---- frosted surfaces ---- */
+.sidebar,
+.card,
+.kpi,
+.funnel-step,
+.modal,
+.login-card,
+.notification-panel,
+.style-panel,
+.progress-filter-menu,
+.chat-shell,
+.chat-modal-window,
+.chat-bubble,
+.admin-user-card,
+.help-intro,
+.help-grid article,
+.settings-page,
+.tracker-event,
+.tracker-task,
+.shared-sync-status,
+.invite-current,
+.toast,
+th,
+.topbar #last-updated {
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+.card,
+.kpi,
+.funnel-step,
+.modal,
+.login-card,
+.notification-panel,
+.chat-shell,
+.chat-modal-window,
+.admin-user-card,
+.settings-page,
+.tracker-event,
+.invite-current { box-shadow: var(--glass-hi), var(--shadow) }
+.modal,
+.login-card { box-shadow: var(--glass-hi), var(--shadow2) }
+
+/* ---- geometry: pill-first liquid shapes ---- */
+.card,
+.kpi,
+.funnel-step { border-radius: 24px }
+.modal,
+.chat-modal-window,
+.login-card { border-radius: 28px }
+.notification-panel,
+.style-panel,
+.progress-filter-menu,
+.settings-page,
+.help-intro,
+.help-grid article,
+.tracker-event,
+.tracker-task,
+.shared-sync-status,
+.invite-current,
+.admin-user-card { border-radius: 20px }
+.btn,
+.icon-btn,
+.chat-search,
+.chat-job-search,
+.settings-tabs button,
+.tracker-cycle button,
+.tracker-pending-btn { border-radius: 999px }
+.total-tools input,
+.total-tools select,
+.form-group input,
+.form-group select,
+.ai-config-card .form-group input,
+.ai-config-card .form-group select,
+.autofill-side select,
+.autofill-side input,
+.login-card input,
+.record-manager-search input,
+.admin-user-card .ubtns input,
+.chat-compose textarea,
+.tracker-round-picker select,
+.progress-filter-toggle,
+.progress-filter-close { border-radius: 12px }
+
+/* ---- elastic motion ---- */
+.btn,
+.icon-btn { transition: transform .28s var(--spring), box-shadow .28s var(--spring), background .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease) }
+.btn:hover,
+.icon-btn:hover { transform: scale(1.05); box-shadow: var(--shadow) }
+.btn:active,
+.icon-btn:active { transform: scale(.96) }
+.card:hover,
+.kpi:hover,
+.funnel-step:hover { transform: translateY(-3px); box-shadow: var(--glass-hi), var(--shadow2) }
+
+/* ---- buttons: glass with specular edge ---- */
+.btn { border-color: rgba(255, 255, 255, .35); background: rgba(255, 255, 255, .4); box-shadow: var(--glass-hi) }
+[data-theme="dark"] .btn { border-color: rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .08) }
+.btn:hover { border-color: var(--blue); color: var(--blue) }
+.btn-primary { background: linear-gradient(180deg, #1a86ff, #007aff); border-color: transparent; color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 6px 18px rgba(0, 122, 255, .38) }
+[data-theme="dark"] .btn-primary { background: linear-gradient(180deg, #2f93ff, #0a84ff); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 6px 18px rgba(10, 132, 255, .4) }
+.btn-primary:hover { color: #fff; filter: brightness(1.08) }
+.btn-danger { background: var(--redS); border-color: rgba(255, 59, 48, .3); color: var(--red) }
+.icon-btn { border-color: rgba(255, 255, 255, .35); background: rgba(255, 255, 255, .4); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur) }
+[data-theme="dark"] .icon-btn { border-color: rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .08) }
+
+/* ---- sidebar: floating glass rail ---- */
+.sidebar { border-right-color: rgba(255, 255, 255, .3) }
+.sidebar a { border-radius: 999px; transition: all .24s var(--spring) }
+.sidebar a:hover { background: rgba(255, 255, 255, .5); color: var(--ink); transform: translateX(2px) }
+.sidebar a.active { background: rgba(0, 122, 255, .14); color: var(--blue); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4); font-weight: 800 }
+[data-theme="dark"] .sidebar a:hover { background: rgba(255, 255, 255, .1) }
+[data-theme="dark"] .sidebar a.active { background: rgba(10, 132, 255, .24); color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14) }
+
+/* ---- tables ---- */
+th { background: rgba(250, 250, 252, .66); color: var(--muted); border-bottom: 1px solid var(--line) }
+[data-theme="dark"] th { background: rgba(28, 30, 42, .66) }
+.data-table tbody tr:hover td { background: rgba(255, 255, 255, .35) }
+[data-theme="dark"] .data-table tbody tr:hover td { background: rgba(255, 255, 255, .06) }
+
+/* ---- inputs: recessed glass ---- */
+.total-tools input,
+.total-tools select,
+.form-group input,
+.form-group select,
+.autofill-side select,
+.autofill-side input,
+.login-card input,
+.record-manager-search input,
+.chat-compose textarea,
+.chat-search,
+.chat-job-search { border-color: rgba(255, 255, 255, .4); background: rgba(255, 255, 255, .45); box-shadow: inset 0 1px 3px rgba(31, 38, 135, .08) }
+[data-theme="dark"] .total-tools input,
+[data-theme="dark"] .total-tools select,
+[data-theme="dark"] .form-group input,
+[data-theme="dark"] .form-group select,
+[data-theme="dark"] .autofill-side select,
+[data-theme="dark"] .autofill-side input,
+[data-theme="dark"] .login-card input,
+[data-theme="dark"] .record-manager-search input,
+[data-theme="dark"] .chat-compose textarea,
+[data-theme="dark"] .chat-search,
+[data-theme="dark"] .chat-job-search { border-color: rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .06); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .3) }
+
+/* ---- overlays ---- */
+.modal-mask { background: rgba(120, 140, 200, .18); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3) }
+#page-chat.chat-modal { background: rgba(120, 140, 200, .18); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3) }
+.toast { border: 1px solid rgba(255, 255, 255, .3); background: rgba(40, 42, 58, .72); color: #fff; box-shadow: var(--shadow2) }
+
+/* ---- settings tabs: iOS segmented control ---- */
+.settings-tabs { gap: 4px; padding: 4px; margin: 10px 20px 0; border-radius: 999px; background: rgba(120, 120, 128, .16) }
+.settings-tabs button { min-height: 34px; border: 0; background: transparent; color: var(--muted); font-weight: 700 }
+.settings-tabs button.active { background: rgba(255, 255, 255, .9); color: var(--ink); box-shadow: 0 2px 8px rgba(31, 38, 135, .16) }
+[data-theme="dark"] .settings-tabs button.active { background: rgba(99, 101, 115, .9); color: #fff }
+
+/* ---- chat bubbles ---- */
+.chat-bubble { border-radius: 18px 18px 18px 4px; border-color: rgba(255, 255, 255, .35) }
+.chat-row.mine .chat-bubble { border-radius: 18px 18px 4px 18px; background: linear-gradient(180deg, #2f93ff, #007aff); border-color: transparent; color: #fff }
+
+/* ---- toggle switch: iOS green ---- */
+.tracker-toggle span { border-radius: 999px }
+.tracker-toggle input:checked + span { background: var(--green); border-color: var(--green) }
