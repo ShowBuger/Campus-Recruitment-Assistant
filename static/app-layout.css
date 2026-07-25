@@ -1,0 +1,19 @@
+/* Missing layout styles for Vue SPA — pixelium CSS doesn't define these */
+.main{padding:22px 26px 60px;max-width:1400px;width:100%;min-width:0}
+.page{min-width:0}.card{min-width:0}
+.kpi-label{font-size:11px;color:var(--sub);font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.kpi-value{position:relative;margin-top:8px;font-size:34px;line-height:1;font-weight:800;letter-spacing:-.04em}
+th{position:sticky;top:0;z-index:2;background:var(--panel);color:var(--sub);font-size:11px;letter-spacing:.05em;text-transform:uppercase;font-weight:800;padding:10px}
+td{padding:10px;color:var(--ink);font-size:13px}
+tr:hover td{background:var(--blueS)}
+.data-table{table-layout:fixed}
+.records-table{min-width:1000px}.master-table{min-width:880px}
+.data-table th{height:42px;padding:0 10px;background:var(--bg);border-bottom-color:var(--line2)}
+.data-table td{height:50px;padding:8px 10px;overflow:hidden;text-overflow:ellipsis}
+.data-table th:nth-child(n+3),.data-table td:nth-child(n+3){text-align:center}
+.data-table tbody tr:hover td{background:var(--blueS)}
+.table-date{display:inline-block;min-width:38px;color:var(--muted);font:700 12px/1 var(--mono);letter-spacing:-.02em;text-align:center}
+.data-table .company-link{display:block;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.board-row .b-company .company-link{color:var(--ink)}
+.board-row .b-company .company-link:hover{color:var(--blue)}
+.company-link{border:0;background:transparent;color:var(--blue);font:inherit;font-weight:800;padding:0;cursor:pointer;text-align:left}.company-link:hover{text-decoration:underline}
