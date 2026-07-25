@@ -119,6 +119,29 @@ async function deleteEvent(id, etype) {
   } catch {}
 }
 
+// Day detail modal
+const dayDetailKey = ref('')
+const dayDetailItems = computed(() => dayDetailKey.value ? (events.value[dayDetailKey.value] || []) : [])
+function openDayDetail(key) { dayDetailKey.value = key }
+function closeDayDetail() { dayDetailKey.value = '' }
+async function deleteCalendarEvent(id, etype) {
+  if (!confirm('确定删除这个日程？')) return
+  try {
+    if (etype) {
+      await fetch('/api/dashboard/calendar/event/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('rb_token')}` },
+        body: JSON.stringify({ record_id: id, event_type: etype })
+      })
+    } else {
+      await fetch(`/api/dashboard/calendar/local-event/${id}/delete`, {
+        method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('rb_token')}` }
+      })
+    }
+    await store.fetch(); await loadLocalEvents()
+    if (dayDetailKey.value) dayDetailKey.value = dayDetailKey.value // trigger recompute
+  } catch {}
+}
+
 onMounted(() => { store.fetch(); loadLocalEvents() })
 </script>
 
@@ -149,7 +172,7 @@ onMounted(() => { store.fetch(); loadLocalEvents() })
           <div class="calendar-scroll">
             <div class="calendar-grid">
               <div v-for="d in ['一','二','三','四','五','六','日']" :key="d" class="calendar-weekday">周{{ d }}</div>
-              <div v-for="day in calendarDays" :key="day.key" class="calendar-day" :class="{ other: day.other, today: day.today }">
+              <div v-for="day in calendarDays" :key="day.key" class="calendar-day" :class="{ other: day.other, today: day.today }" @click="!day.other && openDayDetail(day.key)">
                 <div class="calendar-date"><span>{{ day.date.getDate() }}</span></div>
                 <div class="calendar-events">
                   <div v-for="e in day.visible" :key="e.rid || e.lid || e.label" class="calendar-event" :class="e.type" :title="e.label + ' · ' + e.company + (e.job ? ' · ' + e.job : '')" @click.stop="deleteEvent(e.rid || e.lid, e.etype)">
@@ -255,6 +278,21 @@ onMounted(() => { store.fetch(); loadLocalEvents() })
         <button class="btn" @click="app.openManager()">管理记录</button>
         <button class="btn" @click="app.openStats()">统计信息</button>
         <button class="btn" @click="app.openOffer()">Offer 对比</button>
+      </div>
+    </div>
+
+    <!-- Day Detail Modal -->
+    <div class="modal-mask show" v-if="dayDetailKey" @click.self="closeDayDetail">
+      <div class="modal" style="width:min(520px,94vw)">
+        <div class="modal-hd"><div><h2>{{ dayDetailKey }}</h2><p>{{ dayDetailItems.length }} 个日程</p></div><button class="icon-btn" @click="closeDayDetail" title="关闭">&times;</button></div>
+        <div class="modal-body">
+          <div v-if="!dayDetailItems.length" class="center">该日暂无日程</div>
+          <div v-for="e in dayDetailItems" :key="e.rid || e.lid || e.label">
+            <b>{{ e.label }}</b>
+            <div style="color:var(--muted);font-size:12px;margin-top:2px">{{ e.company }}{{ e.job ? ' · ' + e.job : '' }}</div>
+            <button class="btn" style="height:28px;padding:0 10px;font-size:11px;margin-top:4px" @click="deleteCalendarEvent(e.rid || e.lid, e.etype)">删除</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

@@ -160,7 +160,7 @@
           </div>
         </div>
 
-        <div class="detail-actions" id="total-edit-actions" v-if="record">
+        <div class="detail-actions" id="total-edit-actions" v-if="record" style="display:grid">
           <div class="detail-actions-copy">
             <b>记录管理</b>
             <span>AI 补全只填写空缺字段，备注会追加在原内容之后</span>
