@@ -10,9 +10,15 @@ export const useAuthStore = defineStore('auth', () => {
   const isAdmin = computed(() => user.value?.is_admin || user.value?.is_root)
 
   async function checkSession() {
-    const data = await get('/api/auth/me', { silent: true })
-    user.value = data.user
-    token.value = localStorage.getItem('rb_token') || ''
+    try {
+      const data = await get('/api/auth/me', { silent: true })
+      user.value = data.user
+      token.value = localStorage.getItem('rb_token') || ''
+    } catch (e) {
+      // 网络错误不抛，避免误清 token
+      if (e?.message === '登录已过期') throw e
+      console.warn('checkSession network error:', e.message)
+    }
   }
 
   async function login(username, password) {

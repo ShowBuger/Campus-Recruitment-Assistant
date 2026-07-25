@@ -14,6 +14,7 @@ import HelpModal from '@/components/HelpModal.vue'
 import StatsModal from '@/components/StatsModal.vue'
 import OfferCompareModal from '@/components/OfferCompareModal.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
+import GlassWrapper from '@/components/GlassWrapper.vue'
 
 const auth = useAuthStore()
 const app = useAppStore()
@@ -39,7 +40,9 @@ function bindCardHover() {
 }
 
 onMounted(async () => {
-  try { await auth.checkSession() } catch { auth.clear() }
+  try { await auth.checkSession() } catch (e) {
+    if (e?.message === '登录已过期') auth.clear()
+  }
   if (auth.isLoggedIn) {
     const seen = localStorage.getItem('radar_help_seen')
     if (!seen) { setTimeout(() => { app.showHelp = true; localStorage.setItem('radar_help_seen', '1') }, 800) }
