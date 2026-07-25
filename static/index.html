@@ -43,7 +43,7 @@ a{color:var(--blue);text-decoration:none;font-weight:700}a:hover{color:var(--blu
 .sidebar a:hover{background:var(--blueS);color:var(--ink)}
 .sidebar a.active{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;box-shadow:0 6px 16px rgba(37,99,235,.34)}
 .sidebar-foot{margin-top:auto;padding:10px;font-size:11px;color:var(--sub)}
-.conn{display:inline-flex;align-items:center;gap:6px}.pulse{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px var(--greenS);animation:pulse 1.5s infinite}@keyframes pulse{50%{opacity:.45;transform:scale(.86)}}
+.conn{display:inline-flex;align-items:center;gap:6px}.version-badge{margin-left:8px;padding:1px 8px;border:1px solid var(--line);border-radius:999px;font-size:10px;color:var(--sub);white-space:nowrap}.pulse{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px var(--greenS);animation:pulse 1.5s infinite}@keyframes pulse{50%{opacity:.45;transform:scale(.86)}}
 /* ---- main ---- */
 .main{padding:22px 26px 60px;max-width:1400px;width:100%;min-width:0}
 .page{min-width:0}.card{min-width:0}
@@ -589,7 +589,7 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
         <span style="font-weight:800;font-size:13px" id="user-name">—</span>
         <button class="btn" style="height:28px;padding:0 10px;font-size:11px" onclick="logout()">退出</button>
       </div>
-      <div class="conn" id="conn-state"><span class="pulse" id="conn-pulse"></span><span id="conn-text">云端存储</span></div>
+      <div class="conn" id="conn-state"><span class="pulse" id="conn-pulse"></span><span id="conn-text">云端存储</span></div><span class="version-badge" id="version-badge" title="应用版本" hidden></span>
     </div>
   </aside>
   <main class="main" id="app-main" style="display:none">
@@ -1449,7 +1449,9 @@ applyTheme(localStorage.getItem('radar_theme')||'light');
 updateLiveClock();
 setInterval(updateLiveClock,1000);
 updateAuthUI();
+loadVersionBadge();
 if(_token)initApp();
+function loadVersionBadge(){fetch('/api/version').then(function(r){return r.ok?r.json():null}).then(function(d){if(d&&d.version){var b=$('version-badge');b.textContent='v'+d.version;b.hidden=false}}).catch(function(){})}
 async function initApp(){
   try{
     var me=await api('GET','/api/auth/me',undefined,{silent:true});_currentUser=me.user;
