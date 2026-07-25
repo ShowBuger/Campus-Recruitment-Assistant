@@ -239,3 +239,44 @@ th { background: rgba(250, 250, 252, .66); color: var(--muted); border-bottom: 1
 /* ---- toggle switch: iOS green ---- */
 .tracker-toggle span { border-radius: 999px }
 .tracker-toggle input:checked + span { background: var(--green); border-color: var(--green) }
+
+/* ---- real refraction layer (liquid-glass.js, Chromium) ----
+   warp span mirrors the library's .glass__warp: backdrop blur(6px)
+   saturate(140%) + the SVG displacement filter; clipped to the host's
+   border-radius by the driver; sits below content (z-index:-1) */
+.lg-warp {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  backdrop-filter: blur(6px) saturate(140%);
+  -webkit-backdrop-filter: blur(6px) saturate(140%);
+  filter: url(#lg-filter);
+}
+/* when the real filter is live, drop the CSS frost approximation on panes */
+html.lg-live .sidebar,
+html.lg-live .card,
+html.lg-live .kpi,
+html.lg-live .funnel-step,
+html.lg-live .modal,
+html.lg-live .login-card,
+html.lg-live .notification-panel,
+html.lg-live .style-panel,
+html.lg-live .progress-filter-menu,
+html.lg-live .chat-shell,
+html.lg-live .chat-modal-window,
+html.lg-live .chat-bubble,
+html.lg-live .admin-user-card,
+html.lg-live .help-intro,
+html.lg-live .help-grid article,
+html.lg-live .settings-page,
+html.lg-live .tracker-event,
+html.lg-live .tracker-task,
+html.lg-live .shared-sync-status,
+html.lg-live .invite-current,
+html.lg-live .toast,
+html.lg-live th,
+html.lg-live .topbar #last-updated {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
