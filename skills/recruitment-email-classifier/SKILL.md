@@ -45,11 +45,11 @@ The deadline for completing an action. **Calculate carefully**:
 - **Explicit date/time**: Use the stated time directly. Example: "测评有效期至8月22日 23:59" → parse as `2026-08-22T23:59:00+08:00` → Unix ms.
 - **Relative time from received**: When the email says "请在 X 时间内完成", calculate `deadline = received_ms + duration_ms`. Examples:
   - "72小时内完成" → `received_ms + 72 * 3600 * 1000`
-  - "5个工作日内" → `received_ms + 7 * 24 * 3600 * 1000` (5 business days ≈ 7 calendar days)
   - "3天内" → `received_ms + 3 * 24 * 3600 * 1000`
+  - "5个工作日内" → `received_ms + 5 * 24 * 3600 * 1000`
   - "请在48h内" → `received_ms + 48 * 3600 * 1000`
   - "一周内" → `received_ms + 7 * 24 * 3600 * 1000`
-- **Business day adjustment**: When "工作日" is specified, add 2 extra days per 5 business days to account for weekends. Example: "5个工作日" = 7 calendar days.
+- **Do not pad or adjust**: "工作日"按自然日计算，不额外加天数。直接按字面数字乘以对应时间单位。
 - **Default behavior**: If no deadline is stated, set `deadline_ms` to `null`.
 
 ### interview_round
