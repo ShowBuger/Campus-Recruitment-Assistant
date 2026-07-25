@@ -253,30 +253,36 @@ th { background: rgba(250, 250, 252, .66); color: var(--muted); border-bottom: 1
   -webkit-backdrop-filter: blur(6px) saturate(140%);
   filter: url(#lg-filter);
 }
-/* when the real filter is live, drop the CSS frost approximation on panes */
-html.lg-live .sidebar,
+/* when the real filter is live: warped hosts drop the CSS frost, and each
+   host forms a stacking context (via transform, which does NOT block
+   backdrop sampling) so the z-index:-1 warp paints above the host's own
+   background instead of being buried underneath it */
 html.lg-live .card,
 html.lg-live .kpi,
 html.lg-live .funnel-step,
 html.lg-live .modal,
 html.lg-live .login-card,
-html.lg-live .notification-panel,
-html.lg-live .style-panel,
-html.lg-live .progress-filter-menu,
-html.lg-live .chat-shell,
 html.lg-live .chat-modal-window,
-html.lg-live .chat-bubble,
-html.lg-live .admin-user-card,
-html.lg-live .help-intro,
-html.lg-live .help-grid article,
-html.lg-live .settings-page,
-html.lg-live .tracker-event,
-html.lg-live .tracker-task,
-html.lg-live .shared-sync-status,
-html.lg-live .invite-current,
+html.lg-live .notification-panel,
 html.lg-live .toast,
-html.lg-live th,
-html.lg-live .topbar #last-updated {
+html.lg-live .topbar .btn,
+html.lg-live .btn-primary {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
+html.lg-live .card,
+html.lg-live .kpi,
+html.lg-live .funnel-step,
+html.lg-live .modal,
+html.lg-live .login-card,
+html.lg-live .chat-modal-window,
+html.lg-live .notification-panel,
+html.lg-live .topbar .btn,
+html.lg-live .btn-primary { transform: translateZ(0) }
+html.lg-live .toast { transform: translateX(-50%) translateZ(0) }
+html.lg-live .toast.hidden { transform: translate(-50%,-10px) translateZ(0) }
+html.lg-live .card:hover,
+html.lg-live .kpi:hover,
+html.lg-live .funnel-step:hover { transform: translateZ(0) translateY(-3px) }
+/* a foreground filter would block the warp's backdrop sampling on hover */
+html.lg-live .btn-primary:hover { filter: none }
