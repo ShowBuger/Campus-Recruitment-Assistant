@@ -70,3 +70,8 @@ if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 if os.path.isdir(os.path.join(PROJECT_DIR, "assets")):
     app.mount("/assets", StaticFiles(directory=os.path.join(PROJECT_DIR, "assets")), name="assets")
+
+# Vue SPA 构建产物
+_DIST_DIR = os.path.join(PROJECT_DIR, "static", "dist")
+if os.path.isdir(os.path.join(_DIST_DIR, "assets")):
+    app.mount("/dist/assets", StaticFiles(directory=os.path.join(_DIST_DIR, "assets")), name="vue-assets")

@@ -1,0 +1,13 @@
+* { box-sizing: border-box; margin: 0; padding: 0 }
+html, body { height: 100% }
+body {
+  font-family: var(--font);
+  font-size: 14px; line-height: 1.5;
+  color: var(--ink);
+  background: var(--bg);
+  transition: background .3s ease, color .3s ease;
+}
+.app { display: grid; grid-template-columns: 236px minmax(0,1fr); min-height: 100vh }
+.main { padding: 22px 26px 60px; max-width: 1400px; width: 100%; min-width: 0 }
+a { color: var(--blue); text-decoration: none; font-weight: 700 }
+a:hover { color: var(--blue2) }
