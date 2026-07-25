@@ -7,13 +7,32 @@
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=brand-4">
   <link rel="shortcut icon" href="/static/favicon.svg?v=brand-4">
   <meta name="theme-color" content="#386a57">
-  <link rel="stylesheet" href="/static/base.css?v=1">
-  <link rel="stylesheet" href="/static/components-extra.css?v=1">
-  <link rel="stylesheet" href="/static/pixelium-font.css?v=1">
-  <link rel="stylesheet" href="/static/pixelium-vue.css?v=1">
-  <link rel="stylesheet" href="/static/pixelium-theme.css?v=1">
-  <link rel="stylesheet" href="/static/app-layout.css?v=1">
-  <script type="module" crossorigin src="/dist/assets/index-izoMhS89.js"></script>
+  <!-- Always-loaded base styles -->
+  <link rel="stylesheet" href="/static/base.css?v=2">
+  <link rel="stylesheet" href="/static/components-extra.css?v=2">
+  <link rel="stylesheet" href="/static/app-layout.css?v=2">
+  <!-- Style-specific: disabled by default, enabled by JS when matching style is active -->
+  <link rel="stylesheet" href="/static/pixelium-font.css?v=2" id="css-pixelfont" disabled>
+  <link rel="stylesheet" href="/static/pixelium-vue.css?v=2" id="css-pixelvue" disabled>
+  <link rel="stylesheet" href="/static/pixelium-theme.css?v=2" id="css-pixelium" disabled>
+  <!-- Liquid Glass theme (created after npm install) -->
+  <link rel="stylesheet" href="/static/liquid-glass.css?v=1" id="css-liquid" disabled>
+  <!-- Synchronous script: reads saved style before first paint, zero FOUC -->
+  <script>
+    (function(){
+      var style = localStorage.getItem('radar_style') || 'classic';
+      document.documentElement.dataset.style = style;
+      if (style === 'pixelium') {
+        var el;
+        el = document.getElementById('css-pixelium'); if (el) el.removeAttribute('disabled');
+        el = document.getElementById('css-pixelfont'); if (el) el.removeAttribute('disabled');
+        el = document.getElementById('css-pixelvue'); if (el) el.removeAttribute('disabled');
+      } else if (style === 'liquid') {
+        var el = document.getElementById('css-liquid'); if (el) el.removeAttribute('disabled');
+      }
+    })();
+  </script>
+  <script type="module" crossorigin src="/dist/assets/index-DvcrmYKY.js"></script>
   <link rel="stylesheet" crossorigin href="/dist/assets/index-D6Oi9FJ-.css">
 </head>
 <body>

@@ -17,7 +17,15 @@ export default defineConfig({
   },
   base: '/dist/',
   build: {
-    outDir: '../static/dist',
-    emptyOutDir: true
+    outDir: '/var/www/campus-dashboard/dist',
+    emptyOutDir: true,
+    rollupOptions: {
+      // shader worker is loaded via new Worker(new URL(...)) at runtime —
+      // prevent Rollup from trying to bundle it as a module import
+      external: (id) => {
+        if (id.includes('shader-worker')) return true
+        return false
+      }
+    }
   }
 })
