@@ -1,7 +1,7 @@
 const BASE = ''
-let _token = localStorage.getItem('token') || ''
+let _token = localStorage.getItem('rb_token') || ''
 
-export function setToken(t) { _token = t; t ? localStorage.setItem('token', t) : localStorage.removeItem('token') }
+export function setToken(t) { _token = t; t ? localStorage.setItem('rb_token', t) : localStorage.removeItem('rb_token') }
 export function getToken() { return _token }
 
 export async function api(method, path, body, opts = {}) {

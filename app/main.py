@@ -87,4 +87,4 @@ if os.path.isdir(os.path.join(PROJECT_DIR, "assets")):
 # Vue SPA 构建产物（/vue 路径）
 _DIST_DIR = os.path.join(PROJECT_DIR, "static", "dist")
 if os.path.isdir(_DIST_DIR):
-    app.mount("/vue", StaticFiles(directory=_DIST_DIR, html=True), name="vue-spa")
+    app.mount("/dist", StaticFiles(directory=_DIST_DIR), name="vue-dist")

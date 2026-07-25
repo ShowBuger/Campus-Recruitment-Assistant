@@ -4,7 +4,7 @@ import { get, post, setToken } from '@/utils/api'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
-  const token = ref(localStorage.getItem('token') || '')
+  const token = ref(localStorage.getItem('rb_token') || '')
 
   const isLoggedIn = computed(() => !!token.value && !!user.value)
   const isAdmin = computed(() => user.value?.is_admin || user.value?.is_root)
@@ -12,7 +12,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function checkSession() {
     const data = await get('/api/auth/me', { silent: true })
     user.value = data.user
-    token.value = localStorage.getItem('token') || ''
+    token.value = localStorage.getItem('rb_token') || ''
   }
 
   async function login(username, password) {
