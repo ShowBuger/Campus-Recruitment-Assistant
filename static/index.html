@@ -389,7 +389,7 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
       </div>
       <div class="help-note"><b>提示</b><span>AI Key 仅保存在你的独立配置中。重要岗位信息与截止时间仍建议打开官方入口核对。</span></div>
     </div>
-    <div class="modal-ft"><button class="btn btn-primary" onclick="closeHelpModal()">开始使用</button></div>
+    <div class="modal-ft"><a href="/guide" class="btn" style="margin-right:auto">使用文档</a><button class="btn btn-primary" onclick="closeHelpModal()">开始使用</button></div>
   </div>
 </div>
 <div class="modal-mask" id="config-modal" onclick="if(event.target===this&&_modalMousedownTarget===this)closeConfigModal()">
@@ -440,6 +440,7 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
           <div class="form-group tracker-mode-group"><label for="tracker-mode">更新方式</label><select id="tracker-mode"><option value="confirm">识别后由我确认</option><option value="auto">高置信度自动更新</option></select></div>
           <div class="form-group tracker-enable-group"><label>自动跟踪</label><label class="tracker-toggle"><input id="tracker-enabled" type="checkbox"><span></span><b>按设定周期检查新邮件</b></label></div>
           <div class="form-group tracker-ai-group"><label>识别引擎</label><label class="tracker-toggle"><input id="tracker-ai-enabled" type="checkbox" onchange="updateTrackerAiNotice()"><span></span><b>使用当前大模型判断全部新增邮件</b></label></div>
+          <div class="form-group" id="tracker-ai-model-group"><label for="tracker-ai-model">跟踪模型</label><select id="tracker-ai-model"><option value="">请先在 AI 配置中保存 API Key</option></select><div class="help">选择用于批量识别招聘邮件的模型，建议使用轻量模型以节省成本</div></div>
           <div class="form-group tracker-cycle-group"><label>跟踪周期</label><div class="tracker-cycle" id="tracker-cycle"><button type="button" data-minutes="5" onclick="selectTrackerCycle(5)">5 分钟</button><button type="button" data-minutes="15" onclick="selectTrackerCycle(15)">15 分钟</button><button type="button" data-minutes="30" onclick="selectTrackerCycle(30)">30 分钟</button><button type="button" data-minutes="60" onclick="selectTrackerCycle(60)">1 小时</button><button type="button" data-minutes="180" onclick="selectTrackerCycle(180)">3 小时</button><button type="button" data-minutes="360" onclick="selectTrackerCycle(360)">6 小时</button><button type="button" data-minutes="720" onclick="selectTrackerCycle(720)">12 小时</button><button type="button" data-minutes="1440" onclick="selectTrackerCycle(1440)">24 小时</button></div><input id="tracker-interval" type="hidden" value="30"></div>
         </div>
         <div class="tracker-ai-notice" id="tracker-ai-notice">当前为本地模式：邮件正文不会发送给大模型，仅使用本地关键词判断。</div>
@@ -1240,7 +1241,46 @@ async function testAIConnection(){var btn=$('config-test');btn.disabled=true;btn
 
 /* ---------- 进度跟踪配置 ---------- */
 function selectTrackerCycle(minutes){$('tracker-interval').value=String(minutes);document.querySelectorAll('#tracker-cycle button').forEach(function(btn){btn.classList.toggle('active',Number(btn.dataset.minutes)===Number(minutes))})}
-function trackerPayload(){return{email:$('tracker-email').value.trim(),authorization_code:$('tracker-code').value.trim(),imap_host:$('tracker-host').value.trim(),imap_port:Number($('tracker-port').value)||993,enabled:$('tracker-enabled').checked,mode:$('tracker-mode').value,ai_enabled:$('tracker-ai-enabled').checked,sync_interval_minutes:Number($('tracker-interval').value)||30}}
+var _trackerAiModels=[];
+async function loadTrackerAiModels(selectedProvider,selectedModel,silent){
+  var select=$('tracker-ai-model');if(!select)return;
+  var current=select.selectedIndex>=0?_trackerAiModels[Number(select.value)]:null;
+  selectedProvider=selectedProvider||(current&&current.provider)||'';
+  selectedModel=selectedModel||(current&&current.model)||'';
+  try{
+    var data=await api('GET','/api/progress-tracker/ai-models',undefined,{silent:true});
+    _trackerAiModels=[];
+    arr(data.providers).forEach(function(group){
+      arr(group.models).forEach(function(model){
+        _trackerAiModels.push({provider:group.provider,label:group.label,model:model,catalogLoaded:!!group.catalog_loaded})
+      })
+    });
+    select.innerHTML=_trackerAiModels.map(function(item,index){
+      return'<option value="'+index+'">'+esc(item.label+' · '+item.model)+'</option>'
+    }).join('')||'<option value="">请先在 AI 配置中保存 API Key</option>';
+    var found=_trackerAiModels.findIndex(function(item){return item.provider===selectedProvider&&item.model===selectedModel});
+    select.value=String(found>=0?found:0);
+    select.disabled=!_trackerAiModels.length;
+    if(!silent&&_trackerAiModels.length)toast('已加载 '+_trackerAiModels.length+' 个跟踪模型','success');
+    updateTrackerAiNotice()
+  }catch(e){
+    select.innerHTML='<option value="">模型列表加载失败</option>';
+    select.disabled=true;
+    if(!silent)toast('跟踪模型加载失败：'+e.message,'error')
+  }
+}
+function trackerPayload(){
+  var aiSel=$('tracker-ai-model'),aiIdx=aiSel.selectedIndex,aiItem=_trackerAiModels[Number(aiSel.value)];
+  return{
+    email:$('tracker-email').value.trim(),authorization_code:$('tracker-code').value.trim(),
+    imap_host:$('tracker-host').value.trim(),imap_port:Number($('tracker-port').value)||993,
+    enabled:$('tracker-enabled').checked,mode:$('tracker-mode').value,
+    ai_enabled:$('tracker-ai-enabled').checked,
+    tracker_ai_provider:aiItem?aiItem.provider:'',
+    tracker_ai_model:aiItem?aiItem.model:'',
+    sync_interval_minutes:Number($('tracker-interval').value)||30
+  }
+}
 function updateTrackerAiNotice(){var enabled=$('tracker-ai-enabled').checked,el=$('tracker-ai-notice');el.classList.toggle('active',enabled);el.textContent=enabled?'大模型模式：邮件前段会发送给当前 AI 服务商；接口失效、超时或余额不足时自动切换本地关键词识别。':'当前为本地模式：邮件正文不会发送给大模型，仅使用本地关键词判断。'}
 function renderTrackerEvents(events){
   var el=$('tracker-event-list'),labels={pending:'待确认',applied:'已更新',ignored:'已忽略',preview:'测试预览',error:'判断失败'};if(!el)return;
@@ -1262,7 +1302,7 @@ async function loadTrackerPending(){try{var data=await api('GET','/api/progress-
 async function openTrackerPendingModal(){var events=await loadTrackerPending();showTrackerSyncResults(events)}
 function showTrackerSyncResults(events){events=arr(events);updateTrackerPendingButton(events);var el=$('tracker-test-results');$('tracker-result-title').textContent='待确认更新';$('tracker-test-summary').textContent=events.length?'发现 '+events.length+' 条待确认进度，可以现在处理或稍后再看':'当前没有需要确认的进度';el.innerHTML=events.map(function(item){var matched=!!item.record_id,primary=matched?'<button class="btn btn-primary" onclick="actTrackerPopupEvent('+Number(item.id)+',\'confirm\')">接受</button>':'<button class="btn btn-primary" onclick="actTrackerPopupEvent('+Number(item.id)+',\'create\')">一键添加记录</button>',times=trackerTimeMeta(item);return'<article class="tracker-event tracker-test-result" data-event-id="'+Number(item.id)+'"><div class="tracker-event-main"><div><b>'+esc(item.company||(matched?'已匹配岗位':'待补充公司'))+'</b><span>'+esc(item.job||item.subject||'待补充岗位')+'</span></div><em>'+esc(item.progress||'未识别')+'</em></div><div class="tracker-event-meta"><span>'+esc(trackerConfidenceLabel(item))+'</span>'+(item.reason?'<span>'+esc(item.reason)+'</span>':'')+times.map(function(x){return'<span class="tracker-time-meta">'+esc(x)+'</span>'}).join('')+(!matched?'<span class="tracker-unmatched">未匹配个人总表岗位，可直接新增后再完善信息</span>':'')+'</div>'+trackerRoundPicker(item)+'<div class="tracker-event-actions">'+primary+'<button class="btn" onclick="actTrackerPopupEvent('+Number(item.id)+',\'ignore\')">放弃</button></div></article>'}).join('')||'<div class="center muted">没有需要确认的进度</div>';$('tracker-test-modal').classList.add('show')}
 async function actTrackerPopupEvent(id,action){try{var result=await api('POST','/api/progress-tracker/events/'+id,{action:action}),card=document.querySelector('#tracker-test-results [data-event-id="'+id+'"]');if(card)card.remove();_trackerPending=_trackerPending.filter(function(item){return Number(item.id)!==Number(id)});updateTrackerPendingButton(_trackerPending);var left=_trackerPending.length;$('tracker-test-summary').textContent=left?'还有 '+left+' 条待确认进度':'处理完成，没有待确认进度';if(!left)$('tracker-test-results').innerHTML='<div class="center muted">所有结果均已处理</div>';toast(result.message||'已处理','success');if(action==='confirm'||action==='create')await load();var pending=await loadTrackerPending();updateTrackerPendingButton(pending)}catch(e){toast('处理失败：'+e.message,'error',6000)}}
-async function loadTrackerConfig(){try{var data=await api('GET','/api/progress-tracker',undefined,{silent:true}),c=data.config||{},saved=!!c.authorization_code_saved;updateTrackerPendingButton(data.events);$('tracker-email').value=c.email||'';$('tracker-code').value='';$('tracker-code').placeholder=saved?'••••••••••••••••  已保存':'请输入客户端授权码';$('tracker-code').classList.toggle('secret-saved',saved);$('tracker-code-help').textContent=saved?'✓ 授权码已安全保存；留空不会删除，输入新授权码才会替换':'请勿填写邮箱登录密码';$('tracker-code-help').classList.toggle('saved',saved);$('tracker-host').value=c.imap_host||'imap.163.com';$('tracker-port').value=c.imap_port||993;$('tracker-enabled').checked=!!c.enabled;$('tracker-mode').value=c.mode||'confirm';$('tracker-ai-enabled').checked=!!c.ai_enabled;selectTrackerCycle(c.sync_interval_minutes||30);updateTrackerAiNotice();$('tracker-status-badge').textContent=c.enabled?'跟踪中':c.email?'已配置':'未配置';$('tracker-status-badge').classList.toggle('active',!!c.enabled);$('tracker-last-sync').textContent=c.last_sync_at?'上次同步 '+formatSystemTime(c.last_sync_at):(c.last_error?'错误：'+c.last_error:'尚未同步')}catch(e){}}
+async function loadTrackerConfig(){try{var data=await api('GET','/api/progress-tracker',undefined,{silent:true}),c=data.config||{},saved=!!c.authorization_code_saved;updateTrackerPendingButton(data.events);$('tracker-email').value=c.email||'';$('tracker-code').value='';$('tracker-code').placeholder=saved?'••••••••••••••••  已保存':'请输入客户端授权码';$('tracker-code').classList.toggle('secret-saved',saved);$('tracker-code-help').textContent=saved?'✓ 授权码已安全保存；留空不会删除，输入新授权码才会替换':'请勿填写邮箱登录密码';$('tracker-code-help').classList.toggle('saved',saved);$('tracker-host').value=c.imap_host||'imap.163.com';$('tracker-port').value=c.imap_port||993;$('tracker-enabled').checked=!!c.enabled;$('tracker-mode').value=c.mode||'confirm';$('tracker-ai-enabled').checked=!!c.ai_enabled;await loadTrackerAiModels(c.tracker_ai_provider||'',c.tracker_ai_model||'',true);selectTrackerCycle(c.sync_interval_minutes||30);updateTrackerAiNotice();$('tracker-status-badge').textContent=c.enabled?'跟踪中':c.email?'已配置':'未配置';$('tracker-status-badge').classList.toggle('active',!!c.enabled);$('tracker-last-sync').textContent=c.last_sync_at?'上次同步 '+formatSystemTime(c.last_sync_at):(c.last_error?'错误：'+c.last_error:'尚未同步')}catch(e){}}
 async function saveTrackerConfig(showToast){if(showToast===undefined)showToast=true;var btn=$('tracker-save');btn.disabled=true;btn.classList.add('loading');try{var result=await api('POST','/api/progress-tracker',trackerPayload());if(showToast)toast(result.message||'进度跟踪配置已保存','success');await loadTrackerConfig();return true}catch(e){toast('进度跟踪保存失败：'+e.message,'error',6000);return false}finally{btn.disabled=false;btn.classList.remove('loading')}}
 var _trackerVisualProgress=0,_trackerVisualStage='',_trackerVisualStageAt=0;
 function resetTrackerTaskProgress(){_trackerVisualProgress=0;_trackerVisualStage='';_trackerVisualStageAt=Date.now()}
