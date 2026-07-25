@@ -3,31 +3,32 @@
     <div class="modal record-detail-modal">
       <div class="modal-hd">
         <div>
-          <h2>{{ record?.company || '记录详情' }}</h2>
-          <p>基础信息、投递流程、岗位 JD 与备注统一在此维护。</p>
+          <h2 id="total-edit-title">{{ record?.company || '记录详情' }}</h2>
+          <p id="total-edit-description">在一个窗口中查看和修改完整记录。</p>
         </div>
         <button class="icon-btn" @click="$emit('close')" title="关闭">&times;</button>
       </div>
 
-      <form @submit.prevent="handleSubmit">
+      <form id="total-edit-form" @submit.prevent="handleSubmit">
         <div class="modal-body">
           <div class="grid-2">
-            <!-- 公司名称 + AI 补全 -->
+            <input id="total-edit-id" type="hidden" :value="recordId">
+
             <div class="form-group">
               <label for="total-edit-company">公司</label>
-              <div style="display:flex;gap:8px">
-                <input id="total-edit-company" ref="companyInput" required maxlength="100" v-model="form.company" style="flex:1">
-                <button class="btn btn-ai-enrich" type="button" @click="enrichRecord" :disabled="enriching" title="AI 补全空缺字段">AI 补全</button>
-              </div>
+              <input id="total-edit-company" required maxlength="100" v-model="form.company" ref="companyInput">
             </div>
+
             <div class="form-group">
-              <label for="total-edit-job">目标岗位（选填）</label>
+              <label for="total-edit-job" id="total-edit-job-label">目标岗位（选填）</label>
               <input id="total-edit-job" maxlength="500" placeholder="可留空" v-model="form.job">
             </div>
+
             <div class="form-group">
               <label for="total-edit-city">城市</label>
               <input id="total-edit-city" maxlength="200" v-model="form.city">
             </div>
+
             <div class="form-group">
               <label for="total-edit-batch">批次</label>
               <select id="total-edit-batch" v-model="form.batch">
@@ -35,15 +36,18 @@
                 <option value="提前批">提前批</option>
               </select>
             </div>
+
             <div class="form-group">
-              <label for="total-edit-directions">方向（选填）</label>
+              <label for="total-edit-directions" id="total-edit-directions-label">方向（选填）</label>
               <input id="total-edit-directions" maxlength="500" placeholder="多个方向用逗号分隔，可留空" v-model="form.directions">
             </div>
+
             <div class="form-group">
-              <label for="total-edit-company-type">公司类型（选填）</label>
+              <label for="total-edit-company-type" id="total-edit-company-type-label">公司类型（选填）</label>
               <input id="total-edit-company-type" maxlength="200" placeholder="例如：互联网、车企、国企，可留空" v-model="form.company_type">
             </div>
-            <div class="form-group">
+
+            <div class="form-group" id="total-edit-progress-group">
               <label for="total-edit-progress">进展</label>
               <select id="total-edit-progress" v-model="form.progress">
                 <option value="未投递">未投递</option>
@@ -55,25 +59,28 @@
                 <option value="放弃">放弃</option>
               </select>
             </div>
-            <div class="form-group" v-show="form.progress !== '未投递'">
+
+            <div class="form-group" id="total-edit-resume-version-group" v-show="form.progress !== '未投递'">
               <label for="total-edit-resume-version">简历版本</label>
               <select id="total-edit-resume-version" v-model="form.resume_version">
                 <option value=""></option>
                 <option v-for="f in resumes" :key="f.name" :value="f.name">{{ f.name }}</option>
               </select>
             </div>
+
             <div class="form-group">
               <label for="total-edit-deadline">截止</label>
-              <input id="total-edit-deadline" :type="dateActive.deadline || form.deadline ? 'date' : 'text'" @focus="activateDate('deadline')" @blur="deactivateDate('deadline')" v-model="form.deadline">
+              <input id="total-edit-deadline" type="text" v-model="form.deadline" @focus="activateOptionalDate" @blur="deactivateOptionalDate">
             </div>
+
             <div class="form-group" style="grid-column:1/-1">
               <label for="total-edit-url">入口网址</label>
               <input id="total-edit-url" placeholder="https://..." v-model="form.url">
             </div>
 
-            <div class="detail-section">投递流程与详细信息</div>
+            <div class="detail-section" id="total-edit-detail-section">投递流程与详细信息</div>
 
-            <div class="form-group">
+            <div class="form-group" id="total-edit-priority-group">
               <label for="total-edit-priority">优先级</label>
               <select id="total-edit-priority" v-model="form.priority">
                 <option value="⭐⭐⭐⭐⭐">⭐⭐⭐⭐⭐</option>
@@ -83,58 +90,69 @@
                 <option value="⭐">⭐</option>
               </select>
             </div>
+
             <div class="form-group">
               <label for="total-edit-apply-date">投递时间</label>
-              <input id="total-edit-apply-date" :type="dateActive.apply_date || form.apply_date ? 'date' : 'text'" @focus="activateDate('apply_date')" @blur="deactivateDate('apply_date')" v-model="form.apply_date">
-            </div>
-            <div class="form-group">
-              <label for="total-edit-exam-date">机考时间</label>
-              <input id="total-edit-exam-date" :type="dateActive.exam_date || form.exam_date ? 'date' : 'text'" @focus="activateDate('exam_date')" @blur="deactivateDate('exam_date')" v-model="form.exam_date">
-            </div>
-            <div class="form-group">
-              <label for="total-edit-interview1">一面</label>
-              <input id="total-edit-interview1" :type="dateActive.interview1 || form.interview1 ? 'date' : 'text'" @focus="activateDate('interview1')" @blur="deactivateDate('interview1')" v-model="form.interview1">
-            </div>
-            <div class="form-group">
-              <label for="total-edit-interview2">二面</label>
-              <input id="total-edit-interview2" :type="dateActive.interview2 || form.interview2 ? 'date' : 'text'" @focus="activateDate('interview2')" @blur="deactivateDate('interview2')" v-model="form.interview2">
-            </div>
-            <div class="form-group">
-              <label for="total-edit-interview3">三面</label>
-              <input id="total-edit-interview3" :type="dateActive.interview3 || form.interview3 ? 'date' : 'text'" @focus="activateDate('interview3')" @blur="deactivateDate('interview3')" v-model="form.interview3">
-            </div>
-            <div class="form-group">
-              <label for="total-edit-warm">保温</label>
-              <input id="total-edit-warm" :type="dateActive.warm || form.warm ? 'date' : 'text'" @focus="activateDate('warm')" @blur="deactivateDate('warm')" v-model="form.warm">
-            </div>
-            <div class="form-group">
-              <label for="total-edit-result-date">结果时间</label>
-              <input id="total-edit-result-date" :type="dateActive.result_date || form.result_date ? 'date' : 'text'" @focus="activateDate('result_date')" @blur="deactivateDate('result_date')" v-model="form.result_date">
+              <input id="total-edit-apply-date" type="text" v-model="form.apply_date" @focus="activateOptionalDate" @blur="deactivateOptionalDate">
             </div>
 
-            <div class="detail-section">Offer 信息（用于 Offer 对比）</div>
+            <div class="form-group">
+              <label for="total-edit-exam-date">机考时间</label>
+              <input id="total-edit-exam-date" type="text" v-model="form.exam_date" @focus="activateOptionalDate" @blur="deactivateOptionalDate">
+            </div>
+
+            <div class="form-group">
+              <label for="total-edit-interview1">一面</label>
+              <input id="total-edit-interview1" type="text" v-model="form.interview1" @focus="activateOptionalDate" @blur="deactivateOptionalDate">
+            </div>
+
+            <div class="form-group">
+              <label for="total-edit-interview2">二面</label>
+              <input id="total-edit-interview2" type="text" v-model="form.interview2" @focus="activateOptionalDate" @blur="deactivateOptionalDate">
+            </div>
+
+            <div class="form-group">
+              <label for="total-edit-interview3">三面</label>
+              <input id="total-edit-interview3" type="text" v-model="form.interview3" @focus="activateOptionalDate" @blur="deactivateOptionalDate">
+            </div>
+
+            <div class="form-group">
+              <label for="total-edit-warm">保温</label>
+              <input id="total-edit-warm" type="text" v-model="form.warm" @focus="activateOptionalDate" @blur="deactivateOptionalDate">
+            </div>
+
+            <div class="form-group">
+              <label for="total-edit-result-date">结果时间</label>
+              <input id="total-edit-result-date" type="text" v-model="form.result_date" @focus="activateOptionalDate" @blur="deactivateOptionalDate">
+            </div>
+
+            <div class="detail-section" id="total-edit-offer-section">Offer 信息（用于 Offer 对比）</div>
 
             <div class="form-group">
               <label for="total-edit-offer-total">总包</label>
               <input id="total-edit-offer-total" maxlength="100" placeholder="如 30W / 25k×16" v-model="form.offer_total">
             </div>
+
             <div class="form-group">
               <label for="total-edit-offer-base">base（月/年）</label>
               <input id="total-edit-offer-base" maxlength="100" placeholder="如 20k/月" v-model="form.offer_base">
             </div>
+
             <div class="form-group">
               <label for="total-edit-offer-bonus">奖金/股票/补贴</label>
               <input id="total-edit-offer-bonus" maxlength="200" placeholder="如 签字费 3W、房补 2k/月" v-model="form.offer_bonus">
             </div>
+
             <div class="form-group">
               <label for="total-edit-offer-deadline">决策截止</label>
-              <input id="total-edit-offer-deadline" :type="dateActive.offer_deadline || form.offer_deadline ? 'date' : 'text'" @focus="activateDate('offer_deadline')" @blur="deactivateDate('offer_deadline')" v-model="form.offer_deadline">
+              <input id="total-edit-offer-deadline" type="text" v-model="form.offer_deadline" @focus="activateOptionalDate" @blur="deactivateOptionalDate">
             </div>
 
             <div class="form-group record-detail-textarea">
               <label for="total-edit-job-jd">岗位 JD</label>
               <textarea id="total-edit-job-jd" maxlength="10000" placeholder="填写岗位职责、任职要求等信息" v-model="form.job_jd"></textarea>
             </div>
+
             <div class="form-group record-detail-textarea">
               <label for="total-edit-note">备注</label>
               <textarea id="total-edit-note" maxlength="5000" placeholder="填写公司评价、流程提醒或其他备注" v-model="form.note"></textarea>
@@ -142,22 +160,22 @@
           </div>
         </div>
 
-        <div class="detail-actions" v-if="record">
+        <div class="detail-actions" id="total-edit-actions" v-if="record">
           <div class="detail-actions-copy">
             <b>记录管理</b>
             <span>AI 补全只填写空缺字段，备注会追加在原内容之后</span>
           </div>
           <div class="detail-action-buttons">
-            <button class="btn btn-ai-enrich" type="button" @click="enrichRecord" :disabled="enriching">AI 补全</button>
-            <button class="btn btn-remove-application" type="button" @click="removeApplication" v-show="isAppRecord">移出投递</button>
-            <button class="btn" type="button" @click="shareRecord" :disabled="shareDisabled" :title="shareTitle">上传共享</button>
+            <button class="btn btn-ai-enrich" id="detail-enrich-btn" type="button" @click="enrichRecord" :disabled="enriching">AI 补全</button>
+            <button class="btn btn-remove-application" id="detail-remove-btn" type="button" @click="removeApplication" v-show="isAppRecord">移出投递</button>
+            <button class="btn" id="detail-share-btn" type="button" @click="shareRecord" :disabled="shareDisabled" :title="shareTitle">上传共享</button>
             <button class="btn btn-danger" type="button" @click="deleteRecord">删除记录</button>
           </div>
         </div>
 
         <div class="modal-ft">
           <button class="btn" type="button" @click="$emit('close')">取消</button>
-          <button class="btn btn-primary" type="submit" :disabled="submitting">{{ submitting ? '保存中…' : '保存修改' }}</button>
+          <button class="btn btn-primary" id="total-edit-submit" type="submit" :disabled="submitting">{{ submitting ? '保存中…' : '保存修改' }}</button>
         </div>
       </form>
     </div>
@@ -182,21 +200,6 @@ const companyInput = ref(null)
 const submitting = ref(false)
 const enriching = ref(false)
 const resumes = ref([])
-
-// Track which date fields are currently focused (to show the native date picker)
-const dateActive = reactive({
-  deadline: false,
-  apply_date: false,
-  exam_date: false,
-  interview1: false,
-  interview2: false,
-  interview3: false,
-  warm: false,
-  result_date: false,
-  offer_deadline: false
-})
-
-// Snapshot of AI-related fields at load, used for dirty-checking before enrich
 const initialAiState = ref('')
 
 // ---------- helper functions (ported from original JS) ----------
@@ -236,23 +239,17 @@ function computeAiState() {
   })
 }
 
-// ---------- date field focus / blur ----------
+// ---------- date field activation (match original JS) ----------
 
-function activateDate(field) {
-  dateActive[field] = true
-  nextTick(() => {
-    const id = 'total-edit-' + field.replace(/_/g, '-')
-    const el = document.getElementById(id)
-    if (el && el.showPicker) {
-      try { el.showPicker() } catch (e) { /* ignore */ }
-    }
-  })
+function activateOptionalDate(e) {
+  const input = e.target
+  input.type = 'date'
+  try { if (input.showPicker) input.showPicker() } catch (_) {}
 }
 
-function deactivateDate(field) {
-  if (!form[field]) {
-    dateActive[field] = false
-  }
+function deactivateOptionalDate(e) {
+  const input = e.target
+  if (!input.value) input.type = 'text'
 }
 
 // ---------- form model ----------
@@ -265,9 +262,10 @@ const form = reactive({
   directions: '',
   company_type: '',
   progress: '未投递',
+  resume_version: '',
+  deadline: '',
   url: '',
   priority: '⭐⭐⭐',
-  deadline: '',
   apply_date: '',
   exam_date: '',
   interview1: '',
@@ -280,8 +278,7 @@ const form = reactive({
   offer_bonus: '',
   offer_deadline: '',
   job_jd: '',
-  note: '',
-  resume_version: ''
+  note: ''
 })
 
 // ---------- computed ----------
@@ -296,7 +293,9 @@ const shareMissingFields = computed(() => shareMissing(record.value || {}))
 
 const shareDisabled = computed(() => shareMissingFields.value.length > 0)
 
-const shareTitle = computed(() => shareDisabled.value ? '需补全：' + shareMissingFields.value.join('、') : '')
+const shareTitle = computed(() => {
+  return shareDisabled.value ? '需补全：' + shareMissingFields.value.join('、') : ''
+})
 
 // ---------- actions ----------
 
@@ -443,7 +442,7 @@ onMounted(async () => {
   form.offer_bonus = r.offer_bonus || ''
   form.resume_version = r.resume_version || ''
 
-  // Date fields
+  // Set date values (all as YYYY-MM-DD strings)
   form.deadline = inputDate(r.deadline)
   form.apply_date = inputDate(r.apply_date)
   form.exam_date = inputDate(r.exam_date)
@@ -465,6 +464,16 @@ onMounted(async () => {
   }
 
   nextTick(() => {
+    // For date fields with values, set input type to 'date' (matching original openRecordDetails behavior)
+    const TOTAL_DETAIL_DATE_IDS = [
+      'total-edit-deadline', 'total-edit-apply-date', 'total-edit-exam-date',
+      'total-edit-interview1', 'total-edit-interview2', 'total-edit-interview3',
+      'total-edit-warm', 'total-edit-result-date', 'total-edit-offer-deadline'
+    ]
+    TOTAL_DETAIL_DATE_IDS.forEach(id => {
+      const el = document.getElementById(id)
+      if (el && el.value) el.type = 'date'
+    })
     if (companyInput.value) companyInput.value.focus()
   })
 })
