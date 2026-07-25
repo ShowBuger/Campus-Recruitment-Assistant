@@ -18,6 +18,14 @@ const importLoading = ref(false)
 const feishuSyncing = ref(false)
 const givemeocSyncing = ref(false)
 const givemeocProgress = ref('')
+const givemeocShow = ref(false)
+const givemeocPhase = ref('scanning')
+const givemeocLabel = ref('扫描岗位')
+const givemeocPercent = ref('检索中')
+const givemeocBarWidth = ref('36%')
+const givemeocDetail = ref('正在查找 2027届 秋招岗位…')
+const givemeocError = ref(false)
+const givemeocIndeterminate = ref(false)
 function isRoot() { return auth.user?.username === 'root' }
 function isAdmin() { return auth.isAdmin }
 
@@ -42,16 +50,16 @@ const displayRecords = computed(() => {
     })
   }
   if (!showShared.value && sortValue.value !== 'default') {
-    const sorted = [...items]
+    const sorted = items.map((r, i) => ({ r, i }))
     sorted.sort((a, b) => {
-      const pa = priorityScore(a)
-      const pb = priorityScore(b)
-      if (pa === pb) return 0
+      const pa = priorityScore(a.r)
+      const pb = priorityScore(b.r)
+      if (pa === pb) return a.i - b.i
       if (!pa) return 1
       if (!pb) return -1
       return sortValue.value === 'priority-desc' ? pb - pa : pa - pb
     })
-    return sorted
+    return sorted.map(s => s.r)
   }
   return items
 })
@@ -67,8 +75,7 @@ const recordCountText = computed(() => {
 })
 
 function priorityScore(r) {
-  const map = { '高': 3, '中': 2, '低': 1 }
-  return map[r.priority] || 0
+  return (String(r.priority || '').match(/⭐/g) || []).length
 }
 
 function isApplied(r) {
@@ -128,21 +135,29 @@ function newRecord() { app.openRecord() }
 function manageRecords() { app.showManager = true }
 
 function downloadTemplate() {
-  const a = document.createElement('a')
-  a.href = '/api/dashboard/records/template'
-  a.download = '总表导入模板.xlsx'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
+  downloadBlob('/api/dashboard/records/template', '总表导入模板.xlsx')
 }
 
 function exportExcel() {
-  const a = document.createElement('a')
-  a.href = '/api/dashboard/records/export'
-  a.download = '总表信息.xlsx'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
+  downloadBlob('/api/dashboard/records/export', '总表信息.xlsx')
+}
+
+async function downloadBlob(url, fallbackName) {
+  try {
+    const headers = {}
+    if (auth.token) headers['Authorization'] = `Bearer ${auth.token}`
+    const res = await fetch(url, { headers })
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const blob = await res.blob()
+    const disposition = res.headers.get('Content-Disposition') || ''
+    const match = disposition.match(/filename="?([^";]+)"?/i)
+    const name = match ? match[1] : fallbackName
+    const objectUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = objectUrl; a.download = name
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+  } catch (e) { alert('下载失败: ' + e.message) }
 }
 
 function triggerImport() {
@@ -152,31 +167,79 @@ function triggerImport() {
 
 async function handleImport(event) {
   const file = event.target.files?.[0]; if (!file) return
+  const ext = (file.name || '').toLowerCase().split('.').pop()
+  if (ext !== 'xlsx') { alert('仅支持 .xlsx 格式的 Excel 文件'); event.target.value = ''; return }
   importLoading.value = true
   try {
     const fd = new FormData(); fd.append('file', file)
     const r = await fetch('/api/dashboard/records/import', { method: 'POST', headers: { Authorization: `Bearer ${auth.token}` }, body: fd })
     const data = await r.json()
-    if (data.imported > 0) { await store.refresh() }
-    if (data.errors?.length) { alert(data.errors.slice(0, 3).join('\n')) }
+    if (!r.ok) throw new Error(data.detail || '导入失败')
+    await store.refresh()
+    alert(data.message || `成功导入 ${data.imported_count || 0} 条记录`)
   } catch (e) { alert('导入失败: ' + e.message) }
   finally { importLoading.value = false; event.target.value = '' }
 }
 
 async function feishuSync() {
+  const url = prompt('请输入飞书表格链接')
+  if (!url || !url.trim()) return
   feishuSyncing.value = true
-  try { await post('/api/dashboard/records/feishu-sync'); await store.refresh() } catch {}
+  try {
+    await post('/api/dashboard/records/feishu-sync', { url: url.trim() })
+    await store.refresh()
+  } catch (e) { alert('飞书同步失败: ' + e.message) }
   finally { feishuSyncing.value = false }
 }
 
 async function givemeocSync() {
-  givemeocSyncing.value = true; givemeocProgress.value = '同步中...'
-  try { await post('/api/dashboard/sync-from-givemeoc'); givemeocProgress.value = '已启动' } catch {}
-  finally { givemeocSyncing.value = false }
+  if (!confirm('即将从 GiveMeOC 同步 2027届 岗位到共享总表，确定继续吗？')) return
+  givemeocSyncing.value = true; givemeocShow.value = true; givemeocError.value = false
+  givemeocIndeterminate.value = true; givemeocLabel.value = '扫描岗位'
+  givemeocPercent.value = '检索中'; givemeocBarWidth.value = '36%'
+  givemeocDetail.value = '正在查找 2027届 秋招岗位…'
+  let pollTimer = null
+  const done = (msg, ok) => {
+    clearInterval(pollTimer)
+    givemeocIndeterminate.value = false; givemeocError.value = !ok
+    givemeocLabel.value = ok ? '同步完成' : '同步失败'
+    givemeocPercent.value = ok ? '100%' : '—'
+    givemeocBarWidth.value = ok ? '100%' : '0'
+    givemeocDetail.value = msg || '同步完成'
+    givemeocSyncing.value = false
+    if (msg) alert(msg)
+    loadShared()
+    if (ok) givemeocShow.value = false
+  }
+  try {
+    const start = await post('/api/dashboard/sync-from-givemeoc')
+    pollTimer = setInterval(async () => {
+      try {
+        const p = await get('/api/dashboard/sync-from-givemeoc/progress?sync_id=' + encodeURIComponent(start.sync_id), { silent: true })
+        const ratio = p.total ? Math.round((Number(p.done || 0) / p.total) * 100) : 0
+        if (p.phase === 'scanning') {
+          givemeocIndeterminate.value = true; givemeocLabel.value = '扫描岗位'
+          givemeocPercent.value = (Number(p.found || 0)) + ' 条'; givemeocDetail.value = '正在筛选符合条件的招聘信息'
+        } else if (p.phase === 'writing') {
+          givemeocIndeterminate.value = false; givemeocLabel.value = '批量写入'
+          givemeocPercent.value = '95%'; givemeocBarWidth.value = '95%'
+          givemeocDetail.value = p.message || '正在去重并保存'
+        } else {
+          givemeocIndeterminate.value = false; givemeocLabel.value = '同步详情'
+          givemeocPercent.value = ratio + '%'; givemeocBarWidth.value = Math.max(4, ratio) + '%'
+          givemeocDetail.value = '已处理 ' + Number(p.done || 0) + ' / ' + Number(p.total || 0) + ' 条'
+        }
+        if (p.finished) { done(p.message, !p.failed) }
+      } catch (e) { done('同步异常：' + e.message, false) }
+    }, 800)
+  } catch (err) {
+    if (pollTimer) clearInterval(pollTimer)
+    done('GiveMeOC 同步启动失败：' + err.message, false)
+  }
 }
 
-function sharedNewRecord() { app.openRecord() }
-function sharedManageRecords() { app.showManager = true }
+function sharedNewRecord() { app.openRecord(true) }
+function sharedManageRecords() { app.openManager(true) }
 
 /* ---- Row actions ---- */
 async function addToApplications(r) {
@@ -189,7 +252,7 @@ async function addToApplications(r) {
       await store.refresh()
     }
   } catch (e) {
-    /* toast will be added later */
+    alert('加入投递失败: ' + e.message)
   }
 }
 
@@ -202,7 +265,8 @@ async function addToPersonal(r) {
       store.data = result.dashboard
     }
   } catch (e) {
-    /* toast will be added later */
+    r.is_added = false
+    alert('添加失败: ' + e.message)
   }
 }
 </script>
@@ -279,7 +343,8 @@ async function addToPersonal(r) {
             <tr v-else-if="!displayRecords.length"><td colspan="9" class="center">没有匹配的记录</td></tr>
             <tr v-for="r in displayRecords" :key="r.record_id">
               <td class="company">
-                <button class="company-link" @click="openDetail(r)">{{ r.company || '—' }}</button>
+                <button v-if="!showShared" class="company-link" @click="openDetail(r)">{{ r.company || '—' }}</button>
+                <span v-else>{{ r.company || '—' }}</span>
               </td>
               <td class="job"><TooltipCell :text="r.job || '—'" /></td>
               <td><TooltipCell :text="dirText(r.dir)" /></td>
@@ -317,17 +382,22 @@ async function addToPersonal(r) {
         <input id="total-import-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden @change="handleImport">
         <button class="btn" @click="triggerImport" :disabled="importLoading">{{ importLoading ? '导入中...' : '导入 Excel' }}</button>
         <button v-if="isRoot()" class="btn" @click="feishuSync" :disabled="feishuSyncing">{{ feishuSyncing ? '同步中...' : '飞书同步' }}</button>
-        <button v-if="isAdmin()" class="btn" @click="givemeocSync" :disabled="givemeocSyncing">{{ givemeocSyncing ? givemeocProgress : 'GiveMeOC 同步' }}</button>
       </div>
       <div class="table-actions" v-else>
         <div
           id="shared-admin-actions"
-          :style="{ display: sharedCanDelete ? 'flex' : 'none', gap: '9px' }"
+          :style="{ display: sharedCanDelete ? 'flex' : 'none', gap: '9px', flexWrap: 'wrap' }"
         >
           <button class="btn btn-primary" @click="sharedNewRecord">新建记录</button>
           <button class="btn" @click="sharedManageRecords">管理记录</button>
+          <button v-if="isAdmin()" class="btn" @click="givemeocSync" :disabled="givemeocSyncing">{{ givemeocSyncing ? '同步中...' : 'GiveMeOC 同步' }}</button>
+          <div v-if="givemeocShow" class="shared-sync-status" :class="{ 'is-error': givemeocError, 'is-indeterminate': givemeocIndeterminate }" style="display:grid;width:100%">
+            <div class="shared-sync-head"><b>{{ givemeocLabel }}</b><span>{{ givemeocPercent }}</span></div>
+            <div class="shared-sync-track"><i :style="{ width: givemeocBarWidth }"></i></div>
+            <span style="font-size:10px;color:var(--muted)">{{ givemeocDetail }}</span>
+          </div>
         </div>
-        <span class="muted">共享总表所有用户均可查看；完整个人记录可在“个人总表 → 管理记录”中上传。</span>
+        <span class="muted">共享总表所有用户均可查看；完整个人记录可在"个人总表 → 管理记录"中上传。</span>
       </div>
     </div>
   </section>

@@ -19,6 +19,11 @@ const resultMeta = ref('—')
 const history = ref([])
 const activeHistory = ref('')
 
+// AI provider info
+const PROVIDER_LABELS = { deepseek: 'DeepSeek', openai: 'OpenAI GPT', anthropic: 'Claude', kimi: 'Kimi' }
+const aiProviderLabel = ref('DeepSeek')
+const aiModelLabel = ref('')
+
 const recordsWithJD = computed(() => dashboard.records.filter(r => r.job_jd?.trim()))
 const canRun = computed(() => selectedResume.value && selectedRecord.value)
 const jdMissingCount = computed(() => (dashboard.records || []).length - recordsWithJD.value.length)
@@ -27,7 +32,21 @@ onMounted(async () => {
   if (!dashboard.data) await dashboard.fetch()
   await loadResumes()
   await loadHistory()
+  await loadAIProvider()
 })
+
+async function loadAIProvider() {
+  try {
+    const r = await fetch('/api/config', { headers: { Authorization: `Bearer ${auth.token}` } })
+    if (!r.ok) return
+    const cfg = await r.json()
+    const values = cfg.values || {}
+    const provider = values.ai_provider || 'deepseek'
+    const model = values[provider + '_model'] || ''
+    aiProviderLabel.value = PROVIDER_LABELS[provider] || 'DeepSeek'
+    aiModelLabel.value = aiProviderLabel.value + (model ? ' · ' + model : '')
+  } catch {}
+}
 
 async function loadResumes() {
   try {
@@ -112,7 +131,7 @@ function fmtTime(v) {
       <div class="ai-side" style="display:flex;flex-direction:column;gap:16px">
         <!-- Config Card -->
         <div class="card ai-config-card">
-          <div class="card-hd"><span class="dot g"></span><div class="card-title">AI 简历与岗位分析</div></div>
+          <div class="card-hd"><span class="dot g"></span><div class="card-title">AI 简历与岗位分析</div><div class="card-sub">{{ aiModelLabel }}</div></div>
           <div class="card-body">
             <div class="ai-form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
               <div class="form-group">
@@ -148,7 +167,7 @@ function fmtTime(v) {
             </div>
             <div class="ai-action-row" style="display:flex;align-items:center;gap:12px;margin-top:12px">
               <button class="btn btn-primary" @click="runAnalysis" :disabled="!canRun || loading">{{ loading ? '分析中…' : '开始分析' }}</button>
-              <div class="help">将岗位信息与简历文本发送至已配置的 AI 服务。</div>
+              <div class="help">将岗位信息与简历文本发送至已配置的 {{ aiProviderLabel }} API。</div>
             </div>
           </div>
         </div>
@@ -165,9 +184,9 @@ function fmtTime(v) {
                   <span style="display:block;font-size:10px;color:var(--sub)">{{ h.analysis_mode_label || '综合匹配分析' }} · {{ h.job || '—' }} · {{ h.resume || '—' }}</span>
                   <time style="font-size:10px;color:var(--muted)">{{ fmtTime(h.created_at) }}</time>
                 </div>
-                <div style="display:flex;gap:6px;padding:0 12px 8px">
-                  <a class="btn analysis-download" style="font-size:11px;padding:2px 8px" :href="'/api/ai/history/' + encodeURIComponent(h.id) + '/download?token=' + encodeURIComponent(auth.token)" target="_blank">下载</a>
-                  <button class="btn btn-danger" style="font-size:11px;padding:2px 8px" @click="deleteHistory(h.id)">删除</button>
+                <div class="analysis-history-actions" style="padding:0 12px 8px">
+                  <a class="btn analysis-download" :href="'/api/ai/history/' + encodeURIComponent(h.id) + '/download?token=' + encodeURIComponent(auth.token)" target="_blank">下载</a>
+                  <button class="btn btn-danger" @click="deleteHistory(h.id)">删除</button>
                 </div>
               </div>
             </div>

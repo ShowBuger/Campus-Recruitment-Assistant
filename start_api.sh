@@ -4,7 +4,7 @@ gunicorn app.main:app \
   -w 2 \
   -k uvicorn.workers.UvicornWorker \
   -b 127.0.0.1:8765 \
-  --timeout 60 \
+  --timeout 120 \
   --keep-alive 30 \
   --max-requests 1000 \
   --max-requests-jitter 100 \

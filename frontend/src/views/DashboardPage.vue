@@ -12,6 +12,62 @@ const activeFilter = ref([])
 const draftFilter = ref(null)  // null = not editing; array = editing
 const progressOptions = ['已投递', '机考', '面试', 'OC', '已挂', '放弃']
 
+// Tracker pending events (shared via store, updated by TrackerSettings on sync complete)
+const showTrackerModal = ref(false)
+const trackerModalTitle = ref('')
+const trackerModalSummary = ref('')
+const trackerModalEvents = ref([])
+
+async function loadTrackerPending() {
+  try {
+    const { get } = await import('@/utils/api')
+    const data = await get('/api/progress-tracker')
+    app.setTrackerPending((data?.events || []).filter(e => e.status === 'pending'))
+  } catch (_) { app.clearTrackerPending() }
+}
+
+function openTrackerPendingModal() {
+  const pending = app.trackerPending || []
+  if (!pending.length) return
+  trackerModalTitle.value = '待确认更新'
+  trackerModalSummary.value = `发现 ${pending.length} 条待确认进度，可以现在处理或稍后再看`
+  trackerModalEvents.value = [...pending]
+  showTrackerModal.value = true
+}
+
+async function actTrackerPopupEvent(id, action) {
+  const payload = { action }
+  const roundEl = document.getElementById('tracker-round-' + id)
+  if ((action === 'confirm' || action === 'create') && roundEl?.value) {
+    payload.interview_round = Number(roundEl.value)
+  }
+  const { post } = await import('@/utils/api')
+  const { useToastStore } = await import('@/stores/toast')
+  const toast = useToastStore()
+  try {
+    const result = await post(`/api/progress-tracker/events/${id}`, payload)
+    // Remove from local list only after successful API call
+    const updated = trackerModalEvents.value.filter(e => Number(e.id) !== Number(id))
+    trackerModalEvents.value = updated
+    app.setTrackerPending(app.trackerPending.filter(e => Number(e.id) !== Number(id)))
+    const left = updated.length
+    trackerModalSummary.value = left ? `还有 ${left} 条待确认进度` : '处理完成，没有待确认进度'
+    // Refresh dashboard if confirmed
+    if (action === 'confirm' || action === 'create') await store.fetch()
+    toast.success(result.message || '已处理')
+    // Reload from server to sync
+    await loadTrackerPending()
+  } catch (e) {
+    toast.error('处理失败: ' + e.message)
+  }
+}
+
+function formatTrackerTime(value) {
+  if (!value) return ''
+  const d = new Date(String(value).replace(' ', 'T') + 'Z')
+  return isNaN(d) ? value : d.toLocaleString('zh-CN', { hour12: false })
+}
+
 // ---- calendar event modal ----
 const showEventModal = ref(false)
 const calEventDate = ref('')
@@ -227,8 +283,9 @@ async function deleteCalendarEvent(id, etype) {
 
 function onKeydown(e) { if (e.key === 'Escape' && showFilter.value) applyFilter() }
 
-onMounted(() => { store.fetch(); loadLocalEvents(); store.startPolling(); document.addEventListener('keydown', onKeydown) })
-onUnmounted(() => { store.stopPolling(); document.removeEventListener('keydown', onKeydown) })
+let trackerPollTimer = null
+onMounted(() => { store.fetch(); loadLocalEvents(); loadTrackerPending(); store.startPolling(); trackerPollTimer = setInterval(loadTrackerPending, 30000); document.addEventListener('keydown', onKeydown) })
+onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(trackerPollTimer); document.removeEventListener('keydown', onKeydown) })
 </script>
 
 <template>
@@ -262,7 +319,7 @@ onUnmounted(() => { store.stopPolling(); document.removeEventListener('keydown',
               <div v-for="day in calendarDays" :key="day.key" class="calendar-day" :class="{ other: day.other, today: day.today }" @click="!day.other && openDayDetail(day.key)">
                 <div class="calendar-date"><span>{{ day.date.getDate() }}</span></div>
                 <div class="calendar-events">
-                  <div v-for="e in day.visible" :key="e.rid || e.lid || e.label" class="calendar-event" :class="e.type" :title="e.label + ' · ' + e.company + (e.job ? ' · ' + e.job : '')" @click.stop="deleteEvent(e.rid || e.lid, e.etype)">
+                  <div v-for="e in day.visible" :key="e.rid || e.lid || e.label" class="calendar-event" :class="e.type" :title="e.label + ' · ' + e.company + (e.job ? ' · ' + e.job : '')">
                     {{ e.label }} · {{ e.company }}
                   </div>
                   <div v-if="day.more" class="calendar-more">+{{ day.more }} 项</div>
@@ -294,6 +351,7 @@ onUnmounted(() => { store.stopPolling(); document.removeEventListener('keydown',
       <div class="card-hd record-card-hd">
         <span class="dot"></span>
         <div class="card-title">投递记录</div>
+        <button v-if="app.trackerPending.length" class="tracker-pending-btn" @click="openTrackerPendingModal">待确认更新 <span>{{ app.trackerPending.length }}</span></button>
         <div class="record-hd-spacer"></div>
         <div class="progress-filter" :class="{ active: showFilter }">
           <button class="progress-filter-toggle" :class="{ 'has-filter': activeFilter.length > 0 }" @click="showFilter ? applyFilter() : openFilter()" aria-haspopup="dialog" :aria-expanded="showFilter">
@@ -401,6 +459,47 @@ onUnmounted(() => { store.stopPolling(); document.removeEventListener('keydown',
           <div class="help" style="margin-top:6px" v-show="calEventType !== 'other'">选择公司后自动带入对应岗位与城市信息。</div>
         </div>
         <div class="modal-ft"><button class="btn" @click="showEventModal = false">取消</button><button class="btn btn-primary" @click="submitCalendarEvent">保存日程</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tracker pending events modal (on dashboard, match old tracker-test-modal) -->
+  <div class="modal-mask" :class="{ show: showTrackerModal }" @click.self="showTrackerModal = false">
+    <div class="modal tracker-test-modal">
+      <div class="modal-hd">
+        <div><h2>{{ trackerModalTitle }}</h2><p>{{ trackerModalSummary }}</p></div>
+        <button class="icon-btn" @click="showTrackerModal = false" title="关闭">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="tracker-event-list" v-if="trackerModalEvents.length">
+          <article v-for="item in trackerModalEvents" :key="item.id" class="tracker-event tracker-test-result" :data-event-id="item.id">
+            <div class="tracker-event-main">
+              <div><b>{{ item.company || (item.record_id ? '已匹配岗位' : '待补充公司') }}</b><span>{{ item.job || item.subject || '待补充岗位' }}</span></div>
+              <em>{{ item.progress || '未识别' }}</em>
+            </div>
+            <div class="tracker-event-meta">
+              <span v-if="item.created_at">{{ formatTrackerTime(item.created_at) }}</span>
+              <span>置信度 {{ Math.round((item.confidence || 0) * 100) }}%</span>
+              <span v-if="item.reason">{{ item.reason }}</span>
+              <span v-if="!item.record_id" class="tracker-unmatched">未匹配个人总表岗位，可直接新增后再完善信息</span>
+            </div>
+            <div v-if="item.progress === '面试'" class="tracker-round-picker">
+              确认面试轮次
+              <select :id="'tracker-round-' + item.id">
+                <option value="">请选择</option>
+                <option value="1" :selected="item.interview_round === 1">一面</option>
+                <option value="2" :selected="item.interview_round === 2">二面</option>
+                <option value="3" :selected="item.interview_round === 3">三面</option>
+              </select>
+            </div>
+            <div class="tracker-event-actions">
+              <button v-if="item.record_id" class="btn btn-primary" @click="actTrackerPopupEvent(item.id, 'confirm')">接受</button>
+              <button v-else class="btn btn-primary" @click="actTrackerPopupEvent(item.id, 'create')">一键添加记录</button>
+              <button class="btn" @click="actTrackerPopupEvent(item.id, 'ignore')">放弃</button>
+            </div>
+          </article>
+        </div>
+        <div v-else class="center muted">所有结果均已处理</div>
       </div>
     </div>
   </div>

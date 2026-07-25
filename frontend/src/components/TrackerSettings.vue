@@ -8,40 +8,39 @@
     <div class="grid-2 tracker-form">
       <div class="form-group"><label for="tracker-email">邮箱地址</label><input id="tracker-email" v-model="form.email" type="email" autocomplete="email" placeholder="name@163.com"></div>
       <div class="form-group"><label for="tracker-code">客户端授权码</label><input id="tracker-code" v-model="form.authorization_code" type="password" autocomplete="new-password" :placeholder="config.authorization_code_saved ? '••••••••••••••••  已保存' : '请输入客户端授权码'" :class="{ 'secret-saved': config.authorization_code_saved }"><div class="help" id="tracker-code-help" :class="{ saved: config.authorization_code_saved }">{{ config.authorization_code_saved ? '✓ 授权码已安全保存；留空不会删除，输入新授权码才会替换' : '请勿填写邮箱登录密码' }}</div></div>
-      <div class="form-group"><label for="tracker-host">IMAP 服务器</label><input id="tracker-host" v-model="form.imap_host" placeholder="imap.163.com"></div>
-      <div class="form-group"><label for="tracker-port">SSL 端口</label><input id="tracker-port" v-model.number="form.imap_port" type="number" min="1" max="65535"></div>
-      <div class="form-group tracker-mode-group"><label for="tracker-mode">更新方式</label><select id="tracker-mode" v-model="form.mode"><option value="confirm">识别后由我确认</option><option value="auto">高置信度自动更新</option></select></div>
+      <div class="form-group tracker-mode-group" style="max-width:220px"><label for="tracker-mode">更新方式</label><select id="tracker-mode" v-model="form.mode"><option value="confirm">识别后由我确认</option><option value="auto">高置信度自动更新</option></select></div>
       <div class="form-group tracker-enable-group"><label>自动跟踪</label>
-        <label class="tracker-toggle"><input id="tracker-enabled" type="checkbox" v-model="form.enabled"><span></span><b>按设定周期检查新邮件</b></label>
+        <div class="total-view-switch">
+          <button :class="{ active: !form.enabled }" @click="form.enabled = false">关闭</button>
+          <button :class="{ active: form.enabled }" @click="form.enabled = true">开启</button>
+        </div>
+      </div>
+      <div class="form-group" style="max-width:180px" :style="{ visibility: form.enabled ? 'visible' : 'hidden' }"><label for="tracker-cycle">跟踪周期</label>
+        <select id="tracker-cycle" v-model="form.sync_interval_minutes">
+          <option v-for="opt in cycleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
       </div>
       <div class="form-group tracker-ai-group"><label>识别引擎</label>
-        <label class="tracker-toggle"><input id="tracker-ai-enabled" type="checkbox" v-model="form.ai_enabled" @change="loadAiModels"><span></span><b>使用当前大模型判断全部新增邮件</b></label>
+        <div class="total-view-switch">
+          <button :class="{ active: !form.ai_enabled }" @click="form.ai_enabled = false">本地</button>
+          <button :class="{ active: form.ai_enabled }" @click="form.ai_enabled = true; loadAiModels()">大模型</button>
+        </div>
       </div>
-      <div class="form-group" id="tracker-ai-model-group"><label for="tracker-ai-model">跟踪模型</label>
+      <div class="form-group" id="tracker-ai-model-group" :style="{ visibility: form.ai_enabled ? 'visible' : 'hidden' }"><label for="tracker-ai-model">跟踪模型</label>
         <select id="tracker-ai-model" v-model="selectedModelIndex">
           <option v-if="!aiModels.length" value="">请先在 AI 配置中保存 API Key</option>
           <option v-for="(m,i) in aiModels" :key="i" :value="i">{{ m.label }} · {{ m.model }}</option>
         </select>
         <div class="help">选择用于批量识别招聘邮件的模型，建议使用轻量模型以节省成本</div>
       </div>
-      <div class="form-group tracker-cycle-group"><label>跟踪周期</label>
-        <div class="tracker-cycle" id="tracker-cycle">
-          <button v-for="opt in cycleOptions" :key="opt.value" type="button" :data-minutes="opt.value"
-                  :class="{ active: form.sync_interval_minutes === opt.value }"
-                  @click="form.sync_interval_minutes = opt.value">{{ opt.label }}</button>
-        </div>
-      </div>
     </div>
 
-    <div class="tracker-ai-notice" :class="{ active: form.ai_enabled }">{{ form.ai_enabled ? '大模型模式：邮件前段会发送给当前 AI 服务商；接口失效、超时或余额不足时自动切换本地关键词识别。' : '当前为本地模式：邮件正文不会发送给大模型，仅使用本地关键词判断。' }}</div>
+    <div class="tracker-ai-notice" :style="{ visibility: form.ai_enabled ? 'visible' : 'hidden' }">大模型模式：邮件前段会发送给当前 AI 服务商；接口失效、超时或余额不足时自动切换本地关键词识别。</div>
     <div class="tracker-sync-note">{{ syncStatus }}</div>
     <div class="tracker-task" v-if="taskProgress" :class="{ running: taskProgress.status === 'running' && taskProgress.progress < 100 }">
       <div><b>{{ taskProgress.stage }}</b><span>{{ taskProgress.progress }}%</span></div>
       <i><em :style="{ width: taskProgress.progress + '%' }"></em></i>
     </div>
-
-    <!-- Pending events floating button -->
-    <button v-if="pendingCount > 0" class="tracker-pending-btn" @click="openPendingModal">{{ pendingCount }} 条待确认</button>
 
     <!-- Results Modal (test sync preview / pending events confirmation) -->
     <div class="modal-mask" :class="{ show: showResultsModal }" @click.self="showResultsModal = false">
@@ -92,16 +91,40 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { get, post } from '@/utils/api'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { useDashboardStore } from '@/stores/dashboard'
+import { useAppStore } from '@/stores/app'
+
+// ── 邮箱自动判断 IMAP 服务器与端口 ──
+const IMAP_PRESETS = {
+  '163.com':  { host: 'imap.163.com', port: 993 },
+  '126.com':  { host: 'imap.126.com', port: 993 },
+  'yeah.net': { host: 'imap.yeah.net', port: 993 },
+  'qq.com':   { host: 'imap.qq.com', port: 993 },
+  'foxmail.com': { host: 'imap.qq.com', port: 993 },
+  'gmail.com': { host: 'imap.gmail.com', port: 993 },
+  'outlook.com': { host: 'outlook.office365.com', port: 993 },
+  'hotmail.com': { host: 'outlook.office365.com', port: 993 },
+  'live.com':  { host: 'outlook.office365.com', port: 993 },
+  'sina.com':  { host: 'imap.sina.com', port: 993 },
+  'aliyun.com': { host: 'imap.aliyun.com', port: 993 },
+}
+
+function detectIMAP(email) {
+  if (!email || !email.includes('@')) return null
+  const domain = email.split('@')[1]?.toLowerCase()
+  if (!domain) return null
+  return IMAP_PRESETS[domain] || null
+}
 
 // --- stores ---
 const auth = useAuthStore()
 const toast = useToastStore()
 const dashboard = useDashboardStore()
+const app = useAppStore()
 
 // --- constants ---
 const cycleOptions = [
@@ -120,7 +143,7 @@ const statusLabels = { pending: '待确认', applied: '已更新', ignored: '已
 const form = ref({
   email: '',
   authorization_code: '',
-  imap_host: 'imap.163.com',
+  imap_host: '',
   imap_port: 993,
   enabled: false,
   mode: 'confirm',
@@ -135,6 +158,7 @@ const syncStatus = ref('')
 const taskProgress = ref(null)
 const syncing = ref(false)
 const saving = ref(false)
+const resetting = ref(false)
 let pollingTimer = null
 
 // Visual progress smoothing (match old showTrackerTask)
@@ -201,6 +225,15 @@ onUnmounted(() => {
   stopPolling()
 })
 
+// ── 邮箱变动自动判断 IMAP 配置 ──
+watch(() => form.value.email, (email) => {
+  const preset = detectIMAP(email)
+  if (preset) {
+    form.value.imap_host = preset.host
+    form.value.imap_port = preset.port
+  }
+})
+
 // --- helpers ---
 function stopPolling() {
   if (pollingTimer) {
@@ -230,9 +263,9 @@ async function loadConfig() {
       form.value.ai_enabled = c.ai_enabled ?? false
       form.value.sync_interval_minutes = c.sync_interval_minutes || 30
 
-      if (c.ai_provider && c.ai_model && aiModels.value.length) {
+      if (c.tracker_ai_provider && c.tracker_ai_model && aiModels.value.length) {
         const idx = aiModels.value.findIndex(
-          m => m.provider === c.ai_provider && m.model === c.ai_model
+          m => m.provider === c.tracker_ai_provider && m.model === c.tracker_ai_model
         )
         if (idx >= 0) selectedModelIndex.value = idx
       }
@@ -254,7 +287,9 @@ async function loadConfig() {
 
 async function updatePendingCount(events) {
   if (events) {
-    pendingCount.value = (events || []).filter(e => e.status === 'pending').length
+    const pending = (events || []).filter(e => e.status === 'pending')
+    pendingCount.value = pending.length
+    app.setTrackerPending(pending)
   }
 }
 
@@ -283,9 +318,9 @@ async function loadAiModels() {
     }
     aiModels.value = flat
 
-    if (config.value.ai_provider && config.value.ai_model && flat.length) {
+    if (config.value.tracker_ai_provider && config.value.tracker_ai_model && flat.length) {
       const idx = flat.findIndex(
-        m => m.provider === config.value.ai_provider && m.model === config.value.ai_model
+        m => m.provider === config.value.tracker_ai_provider && m.model === config.value.tracker_ai_model
       )
       if (idx >= 0) selectedModelIndex.value = idx
     }
@@ -361,6 +396,8 @@ function pollTask(taskId, isTest) {
 
 // --- actions ---
 async function testSync() {
+  // Save config first (match old saveTrackerConfig(false))
+  if (!(await saveConfigSilent())) return
   syncing.value = true
   syncStatus.value = '测试同步中...'
   resetVisualProgress()
@@ -377,6 +414,8 @@ async function testSync() {
 }
 
 async function startSync() {
+  // Save config first (match old saveTrackerConfig(false))
+  if (!(await saveConfigSilent())) return
   syncing.value = true
   syncStatus.value = '同步中...'
   resetVisualProgress()
@@ -398,13 +437,6 @@ function showPendingResults(events) {
   resultsSummary.value = events.length ? `发现 ${events.length} 条待确认进度，可以现在处理或稍后再看` : '当前没有需要确认的进度'
   resultsEvents.value = events
   showResultsModal.value = true
-}
-
-async function openPendingModal() {
-  const pending = await loadPendingEvents()
-  if (pending.length) {
-    showPendingResults(pending)
-  }
 }
 
 async function actEvent(id, action) {
@@ -437,6 +469,25 @@ async function actEvent(id, action) {
   }
 }
 
+async function saveConfigSilent() {
+  try {
+    const payload = { ...form.value }
+    if (payload.ai_enabled && aiModels.value[selectedModelIndex.value]) {
+      const m = aiModels.value[selectedModelIndex.value]
+      payload.tracker_ai_provider = m.provider
+      payload.tracker_ai_model = m.model
+    }
+    if (!payload.authorization_code && config.value.authorization_code_saved) {
+      delete payload.authorization_code
+    }
+    await post('/api/progress-tracker', payload)
+    return true
+  } catch (e) {
+    toast.error('请先保存跟踪配置: ' + e.message)
+    return false
+  }
+}
+
 async function save() {
   saving.value = true
   try {
@@ -444,8 +495,8 @@ async function save() {
 
     if (payload.ai_enabled && aiModels.value[selectedModelIndex.value]) {
       const m = aiModels.value[selectedModelIndex.value]
-      payload.ai_provider = m.provider
-      payload.ai_model = m.model
+      payload.tracker_ai_provider = m.provider
+      payload.tracker_ai_model = m.model
     }
 
     if (!payload.authorization_code && config.value.authorization_code_saved) {
@@ -463,17 +514,22 @@ async function save() {
 }
 
 async function resetCache() {
-  if (!confirm('确定清空同步缓存？此操作不可恢复。')) return
+  if (!confirm('确定清空当前账号的同步缓存吗？这会删除待确认更新、邮件缓存和同步任务记录，并让下次同步按首次同步重新读取。邮箱与 AI 配置不会删除。')) return
+  resetting.value = true
   try {
     await post('/api/progress-tracker/reset')
     pendingCount.value = 0
+    app.clearTrackerPending()
     showResultsModal.value = false
-    toast.success('缓存已清空')
-    syncStatus.value = '缓存已清空'
+    await loadConfig()
+    await dashboard.fetch().catch(() => {})
+    toast.success('同步缓存已清空')
   } catch (e) {
-    toast.error('清空缓存失败: ' + e.message)
+    toast.error('清空失败: ' + e.message)
+  } finally {
+    resetting.value = false
   }
 }
 
-defineExpose({ testSync, startSync, save, resetCache, syncing, saving })
+defineExpose({ testSync, startSync, save, resetCache, syncing, saving, resetting })
 </script>

@@ -352,10 +352,37 @@ GIVEMEOC_MAX_WORKERS = 16
 
 DATE_PATTERN = re.compile(r"(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})")
 
-# In-memory sync progress store
-_sync_progress: "dict[str, dict]" = {}
+# Sync progress stored in DB (shared across gunicorn workers)
 _sync_guard = threading.Lock()
-_active_sync_id: str | None = None
+_SYNC_CONFIG_PREFIX = "givemeoc_sync_"
+_ACTIVE_SYNC_KEY = "givemeoc_sync_active_id"
+
+
+def _sync_progress_get(sync_id: str) -> dict | None:
+    raw = database.get_system_config(_SYNC_CONFIG_PREFIX + sync_id)
+    if not raw:
+        return None
+    try:
+        import json as _json
+        return _json.loads(raw)
+    except Exception:
+        return None
+
+
+def _sync_progress_set(sync_id: str, data: dict) -> None:
+    import json as _json
+    database.set_system_config(_SYNC_CONFIG_PREFIX + sync_id, _json.dumps(data, ensure_ascii=False))
+
+
+def _active_sync_get() -> str | None:
+    return database.get_system_config(_ACTIVE_SYNC_KEY)
+
+
+def _active_sync_set(sync_id: str | None) -> None:
+    if sync_id:
+        database.set_system_config(_ACTIVE_SYNC_KEY, sync_id)
+    else:
+        database.set_system_config(_ACTIVE_SYNC_KEY, "0")
 
 def _parse_givemeoc_deadline(deadline_str: str) -> int | None:
     """Convert givemeoc deadline string to millisecond timestamp."""
@@ -435,15 +462,15 @@ def _to_shared_fields(givemeoc_detail: dict) -> dict:
 
 def _new_sync(user_id: int, automatic: bool = False) -> tuple[str, bool]:
     """Start one shared sync task, or return the currently running task."""
-    global _active_sync_id
     with _sync_guard:
-        if _active_sync_id:
-            active = _sync_progress.get(_active_sync_id)
+        active_id = _active_sync_get()
+        if active_id and active_id != "0":
+            active = _sync_progress_get(active_id)
             if active is None or not active.get("finished"):
-                return _active_sync_id, False
+                return active_id, False
         sync_id = uuid.uuid4().hex[:12]
-        _active_sync_id = sync_id
-    _sync_progress[sync_id] = {
+        _active_sync_set(sync_id)
+    progress = {
         "phase": "scanning",
         "found": 0,
         "done": 0,
@@ -456,12 +483,13 @@ def _new_sync(user_id: int, automatic: bool = False) -> tuple[str, bool]:
         "started_at": datetime.now().isoformat(timespec="seconds"),
         "message": "正在扫描 GiveMeOC 岗位…",
     }
+    _sync_progress_set(sync_id, progress)
 
     def _run_sync():
-        global _active_sync_id
-        pid = _sync_progress[sync_id]
         label = "自动同步" if automatic else "同步"
         bus.log(f"GiveMeOC {label}已启动", channel="sync", level="info")
+        # Use a local dict mirroring the DB-stored progress
+        pid = dict(_sync_progress_get(sync_id) or progress)
         try:
             ids: list[int] = []
             page = 1
@@ -479,15 +507,18 @@ def _new_sync(user_id: int, automatic: bool = False) -> tuple[str, bool]:
                         ids.append(row["id"])
                 page += 1
                 pid["found"] = len(ids)
+                _sync_progress_set(sync_id, pid)
 
             if not ids:
                 pid["finished"] = True
                 pid["message"] = "未找到匹配 2027届 的岗位"
+                _sync_progress_set(sync_id, pid)
                 return
 
             pid["phase"] = "syncing"
             pid["total"] = len(ids)
             pid["message"] = f"已找到 {len(ids)} 条，正在并发获取岗位详情…"
+            _sync_progress_set(sync_id, pid)
             valid_records: list[dict] = []
 
             def _fetch_one(cid: int) -> dict | None:
@@ -511,9 +542,14 @@ def _new_sync(user_id: int, automatic: bool = False) -> tuple[str, bool]:
                     except Exception:
                         pid["errors"] += 1
                     pid["done"] += 1
+                    # Write progress every 5 items to reduce DB writes
+                    if pid["done"] % 5 == 0:
+                        _sync_progress_set(sync_id, pid)
+            _sync_progress_set(sync_id, pid)
 
             pid["phase"] = "writing"
             pid["message"] = f"正在批量去重并写入 {len(valid_records)} 条有效岗位…"
+            _sync_progress_set(sync_id, pid)
             pid["added"], pid["skipped"] = local_records.create_shared_records(
                 user_id, valid_records
             )
@@ -534,9 +570,10 @@ def _new_sync(user_id: int, automatic: bool = False) -> tuple[str, bool]:
             pid["message"] = f"{label}异常：{exc}"
             bus.log(f"GiveMeOC {label}异常：{exc}", channel="sync", level="error")
         finally:
+            _sync_progress_set(sync_id, pid)
             with _sync_guard:
-                if _active_sync_id == sync_id:
-                    _active_sync_id = None
+                if _active_sync_get() == sync_id:
+                    _active_sync_set(None)
 
     threading.Thread(target=_run_sync, daemon=True).start()
     return sync_id, True
@@ -561,10 +598,10 @@ def sync_from_givemeoc_progress(
     sync_id: str,
     user: dict = Depends(auth_module.get_current_user),
 ):
-    """Poll sync progress."""
+    """Poll sync progress (DB-backed, works across workers)."""
     if not (user.get("is_root") or user.get("is_admin")):
         raise HTTPException(status_code=403, detail="仅管理员可以查看同步进度")
-    progress = _sync_progress.get(sync_id)
+    progress = _sync_progress_get(sync_id)
     if not progress:
         raise HTTPException(status_code=404, detail="未找到同步任务")
     return {"success": True, **progress}
@@ -1045,14 +1082,28 @@ def delete_calendar_event(
     body: CalendarEventDelete,
     user: dict = Depends(auth_module.get_current_user),
 ):
-    """删除本地记录上的某个日程（将对应日期字段设为空）。"""
+    """删除本地记录上的某个日程（将对应日期字段设为空，并同步调整进展）。"""
     if not body.record_id.startswith("rec"):
         raise HTTPException(status_code=422, detail="无效的本地记录 ID")
     field_name = EVENT_TYPE_FIELD_MAP.get(body.event_type)
     if not field_name:
         raise HTTPException(status_code=422, detail=f"未知事件类型: {body.event_type}")
     try:
-        if not local_records.update_record(user["user_id"], body.record_id, {field_name: None}):
+        record = local_records.get_record(user["user_id"], body.record_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="未找到对应的本地记录")
+        # 清除对应时间字段
+        updates = {field_name: None}
+        # 如果删除的是投递时间，同步将进展回退为"未投递"
+        cleared_progress = EVENT_TYPE_PROGRESS_MAP.get(body.event_type)
+        if cleared_progress:
+            current_progress = (record["fields"].get("进展") or [])
+            if cleared_progress in current_progress:
+                new_progress = [p for p in current_progress if p != cleared_progress]
+                if not new_progress:
+                    new_progress = ["未投递"]
+                updates["进展"] = new_progress
+        if not local_records.update_record(user["user_id"], body.record_id, updates):
             raise HTTPException(status_code=404, detail="未找到对应的本地记录")
         data = local_records.get_dashboard_data(user["user_id"])
         state.set_cache(user["user_id"], data)

@@ -208,7 +208,7 @@
           <button class="btn btn-primary" id="config-save" @click="saveConfig" :disabled="saving">保存 AI 配置</button>
         </div>
         <div class="settings-page-actions" :class="{ active: tab === 'tracker' }" id="settings-actions-tracker">
-          <button class="btn btn-danger" id="tracker-reset" @click="trackerRef?.resetCache()">清空同步缓存</button>
+          <button class="btn btn-danger" id="tracker-reset" @click="trackerRef?.resetCache()" :disabled="trackerRef?.resetting">清空同步缓存</button>
           <button class="btn" id="tracker-test" @click="trackerRef?.testSync()" :disabled="trackerRef?.syncing">测试同步</button>
           <button class="btn" id="tracker-sync" @click="trackerRef?.startSync()" :disabled="trackerRef?.syncing">立即同步</button>
           <button class="btn btn-primary" id="tracker-save" @click="trackerRef?.save()" :disabled="trackerRef?.saving">保存跟踪配置</button>

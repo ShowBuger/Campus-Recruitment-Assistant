@@ -10,22 +10,30 @@ export const useAppStore = defineStore('app', () => {
   const showOffer = ref(false)
   const showManager = ref(false)
   const detailId = ref('')
+  const recordShared = ref(false)
+  const managerShared = ref(false)
 
   function toggleConfig() { showConfig.value = !showConfig.value }
   function toggleChat() { showChat.value = !showChat.value }
   function toggleHelp() { showHelp.value = !showHelp.value }
-  function openRecord() { showRecord.value = true }
-  function closeRecord() { showRecord.value = false }
+  function openRecord(shared) { recordShared.value = !!shared; showRecord.value = true }
+  function closeRecord() { showRecord.value = false; recordShared.value = false }
   function openDetail(id) { detailId.value = id }
   function closeDetail() { detailId.value = '' }
   function openStats() { showStats.value = true }
   function closeStats() { showStats.value = false }
   function openOffer() { showOffer.value = true }
   function closeOffer() { showOffer.value = false }
-  function openManager() { showManager.value = true }
-  function closeManager() { showManager.value = false }
+  function openManager(shared) { managerShared.value = !!shared; showManager.value = true }
+  function closeManager() { showManager.value = false; managerShared.value = false }
 
-  return { showConfig, showChat, showRecord, showHelp, showStats, showOffer, showManager, detailId,
+  // Tracker pending events (shared between DashboardPage & TrackerSettings)
+  const trackerPending = ref([])
+  function setTrackerPending(events) { trackerPending.value = events || [] }
+  function clearTrackerPending() { trackerPending.value = [] }
+
+  return { showConfig, showChat, showRecord, showHelp, showStats, showOffer, showManager, detailId, recordShared, managerShared,
     toggleConfig, toggleChat, toggleHelp, openRecord, closeRecord, openDetail, closeDetail,
-    openStats, closeStats, openOffer, closeOffer, openManager, closeManager }
+    openStats, closeStats, openOffer, closeOffer, openManager, closeManager,
+    trackerPending, setTrackerPending, clearTrackerPending }
 })
