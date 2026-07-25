@@ -1,9 +1,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
+import { useAuthStore } from '@/stores/auth'
 import ProgressBadge from '@/components/ProgressBadge.vue'
 
 const store = useDashboardStore()
+const auth = useAuthStore()
 
 const showFilter = ref(false)
 const progressOptions = ['已投递', '机考', '面试', 'OC', '已挂', '放弃']
@@ -47,7 +49,115 @@ function formatDeadlineText(days) {
   return '剩 ' + days + ' 天'
 }
 
-onMounted(() => store.fetch())
+/* ── Calendar ────────────────────────────────────────── */
+const year = ref(new Date().getFullYear())
+const month = ref(new Date().getMonth())
+const events = ref([])
+const selectedDate = ref('')
+const newLabel = ref('')
+
+const calendarTitle = computed(() => `${year.value}年${month.value + 1}月`)
+const daysInMonth = computed(() => new Date(year.value, month.value + 1, 0).getDate())
+const firstDayOffset = computed(() => new Date(year.value, month.value, 1).getDay())
+
+function isToday(day) {
+  const now = new Date()
+  return year.value === now.getFullYear() && month.value === now.getMonth() && day === now.getDate()
+}
+
+function getDateStr(day) {
+  return `${year.value}-${String(month.value + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+function hasEvents(day) {
+  if (!day) return false
+  return events.value.some(e => e.date === getDateStr(day))
+}
+
+function getEvents(day) {
+  return events.value.filter(e => e.date === getDateStr(day))
+}
+
+function eventDotClass(e) {
+  const label = e.label || ''
+  if (/投递|申请|apply/i.test(label)) return 'g'
+  if (/机考|笔试|exam/i.test(label)) return 'a'
+  if (/截止|deadline|ddl/i.test(label)) return 'r'
+  if (/结果|offer|oc|录用|通过/i.test(label)) return 'c'
+  return ''
+}
+
+const upcomingEvents = computed(() =>
+  [...events.value]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 8)
+)
+
+const dateEvents = computed(() =>
+  events.value.filter(e => e.date === selectedDate.value)
+)
+
+function selectDate(day) {
+  selectedDate.value = getDateStr(day)
+}
+
+function prevMonth() {
+  if (month.value === 0) { month.value = 11; year.value-- }
+  else month.value--
+}
+
+function nextMonth() {
+  if (month.value === 11) { month.value = 0; year.value++ }
+  else month.value++
+}
+
+function goToday() {
+  const now = new Date()
+  year.value = now.getFullYear()
+  month.value = now.getMonth()
+  selectedDate.value = getDateStr(now.getDate())
+}
+
+async function loadEvents() {
+  try {
+    const r = await fetch('/api/dashboard/calendar/local-events', {
+      headers: { Authorization: `Bearer ${auth.token}` }
+    })
+    events.value = (await r.json()).events || []
+  } catch { events.value = [] }
+}
+
+async function addEvent() {
+  if (!newLabel.value.trim() || !selectedDate.value) return
+  try {
+    await fetch('/api/dashboard/calendar/local-event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
+      body: JSON.stringify({ date: selectedDate.value, label: newLabel.value.trim() })
+    })
+    newLabel.value = ''
+    await loadEvents()
+  } catch {}
+}
+
+async function deleteEvent(id) {
+  try {
+    await fetch(`/api/dashboard/calendar/local-event/${id}/delete`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${auth.token}` }
+    })
+    await loadEvents()
+  } catch {}
+}
+
+function openAddEvent() {
+  if (!selectedDate.value) goToday()
+}
+
+onMounted(() => {
+  store.fetch()
+  loadEvents()
+})
 </script>
 
 <template>
@@ -73,6 +183,73 @@ onMounted(() => store.fetch())
         <div class="kpi-label">Offer</div>
         <div class="kpi-value">{{ store.kpi.offer_count }}</div>
         <div class="kpi-sub">OC 或已录用</div>
+      </div>
+    </div>
+
+    <!-- Calendar Card -->
+    <div class="card dashboard-calendar">
+      <div class="card-hd">
+        <span class="dot a"></span>
+        <div class="card-title">校招日历</div>
+        <div class="card-sub">日程、投递节点与截止日期</div>
+      </div>
+      <div class="card-body">
+        <div class="calendar-toolbar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button class="icon-btn" style="width:36px;height:36px;font-size:20px;line-height:1" @click="prevMonth" title="上个月">&#8249;</button>
+          <h2 style="min-width:142px;padding:5px 9px;border:2px solid var(--ink);background:var(--panel);box-shadow:2px 2px 0 var(--ink);font:900 14px/1.4 var(--mono,monospace);letter-spacing:.04em;text-align:center">{{ calendarTitle }}</h2>
+          <button class="icon-btn" style="width:36px;height:36px;font-size:20px;line-height:1" @click="nextMonth" title="下个月">&#8250;</button>
+          <button class="btn" style="min-height:34px;padding:5px 14px;font-size:12px" @click="goToday">今天</button>
+          <button class="btn btn-primary" style="min-height:34px;padding:5px 14px;font-size:12px" @click="openAddEvent">新建日程</button>
+          <div class="calendar-legend" style="display:flex;gap:10px;margin-left:auto;flex-wrap:wrap">
+            <span class="lg-apply" style="display:inline-flex;align-items:center;gap:4px;padding:3px 5px;border:1px solid var(--line2);border-radius:1px;background:var(--panel);font-size:9px"><span style="width:7px;height:7px;border:1px solid var(--ink);background:var(--green)"></span>投递</span>
+            <span class="lg-exam" style="display:inline-flex;align-items:center;gap:4px;padding:3px 5px;border:1px solid var(--line2);border-radius:1px;background:var(--panel);font-size:9px"><span style="width:7px;height:7px;border:1px solid var(--ink);background:var(--amber)"></span>机考/笔试</span>
+            <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 5px;border:1px solid var(--line2);border-radius:1px;background:var(--panel);font-size:9px"><span style="width:7px;height:7px;border:1px solid var(--ink);background:var(--blue)"></span>面试</span>
+            <span class="lg-warm" style="display:inline-flex;align-items:center;gap:4px;padding:3px 5px;border:1px solid var(--line2);border-radius:1px;background:var(--panel);font-size:9px"><span style="width:7px;height:7px;border:1px solid var(--ink);background:var(--muted)"></span>保温</span>
+            <span class="lg-result" style="display:inline-flex;align-items:center;gap:4px;padding:3px 5px;border:1px solid var(--line2);border-radius:1px;background:var(--panel);font-size:9px"><span style="width:7px;height:7px;border:1px solid var(--ink);background:var(--cyan)"></span>结果</span>
+            <span class="lg-deadline" style="display:inline-flex;align-items:center;gap:4px;padding:3px 5px;border:1px solid var(--line2);border-radius:1px;background:var(--panel);font-size:9px"><span style="width:7px;height:7px;border:1px solid var(--ink);background:var(--red)"></span>截止</span>
+            <span class="lg-other" style="display:inline-flex;align-items:center;gap:4px;padding:3px 5px;border:1px solid var(--line2);border-radius:1px;background:var(--panel);font-size:9px"><span style="width:7px;height:7px;border:1px solid var(--ink)"></span>其他</span>
+          </div>
+        </div>
+
+        <div class="calendar-layout" style="display:flex;gap:16px;align-items:stretch">
+          <div class="calendar-scroll" style="flex:1;min-width:0">
+            <div class="calendar-grid">
+              <div v-for="d in '日一二三四五六'.split('')" :key="d" class="calendar-weekday" style="text-align:center;padding:8px 5px;border-bottom:2px solid var(--ink);color:var(--ink);background:var(--bg);font:900 10px var(--mono,monospace);letter-spacing:.1em">{{ d }}</div>
+              <div v-for="i in firstDayOffset" :key="'e'+i" class="calendar-day other"></div>
+              <div v-for="day in daysInMonth" :key="day" class="calendar-day" :class="{ today: isToday(day) }" @click="selectDate(day)">
+                <span class="calendar-date">{{ day }}</span>
+                <div class="calendar-dots" v-if="hasEvents(day)" style="display:flex;flex-wrap:wrap;gap:2px;margin-top:3px">
+                  <span v-for="e in getEvents(day)" :key="e.id" class="dot" :class="eventDotClass(e)" style="width:7px;height:7px;border:1px solid var(--ink);border-radius:0"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="countdown-panel" style="width:280px;flex-shrink:0;display:flex;flex-direction:column">
+            <h3 style="padding:10px 14px;font-size:13px;border-bottom:2px solid var(--ink);background:var(--bg);letter-spacing:.05em;flex-shrink:0">近期安排</h3>
+            <div class="countdown-list" style="flex:1;max-height:320px;overflow:auto">
+              <div v-if="!upcomingEvents.length" class="center" style="padding:24px 14px;color:var(--sub);font-size:11px">暂无安排</div>
+              <div v-for="e in upcomingEvents" :key="e.id" class="countdown-item" style="padding:10px 14px;border-bottom:1px dashed var(--line2)">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                  <b style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ e.label }}</b>
+                  <button class="icon-btn" style="flex-shrink:0;width:22px;height:22px;font-size:10px;line-height:1;border-width:1px;padding:0" @click="deleteEvent(e.id)" title="删除">&times;</button>
+                </div>
+                <span style="font-size:10px;color:var(--muted);margin-top:3px;display:block">{{ e.date }}</span>
+              </div>
+            </div>
+            <div v-if="selectedDate" style="border-top:2px solid var(--ink);padding:10px 14px;flex-shrink:0;background:var(--bg)">
+              <div style="font-size:11px;font-weight:800;margin-bottom:6px;color:var(--blue);letter-spacing:.02em">{{ selectedDate }}</div>
+              <div v-for="e in dateEvents" :key="e.id" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:11px;border-bottom:1px dashed var(--line2)">
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ e.label }}</span>
+                <button class="icon-btn" style="flex-shrink:0;width:20px;height:20px;font-size:9px;line-height:1;border-width:1px;padding:0" @click="deleteEvent(e.id)" title="删除">&times;</button>
+              </div>
+              <div style="display:flex;gap:4px;margin-top:6px">
+                <input v-model="newLabel" placeholder="添加日程" style="flex:1;height:30px;font-size:11px;border:2px solid var(--line2);border-radius:2px;padding:0 8px;background:var(--panel);color:var(--ink);min-width:0" @keydown.enter="addEvent" maxlength="100">
+                <button class="btn btn-primary" style="height:30px;padding:0 10px;font-size:11px;min-height:30px" @click="addEvent">添加</button>
+              </div>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
 
