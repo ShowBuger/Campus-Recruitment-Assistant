@@ -322,6 +322,12 @@ function buildConfigBody(provider) {
   return body
 }
 
+function maskSavedKey(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  return text.length <= 10 ? text.slice(0, 2) + '***' : text.slice(0, 6) + '***' + text.slice(-4)
+}
+
 function selectModel(provider) {
   // The v-model on the model-picker select already updates config.[provider]_model,
   // and the custom-model input also binds to the same config field.
@@ -381,6 +387,12 @@ async function saveConfig() {
       kimi_base_url: config.kimi_base_url,
     }
     const data = await post('/api/config', body)
+    const provider = config.ai_provider
+    const keyField = `${provider}_api_key`
+    if (config[keyField]) {
+      maskedKeys[provider] = maskSavedKey(config[keyField])
+      config[keyField] = ''
+    }
     toast.success(data.message || '配置已保存')
   } catch (err) {
     toast.error(err.message || '保存配置失败')

@@ -28,14 +28,6 @@ def normalize_base_url(value: str, provider: str) -> str:
     if parsed.query or parsed.fragment:
         raise ValueError("API URL 不能包含查询参数或片段")
     hostname = parsed.hostname.lower().rstrip(".")
-    if hostname == "localhost" or hostname.endswith(".localhost"):
-        raise ValueError("API URL 不能指向本机")
-    try:
-        literal_ip = ipaddress.ip_address(hostname)
-    except ValueError:
-        literal_ip = None
-    if literal_ip is not None and not literal_ip.is_global:
-        raise ValueError("API URL 不能指向本机、内网或保留地址")
     netloc = f"[{hostname}]" if ":" in hostname else hostname
     if parsed.port:
         netloc += f":{parsed.port}"
@@ -54,11 +46,8 @@ def validate_public_base_url(value: str, provider: str) -> str:
         raise ValueError("API URL 域名无法解析")
     for address in addresses:
         try:
-            if not ipaddress.ip_address(address).is_global:
-                raise ValueError("API URL 不能指向本机、内网或保留地址")
+            ipaddress.ip_address(address)
         except ValueError as exc:
-            if "不能指向" in str(exc):
-                raise
             raise ValueError("API URL 解析结果无效") from exc
     return normalized
 

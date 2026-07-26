@@ -1,6 +1,7 @@
 """SQLite 数据库：用户账号、独立配置、本地日程持久化。"""
 import sqlite3
 import os
+import json
 import secrets
 import threading
 import time
@@ -355,6 +356,27 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             PRIMARY KEY (user_id, provider),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS recommendation_runs (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            preference TEXT NOT NULL DEFAULT '',
+            resume_filename TEXT NOT NULL DEFAULT '',
+            provider TEXT NOT NULL DEFAULT '',
+            model TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'running',
+            phase TEXT NOT NULL DEFAULT 'preparing',
+            message TEXT NOT NULL DEFAULT '',
+            scanned INTEGER NOT NULL DEFAULT 0,
+            total_chunks INTEGER NOT NULL DEFAULT 0,
+            completed_chunks INTEGER NOT NULL DEFAULT 0,
+            result_count INTEGER NOT NULL DEFAULT 0,
+            result_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_recommendation_runs_user
+            ON recommendation_runs(user_id, created_at DESC);
     """)
     tracker_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(email_tracker_configs)")
@@ -754,6 +776,66 @@ def get_user_config(user_id: int) -> dict:
     }.get(provider, "deepseek_api_key")
     d["configured"] = bool(d.get(key_field))
     return d
+
+
+def create_recommendation_run(run: dict) -> None:
+    with _write_lock:
+        db = get_db()
+        db.execute(
+            """INSERT INTO recommendation_runs
+               (id, user_id, preference, resume_filename, provider, model, status, phase,
+                message, scanned, total_chunks, completed_chunks)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (run["id"], run["user_id"], run.get("preference", ""), run.get("resume_filename", ""),
+             run.get("provider", ""), run.get("model", ""), run.get("status", "running"),
+             run.get("phase", "preparing"), run.get("message", ""), int(run.get("scanned", 0)),
+             int(run.get("total_chunks", 0)), int(run.get("completed_chunks", 0))),
+        )
+        db.commit()
+
+
+def update_recommendation_run(run_id: str, values: dict) -> None:
+    allowed = {"status", "phase", "message", "scanned", "total_chunks", "completed_chunks",
+               "result_count", "result_json"}
+    data = {key: value for key, value in values.items() if key in allowed}
+    if "result" in values:
+        result = values["result"] or {}
+        data["result_json"] = json.dumps(result, ensure_ascii=False)
+        data["result_count"] = len(result.get("items") or [])
+    if not data:
+        return
+    assignments = ", ".join(f"{key} = ?" for key in data) + ", updated_at = datetime('now')"
+    with _write_lock:
+        db = get_db()
+        db.execute(f"UPDATE recommendation_runs SET {assignments} WHERE id = ?", (*data.values(), run_id))
+        db.commit()
+
+
+def list_recommendation_runs(user_id: int, limit: int = 20) -> list[dict]:
+    db = get_db()
+    rows = db.execute(
+        """SELECT id, preference, resume_filename, provider, model, status, phase, message,
+                  scanned, total_chunks, completed_chunks, result_count, created_at, updated_at
+           FROM recommendation_runs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?""",
+        (user_id, limit),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_recommendation_run(user_id: int, run_id: str) -> dict | None:
+    db = get_db()
+    row = db.execute(
+        "SELECT * FROM recommendation_runs WHERE id = ? AND user_id = ?", (run_id, user_id)
+    ).fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    try:
+        result["result"] = json.loads(result.pop("result_json") or "{}")
+    except json.JSONDecodeError:
+        result["result"] = {}
+    result.pop("user_id", None)
+    return result
 
 
 def save_ai_config(user_id: int, values: dict) -> None:

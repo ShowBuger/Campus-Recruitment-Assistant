@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import json
 import re
+from threading import RLock, Thread
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -14,6 +16,9 @@ from app.routers.ai import PROVIDER_NAMES, _call_ai_provider, _extract_resume_te
 
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 CHUNK_SIZE = 45
+MAX_WORKERS = 3
+_RUNS: dict[str, dict] = {}
+_RUNS_LOCK = RLock()
 
 SKILL_PATH = Path(__file__).resolve().parents[2] / "skills" / "job-recommendation" / "SKILL.md"
 _SYSTEM_PROMPT: str | None = None
@@ -75,6 +80,92 @@ def _rank_chunk(provider: str, api_key: str, model: str, base_url: str, api_mode
     ))
 
 
+def _summarize_resume(provider: str, api_key: str, model: str, base_url: str, api_mode: str,
+                      resume_text: str) -> str:
+    """Create one compact profile so every ranking request does not carry the full resume."""
+    if not resume_text:
+        return ""
+    system = "你是求职简历信息提取助手。只依据给出的简历提取事实，不要编造。"
+    content = f"""请将以下简历压缩为用于岗位匹配的结构化摘要，使用简短中文并保留：
+教育背景、求职方向、核心技能、项目/实习、行业偏好、城市偏好、限制条件。
+总长度不超过 2500 个汉字；没有的信息写“未提及”。
+
+【简历】
+{resume_text[:18000]}"""
+    return _call_ai_provider(
+        provider, api_key, model, system, content, base_url=base_url,
+        api_mode=api_mode, max_output_tokens=1400,
+    )[:6000]
+
+
+def _set_run(run_id: str, **values) -> None:
+    with _RUNS_LOCK:
+        if run_id in _RUNS:
+            _RUNS[run_id].update(values)
+    database.update_recommendation_run(run_id, values)
+
+
+def _result_payload(records: list[dict], ranked: dict[str, dict], cfg: dict, provider: str,
+                    model: str, resume_used: bool, *, partial: bool = False) -> dict:
+    minimum = int(cfg.get("recommendation_min_score") or 45)
+    results = []
+    for record in records:
+        item = ranked.get(record["record_id"])
+        if not item:
+            continue
+        score = max(0, min(100, int(item.get("score") or 0)))
+        if score < minimum:
+            continue
+        grade = str(item.get("grade") or "C").upper()
+        results.append({**record, "recommendation_score": score,
+                        "recommendation_grade": grade if grade in {"S", "A", "B", "C"} else "C",
+                        "recommendation_reason": str(item.get("reason") or "模型未给出理由")[:120]})
+    results.sort(key=lambda item: -item["recommendation_score"])
+    limit = int(cfg.get("recommendation_limit") or 0)
+    if limit > 0:
+        results = results[:limit]
+    return {"success": True, "items": results, "scanned": len(records),
+            "resume_used": resume_used, "resume_summarized": resume_used, "partial": partial,
+            "provider": provider, "provider_name": PROVIDER_NAMES[provider], "model": model}
+
+
+def _finish_ranking(run_id: str, *, user_id: int, cfg: dict, provider: str, api_key: str,
+                    model: str, base_url: str, api_mode: str, preference: str,
+                    resume_text: str, records: list[dict]) -> None:
+    try:
+        resume_profile = ""
+        if resume_text:
+            _set_run(run_id, phase="summarizing", message="正在提炼简历匹配要点…")
+            resume_profile = _summarize_resume(provider, api_key, model, base_url, api_mode, resume_text)
+
+        chunks = [records[index:index + CHUNK_SIZE] for index in range(0, len(records), CHUNK_SIZE)]
+        _set_run(run_id, phase="ranking", total_chunks=len(chunks), completed_chunks=0,
+                 message="正在分批评估岗位匹配度…")
+        ranked: dict[str, dict] = {}
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {
+                executor.submit(_rank_chunk, provider, api_key, model, base_url, api_mode,
+                                preference, resume_profile, chunk): chunk
+                for chunk in chunks
+            }
+            completed = 0
+            for future in as_completed(futures):
+                for item in future.result():
+                    record_id = str(item.get("record_id") or "")
+                    if record_id:
+                        ranked[record_id] = item
+                completed += 1
+                _set_run(run_id, completed_chunks=completed,
+                         message=f"已完成 {completed} / {len(chunks)} 个岗位批次",
+                         result=_result_payload(records, ranked, cfg, provider, model, bool(resume_text), partial=True))
+
+        result = _result_payload(records, ranked, cfg, provider, model, bool(resume_text))
+        _set_run(run_id, status="finished", phase="finished", message="筛选完成",
+                 result=result)
+    except Exception as exc:
+        _set_run(run_id, status="failed", phase="failed", message=str(exc))
+
+
 @router.post("")
 def recommend_jobs(request: RecommendationRequest, user: dict = Depends(auth_module.get_current_user)):
     resume_text = ""
@@ -102,44 +193,42 @@ def recommend_jobs(request: RecommendationRequest, user: dict = Depends(auth_mod
         item for item in local_records.list_shared_records(user["user_id"])
         if not local_records.is_shared_deadline_expired(item.get("deadline"))
     ]
-    chunks = [records[index:index + CHUNK_SIZE] for index in range(0, len(records), CHUNK_SIZE)]
-    ranked: dict[str, dict] = {}
-    try:
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            futures = {
-                executor.submit(_rank_chunk, provider, api_key, model, base_url, api_mode,
-                                request.preference.strip(), resume_text, chunk): chunk
-                for chunk in chunks
-            }
-            for future in as_completed(futures):
-                for item in future.result():
-                    record_id = str(item.get("record_id") or "")
-                    if record_id:
-                        ranked[record_id] = item
-    except HTTPException:
-        raise
-    except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=502, detail=f"{PROVIDER_NAMES[provider]} 返回的推荐格式异常：{exc}") from exc
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"调用 {PROVIDER_NAMES[provider]} 推荐失败：{exc}") from exc
+    run_id = uuid4().hex
+    run = {"id": run_id, "user_id": user["user_id"], "status": "running", "phase": "preparing",
+           "message": "正在准备岗位数据…", "total_chunks": 0, "completed_chunks": 0,
+           "preference": request.preference.strip(), "resume_filename": request.resume_filename.strip(),
+           "provider": provider, "model": model, "scanned": len(records)}
+    with _RUNS_LOCK:
+        _RUNS[run_id] = run.copy()
+    database.create_recommendation_run(run)
+    Thread(target=_finish_ranking, kwargs={
+        "run_id": run_id, "user_id": user["user_id"], "cfg": cfg, "provider": provider,
+        "api_key": api_key, "model": model, "base_url": base_url, "api_mode": api_mode,
+        "preference": request.preference.strip(), "resume_text": resume_text, "records": records,
+    }, daemon=True).start()
+    return {"run_id": run_id, "status": "running", "scanned": len(records)}
 
-    minimum = int(cfg.get("recommendation_min_score") or 45)
-    results = []
-    for record in records:
-        item = ranked.get(record["record_id"])
-        if not item:
-            continue
-        score = max(0, min(100, int(item.get("score") or 0)))
-        if score < minimum:
-            continue
-        grade = str(item.get("grade") or "C").upper()
-        results.append({**record, "recommendation_score": score,
-                        "recommendation_grade": grade if grade in {"S", "A", "B", "C"} else "C",
-                        "recommendation_reason": str(item.get("reason") or "模型未给出理由")[:120]})
-    results.sort(key=lambda item: -item["recommendation_score"])
-    limit = int(cfg.get("recommendation_limit") or 0)
-    if limit > 0:
-        results = results[:limit]
-    return {"success": True, "items": results, "scanned": len(records),
-            "resume_used": bool(resume_text), "method": "大模型语义匹配",
-            "provider": provider, "provider_name": PROVIDER_NAMES[provider], "model": model}
+
+@router.get("/history")
+def list_recommendation_history(user: dict = Depends(auth_module.get_current_user)):
+    return {"items": database.list_recommendation_runs(user["user_id"])}
+
+
+@router.get("/history/{run_id}")
+def get_recommendation_history(run_id: str, user: dict = Depends(auth_module.get_current_user)):
+    run = database.get_recommendation_run(user["user_id"], run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="未找到该筛选历史")
+    return run
+
+
+@router.get("/{run_id}")
+def get_recommendation_run(run_id: str, user: dict = Depends(auth_module.get_current_user)):
+    with _RUNS_LOCK:
+        run = _RUNS.get(run_id)
+        if run and run.get("user_id") == user["user_id"]:
+            return {key: value for key, value in run.items() if key != "user_id"}
+    run = database.get_recommendation_run(user["user_id"], run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="未找到该筛选任务")
+    return run
