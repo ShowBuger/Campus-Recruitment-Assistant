@@ -2,9 +2,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import { useDialogStore } from '@/stores/dialog'
 
 const auth = useAuthStore()
 const toast = useToastStore()
+const dialog = useDialogStore()
 const files = ref([])
 const activeFile = ref('')
 const uploading = ref(false)
@@ -57,7 +59,11 @@ async function handleUpload(e) {
 }
 
 async function deleteFile(f) {
-  if (!confirm(`确定删除简历"${f.name}"吗？已有分析历史不会被一并删除。`)) return
+  const confirmed = await dialog.confirm(
+    `确定删除简历“${f.name}”吗？\n已有分析历史不会被一并删除。`,
+    { title: '删除简历', tone: 'danger', confirmText: '删除简历' },
+  )
+  if (!confirmed) return
   try {
     const res = await fetch(`/api/resumes/${encodeURIComponent(f.name)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${auth.token}` } })
     if (!res.ok) throw new Error('删除失败')

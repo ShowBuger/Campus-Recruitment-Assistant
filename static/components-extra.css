@@ -109,7 +109,8 @@ body.chat-open{overflow:hidden}
 .settings-tabs button.active{border-color:var(--blue);background:var(--blue);color:#fff}
 .settings-page{display:none;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
 .settings-page.active{display:block}
-.settings-page .provider-panel{display:block;padding:14px;border:1px solid var(--line);border-radius:15px;background:var(--panel)}
+.settings-page .provider-panel{display:none;padding:14px;border:1px solid var(--line);border-radius:15px;background:var(--panel)}
+.settings-page .provider-panel.active{display:block}
 .settings-section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}
 .settings-section-title b,.settings-section-title span{display:block}
 .settings-section-title b{font-size:14px}

@@ -2,11 +2,13 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAppStore } from '@/stores/app'
+import { useDialogStore } from '@/stores/dialog'
 import ProgressBadge from '@/components/ProgressBadge.vue'
 import TooltipCell from '@/components/TooltipCell.vue'
 
 const store = useDashboardStore()
 const app = useAppStore()
+const dialog = useDialogStore()
 const showFilter = ref(false)
 const activeFilter = ref([])
 const draftFilter = ref(null)  // null = not editing; array = editing
@@ -229,7 +231,11 @@ async function loadLocalEvents() {
 }
 
 async function deleteEvent(id, etype) {
-  if (!confirm('确定删除这个日程？')) return
+  const confirmed = await dialog.confirm(
+    '确定删除这个日程吗？',
+    { title: '删除日程', tone: 'danger', confirmText: '删除日程' },
+  )
+  if (!confirmed) return
   try {
     if (etype) {
       await fetch('/api/dashboard/calendar/event/delete', {
@@ -258,7 +264,11 @@ function eventBadgeClass(type) { return EVENT_BADGE_MAP[type] || 'bdg-b' }
 function eventTypeName(type) { return EVENT_TYPE_MAP[type] || type }
 
 async function deleteCalendarEvent(id, etype) {
-  if (!confirm('确定删除这个日程？')) return
+  const confirmed = await dialog.confirm(
+    '确定删除这个日程吗？',
+    { title: '删除日程', tone: 'danger', confirmText: '删除日程' },
+  )
+  if (!confirmed) return
   try {
     if (etype) {
       await fetch('/api/dashboard/calendar/event/delete', {

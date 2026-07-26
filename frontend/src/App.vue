@@ -14,6 +14,7 @@ import HelpModal from '@/components/HelpModal.vue'
 import StatsModal from '@/components/StatsModal.vue'
 import OfferCompareModal from '@/components/OfferCompareModal.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
+import AppDialog from '@/components/AppDialog.vue'
 
 
 const auth = useAuthStore()
@@ -72,5 +73,6 @@ onMounted(async () => {
     </div>
   </div>
   <LoginModal v-else />
+  <AppDialog />
   <ToastContainer />
 </template>

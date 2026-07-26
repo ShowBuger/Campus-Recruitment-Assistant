@@ -17,7 +17,9 @@ export default defineConfig({
   },
   base: '/dist/',
   build: {
-    outDir: '/var/www/campus-dashboard/dist',
+    // Keep the build artifact inside the project so local startup and the
+    // deployment script use the same output. setup.sh copies static/ to nginx.
+    outDir: '../static/dist',
     emptyOutDir: true,
     rollupOptions: {
       // shader worker is loaded via new Worker(new URL(...)) at runtime —

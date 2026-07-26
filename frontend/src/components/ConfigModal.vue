@@ -42,7 +42,7 @@
           </div>
 
           <!-- DeepSeek -->
-          <div class="provider-panel" id="provider-deepseek" :class="{ active: config.ai_provider === 'deepseek' }">
+          <div class="provider-panel" id="provider-deepseek" v-show="config.ai_provider === 'deepseek'" :class="{ active: config.ai_provider === 'deepseek' }">
             <div class="provider-name">DeepSeek</div>
             <div class="grid-2">
               <div class="form-group">
@@ -75,7 +75,7 @@
           </div>
 
           <!-- OpenAI -->
-          <div class="provider-panel" id="provider-openai" :class="{ active: config.ai_provider === 'openai' }">
+          <div class="provider-panel" id="provider-openai" v-show="config.ai_provider === 'openai'" :class="{ active: config.ai_provider === 'openai' }">
             <div class="provider-name">OpenAI GPT</div>
             <div class="grid-2">
               <div class="form-group">
@@ -125,7 +125,7 @@
           </div>
 
           <!-- Anthropic -->
-          <div class="provider-panel" id="provider-anthropic" :class="{ active: config.ai_provider === 'anthropic' }">
+          <div class="provider-panel" id="provider-anthropic" v-show="config.ai_provider === 'anthropic'" :class="{ active: config.ai_provider === 'anthropic' }">
             <div class="provider-name">Anthropic Claude</div>
             <div class="grid-2">
               <div class="form-group">
@@ -161,7 +161,7 @@
           </div>
 
           <!-- Kimi -->
-          <div class="provider-panel" id="provider-kimi" :class="{ active: config.ai_provider === 'kimi' }">
+          <div class="provider-panel" id="provider-kimi" v-show="config.ai_provider === 'kimi'" :class="{ active: config.ai_provider === 'kimi' }">
             <div class="provider-name">Kimi</div>
             <div class="grid-2">
               <div class="form-group">

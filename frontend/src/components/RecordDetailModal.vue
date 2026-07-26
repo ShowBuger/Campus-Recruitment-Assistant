@@ -186,6 +186,7 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useToastStore } from '@/stores/toast'
+import { useDialogStore } from '@/stores/dialog'
 import { get, post } from '@/utils/api'
 
 const props = defineProps({
@@ -195,6 +196,7 @@ const emit = defineEmits(['close', 'saved'])
 
 const store = useDashboardStore()
 const toast = useToastStore()
+const dialog = useDialogStore()
 
 const companyInput = ref(null)
 const submitting = ref(false)
@@ -389,7 +391,11 @@ async function shareRecord() {
 async function removeApplication() {
   const r = record.value
   if (!r) return
-  if (!confirm('确定将"' + (form.company || '该记录') + '"移出投递记录并清空流程时间吗？')) return
+  const confirmed = await dialog.confirm(
+    '确定将“' + (form.company || '该记录') + '”移出投递记录吗？\n关联的投递流程时间将被清空。',
+    { title: '移出投递流程', tone: 'warning', confirmText: '确认移出' },
+  )
+  if (!confirmed) return
   try {
     await post(`/api/dashboard/records/${encodeURIComponent(props.recordId)}/remove`)
     await store.refresh()
@@ -404,7 +410,11 @@ async function removeApplication() {
 async function deleteRecord() {
   const r = record.value
   if (!r) return
-  if (!confirm('确定永久删除"' + (form.company || '该记录') + '"吗？此操作不可撤销。')) return
+  const confirmed = await dialog.confirm(
+    '确定永久删除“' + (form.company || '该记录') + '”吗？\n此操作不可撤销。',
+    { title: '永久删除记录', tone: 'danger', confirmText: '永久删除' },
+  )
+  if (!confirmed) return
   try {
     await post(`/api/dashboard/records/${encodeURIComponent(props.recordId)}/permanent-delete`)
     await store.refresh()

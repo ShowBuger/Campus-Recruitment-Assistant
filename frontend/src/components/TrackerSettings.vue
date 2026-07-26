@@ -97,6 +97,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAppStore } from '@/stores/app'
+import { useDialogStore } from '@/stores/dialog'
 
 // ── 邮箱自动判断 IMAP 服务器与端口 ──
 const IMAP_PRESETS = {
@@ -125,6 +126,7 @@ const auth = useAuthStore()
 const toast = useToastStore()
 const dashboard = useDashboardStore()
 const app = useAppStore()
+const dialog = useDialogStore()
 
 // --- constants ---
 const cycleOptions = [
@@ -514,7 +516,11 @@ async function save() {
 }
 
 async function resetCache() {
-  if (!confirm('确定清空当前账号的同步缓存吗？这会删除待确认更新、邮件缓存和同步任务记录，并让下次同步按首次同步重新读取。邮箱与 AI 配置不会删除。')) return
+  const confirmed = await dialog.confirm(
+    '这会删除待确认更新、邮件缓存和同步任务记录，并让下次同步按首次同步重新读取。\n\n邮箱与 AI 配置不会删除。',
+    { title: '清空同步缓存', tone: 'danger', confirmText: '确认清空' },
+  )
+  if (!confirmed) return
   resetting.value = true
   try {
     await post('/api/progress-tracker/reset')

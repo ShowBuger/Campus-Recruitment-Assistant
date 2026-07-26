@@ -2,9 +2,11 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import { useDialogStore } from '@/stores/dialog'
 
 const auth = useAuthStore()
 const toast = useToastStore()
+const dialog = useDialogStore()
 
 const activePanel = ref('users')
 const users = ref([])
@@ -72,7 +74,11 @@ async function changePassword(user) {
 }
 
 async function deleteUser(user) {
-  if (!confirm('确定删除用户"' + user.username + '"？该用户的配置、日程、简历和分析历史也会删除。')) return
+  const confirmed = await dialog.confirm(
+    '确定删除用户“' + user.username + '”吗？\n该用户的配置、日程、简历和分析历史也会一并删除。',
+    { title: '删除用户', tone: 'danger', confirmText: '永久删除' },
+  )
+  if (!confirmed) return
   try {
     await apiReq('DELETE', '/api/admin/users/' + user.id)
     toast.success('用户已删除')

@@ -2,12 +2,14 @@
 import { ref, onMounted } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useToastStore } from '@/stores/toast'
+import { useDialogStore } from '@/stores/dialog'
 import ProgressBadge from '@/components/ProgressBadge.vue'
 import TooltipCell from '@/components/TooltipCell.vue'
 import { post } from '@/utils/api'
 
 const store = useDashboardStore()
 const toast = useToastStore()
+const dialog = useDialogStore()
 const dragRid = ref('')
 
 /* ---------- 常量 ---------- */
@@ -117,7 +119,13 @@ async function onDrop(e, targetCol) {
   if (isBackward) {
     var clearStages = []
     _PROGRESS_ORDER_BOARD.forEach(function (s, i) { if (newIdx < i && i <= oldIdx) clearStages.push(s) })
-    if (!confirm('确定将进展从「' + oldProgress + '」回退到「' + targetCol + '」吗？\n\n此操作将清除以下阶段对应的时间记录：\n' + clearStages.join('、') + '\n\n「' + targetCol + '」的时间将更新为今天。')) {
+    const confirmed = await dialog.confirm(
+      '确定将进展从「' + oldProgress + '」回退到「' + targetCol + '」吗？\n\n' +
+      '此操作将清除以下阶段对应的时间记录：\n' + clearStages.join('、') +
+      '\n\n「' + targetCol + '」的时间将更新为今天。',
+      { title: '回退投递进展', tone: 'warning', confirmText: '确认回退' },
+    )
+    if (!confirmed) {
       return
     }
   }

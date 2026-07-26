@@ -475,6 +475,19 @@ def _serialize(record: dict) -> dict:
     }
 
 
+def _is_applied(fields: dict) -> bool:
+    """Return whether a record has entered the application pipeline."""
+    progress = fields.get("进展") or []
+    if not isinstance(progress, list):
+        progress = [progress] if progress else []
+    if any(str(item).strip() and str(item).strip() != "未投递" for item in progress):
+        return True
+    return any(
+        fields.get(field)
+        for field in ("投递时间", "机考时间", "一面", "二面", "三面", "保温", "结果")
+    )
+
+
 def get_dashboard_data(user_id: int) -> dict:
     """Single-pass aggregation for better performance."""
     records = list_records(user_id)
@@ -493,26 +506,30 @@ def get_dashboard_data(user_id: int) -> dict:
             continue
         rows.append(record)
 
-        # Counters
         prog = fields.get("进展") or []
-        progress.update(prog)
-        directions.update(fields.get("嵌入式方向") or [])
-        company_types.update(fields.get("公司/行业类型") or [])
-
-        # Metrics
-        if fields.get("机考时间"):
-            exam_count += 1
-        if fields.get("一面") or fields.get("二面") or fields.get("三面"):
-            interview_count += 1
-
-        # Categorize
-        if fields.get("投递时间"):
+        if _is_applied(fields):
+            # All dashboard statistics use applied records as their population.
+            progress.update(prog)
+            directions.update(fields.get("嵌入式方向") or [])
+            company_types.update(fields.get("公司/行业类型") or [])
+            if fields.get("机考时间"):
+                exam_count += 1
+            if fields.get("一面") or fields.get("二面") or fields.get("三面"):
+                interview_count += 1
             recent.append(record)
+
         if fields.get("投递截止时间"):
             deadlines.append(record)
 
     # Sort only what we need
-    recent.sort(key=lambda r: r["fields"].get("投递时间") or 0, reverse=True)
+    recent.sort(
+        key=lambda r: (
+            r["fields"].get("投递时间")
+            or r["fields"].get("progress_updated_at")
+            or 0
+        ),
+        reverse=True,
+    )
     deadlines.sort(key=lambda r: r["fields"].get("投递截止时间") or 0)
 
     # Serialize (only once per record)

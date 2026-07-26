@@ -6,9 +6,11 @@ import ProgressBadge from '@/components/ProgressBadge.vue'
 import TooltipCell from '@/components/TooltipCell.vue'
 import { get, post } from '@/utils/api'
 import { useAppStore } from '@/stores/app'
+import { useDialogStore } from '@/stores/dialog'
 const app = useAppStore()
 const store = useDashboardStore()
 const auth = useAuthStore()
+const dialog = useDialogStore()
 const showShared = ref(false)
 const sharedRecords = ref([])
 const sharedCanDelete = ref(false)
@@ -157,7 +159,9 @@ async function downloadBlob(url, fallbackName) {
     a.href = objectUrl; a.download = name
     document.body.appendChild(a); a.click(); a.remove()
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
-  } catch (e) { alert('下载失败: ' + e.message) }
+  } catch (e) {
+    await dialog.alert('下载失败：' + e.message, { title: '下载失败', tone: 'danger' })
+  }
 }
 
 function triggerImport() {
@@ -168,7 +172,11 @@ function triggerImport() {
 async function handleImport(event) {
   const file = event.target.files?.[0]; if (!file) return
   const ext = (file.name || '').toLowerCase().split('.').pop()
-  if (ext !== 'xlsx') { alert('仅支持 .xlsx 格式的 Excel 文件'); event.target.value = ''; return }
+  if (ext !== 'xlsx') {
+    await dialog.alert('仅支持 .xlsx 格式的 Excel 文件。', { title: '文件格式不支持', tone: 'warning' })
+    event.target.value = ''
+    return
+  }
   importLoading.value = true
   try {
     const fd = new FormData(); fd.append('file', file)
@@ -176,24 +184,45 @@ async function handleImport(event) {
     const data = await r.json()
     if (!r.ok) throw new Error(data.detail || '导入失败')
     await store.refresh()
-    alert(data.message || `成功导入 ${data.imported_count || 0} 条记录`)
-  } catch (e) { alert('导入失败: ' + e.message) }
+    await dialog.alert(
+      data.message || `成功导入 ${data.imported_count || 0} 条记录`,
+      { title: '导入完成', tone: 'success' },
+    )
+  } catch (e) {
+    await dialog.alert('导入失败：' + e.message, { title: '导入失败', tone: 'danger' })
+  }
   finally { importLoading.value = false; event.target.value = '' }
 }
 
 async function feishuSync() {
-  const url = prompt('请输入飞书表格链接')
+  const url = await dialog.prompt(
+    '粘贴需要同步的飞书电子表格链接。',
+    {
+      title: '同步飞书表格',
+      inputLabel: '飞书表格链接',
+      placeholder: 'https://example.feishu.cn/sheets/...',
+      confirmText: '开始同步',
+      required: true,
+      tone: 'info',
+    },
+  )
   if (!url || !url.trim()) return
   feishuSyncing.value = true
   try {
     await post('/api/dashboard/records/feishu-sync', { url: url.trim() })
     await store.refresh()
-  } catch (e) { alert('飞书同步失败: ' + e.message) }
+  } catch (e) {
+    await dialog.alert('飞书同步失败：' + e.message, { title: '同步失败', tone: 'danger' })
+  }
   finally { feishuSyncing.value = false }
 }
 
 async function givemeocSync() {
-  if (!confirm('即将从 GiveMeOC 同步 2027届 岗位到共享总表，确定继续吗？')) return
+  const confirmed = await dialog.confirm(
+    '即将从 GiveMeOC 同步 2027 届岗位到共享总表。',
+    { title: '同步招聘岗位', tone: 'info', confirmText: '开始同步' },
+  )
+  if (!confirmed) return
   givemeocSyncing.value = true; givemeocShow.value = true; givemeocError.value = false
   givemeocIndeterminate.value = true; givemeocLabel.value = '扫描岗位'
   givemeocPercent.value = '检索中'; givemeocBarWidth.value = '36%'
@@ -207,7 +236,10 @@ async function givemeocSync() {
     givemeocBarWidth.value = ok ? '100%' : '0'
     givemeocDetail.value = msg || '同步完成'
     givemeocSyncing.value = false
-    if (msg) alert(msg)
+    if (msg) void dialog.alert(msg, {
+      title: ok ? '同步完成' : '同步失败',
+      tone: ok ? 'success' : 'danger',
+    })
     loadShared()
     if (ok) givemeocShow.value = false
   }
@@ -252,7 +284,7 @@ async function addToApplications(r) {
       await store.refresh()
     }
   } catch (e) {
-    alert('加入投递失败: ' + e.message)
+    await dialog.alert('加入投递失败：' + e.message, { title: '操作失败', tone: 'danger' })
   }
 }
 
@@ -266,7 +298,7 @@ async function addToPersonal(r) {
     }
   } catch (e) {
     r.is_added = false
-    alert('添加失败: ' + e.message)
+    await dialog.alert('添加失败：' + e.message, { title: '操作失败', tone: 'danger' })
   }
 }
 </script>

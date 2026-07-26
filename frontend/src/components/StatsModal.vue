@@ -95,7 +95,7 @@ import { useDashboardStore } from '@/stores/dashboard'
 
 const emit = defineEmits(['close'])
 const store = useDashboardStore()
-const records = computed(() => store.records || [])
+const records = computed(() => store.recentRecords || [])
 
 function toArray(v) {
   return Array.isArray(v) ? v : (v ? [v] : [])

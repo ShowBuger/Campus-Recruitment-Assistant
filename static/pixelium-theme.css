@@ -1412,13 +1412,14 @@ body.chat-open { overflow: hidden; }
 }
 .settings-page.active { display: block; }
 .settings-page .provider-panel {
-  display: block;
+  display: none;
   padding: 14px;
   border: 2px solid var(--line2);
   border-radius: 2px;
   background: var(--panel);
   box-shadow: 2px 2px 0 var(--line2);
 }
+.settings-page .provider-panel.active { display: block; }
 .settings-page .form-group input,
 .settings-page .form-group select { background: var(--panel); }
 .tracker-settings {

@@ -3,10 +3,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { useDashboardStore } from '@/stores/dashboard'
+import { useDialogStore } from '@/stores/dialog'
 
 const auth = useAuthStore()
 const toast = useToastStore()
 const dashboard = useDashboardStore()
+const dialog = useDialogStore()
 
 const resumeFiles = ref([])
 const selectedResume = ref('')
@@ -109,7 +111,11 @@ async function viewHistory(id) {
 }
 
 async function deleteHistory(id) {
-  if (!confirm('确定删除这条分析历史吗？此操作不可撤销。')) return
+  const confirmed = await dialog.confirm(
+    '确定删除这条分析历史吗？\n此操作不可撤销。',
+    { title: '删除分析历史', tone: 'danger', confirmText: '永久删除' },
+  )
+  if (!confirmed) return
   try {
     const r = await fetch(`/api/ai/history/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${auth.token}` } })
     if (!r.ok) throw new Error('删除失败')

@@ -3,12 +3,14 @@ import { ref, computed, onMounted } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAppStore } from '@/stores/app'
 import { useToastStore } from '@/stores/toast'
+import { useDialogStore } from '@/stores/dialog'
 import { get, del } from '@/utils/api'
 
 const emit = defineEmits(['close'])
 const store = useDashboardStore()
 const app = useAppStore()
 const toast = useToastStore()
+const dialog = useDialogStore()
 const query = ref('')
 const sharedRecords = ref([])
 const sharedCanDelete = ref(false)
@@ -45,7 +47,11 @@ function openDetail(r) {
 }
 
 async function deleteShared(r) {
-  if (!confirm(`确定从共享总表删除"${r.company || '该记录'}"吗？`)) return
+  const confirmed = await dialog.confirm(
+    `确定从共享总表删除“${r.company || '该记录'}”吗？`,
+    { title: '删除共享记录', tone: 'danger', confirmText: '删除记录' },
+  )
+  if (!confirmed) return
   try {
     await del('/api/dashboard/shared/records/' + encodeURIComponent(r.record_id))
     toast.success('共享记录已删除')
