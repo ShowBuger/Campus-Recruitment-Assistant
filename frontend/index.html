@@ -7,12 +7,26 @@
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=brand-4">
   <link rel="shortcut icon" href="/static/favicon.svg?v=brand-4">
   <meta name="theme-color" content="#386a57">
+  <!-- Always-loaded base styles -->
   <link rel="stylesheet" href="/static/base.css?v=1">
   <link rel="stylesheet" href="/static/components-extra.css?v=1">
-  <link rel="stylesheet" href="/static/pixelium-font.css?v=1">
-  <link rel="stylesheet" href="/static/pixelium-vue.css?v=1">
-  <link rel="stylesheet" href="/static/pixelium-theme.css?v=1">
   <link rel="stylesheet" href="/static/app-layout.css?v=1">
+  <!-- Pixelium theme (disabled by default, enabled when saved style matches) -->
+  <link rel="stylesheet" href="/static/pixelium-font.css?v=1" id="css-pixelfont" disabled>
+  <link rel="stylesheet" href="/static/pixelium-vue.css?v=1" id="css-pixelvue" disabled>
+  <link rel="stylesheet" href="/static/pixelium-theme.css?v=1" id="css-pixelium" disabled>
+  <script>
+    (function(){
+      var style = localStorage.getItem('radar_style') || 'classic';
+      document.documentElement.dataset.style = style;
+      if (style === 'pixelium') {
+        var el;
+        el = document.getElementById('css-pixelium'); if (el) el.removeAttribute('disabled');
+        el = document.getElementById('css-pixelfont'); if (el) el.removeAttribute('disabled');
+        el = document.getElementById('css-pixelvue'); if (el) el.removeAttribute('disabled');
+      }
+    })();
+  </script>
 </head>
 <body>
   <div id="app"></div>

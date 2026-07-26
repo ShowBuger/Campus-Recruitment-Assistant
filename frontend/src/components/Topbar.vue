@@ -73,17 +73,25 @@ function stopNotifPoll() { if (notifPollTimer) { clearInterval(notifPollTimer); 
 
 // ---- Style switcher ----
 const showStylePanel = ref(false)
-const currentStyle = ref(document.documentElement.dataset.style || 'pixelium')
+const currentStyle = ref(document.documentElement.dataset.style || 'classic')
 
 function toggleStylePanel(event) {
   event.stopPropagation()
   showStylePanel.value = !showStylePanel.value
 }
 
+function enableSheet(id, on) {
+  const el = document.getElementById(id)
+  if (el) { if (on) el.removeAttribute('disabled'); else el.setAttribute('disabled', '') }
+}
+
 function applyStyle(name) {
   currentStyle.value = name
   document.documentElement.dataset.style = name
   try { localStorage.setItem('radar_style', name) } catch (_) {}
+  enableSheet('css-pixelium', name === 'pixelium')
+  enableSheet('css-pixelfont', name === 'pixelium')
+  enableSheet('css-pixelvue', name === 'pixelium')
   showStylePanel.value = false
 }
 
