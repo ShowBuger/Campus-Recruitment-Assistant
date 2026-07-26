@@ -73,7 +73,7 @@ function stopNotifPoll() { if (notifPollTimer) { clearInterval(notifPollTimer); 
 
 // ---- Style switcher ----
 const showStylePanel = ref(false)
-const currentStyle = ref(document.documentElement.dataset.style || 'classic')
+const currentStyle = ref(document.documentElement.dataset.style || 'pixelium')
 
 function toggleStylePanel(event) {
   event.stopPropagation()

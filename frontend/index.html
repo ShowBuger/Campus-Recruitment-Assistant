@@ -11,19 +11,20 @@
   <link rel="stylesheet" href="/static/base.css?v=1">
   <link rel="stylesheet" href="/static/components-extra.css?v=1">
   <link rel="stylesheet" href="/static/app-layout.css?v=1">
-  <!-- Pixelium theme (disabled by default, enabled when saved style matches) -->
-  <link rel="stylesheet" href="/static/pixelium-font.css?v=1" id="css-pixelfont" disabled>
-  <link rel="stylesheet" href="/static/pixelium-vue.css?v=1" id="css-pixelvue" disabled>
-  <link rel="stylesheet" href="/static/pixelium-theme.css?v=1" id="css-pixelium" disabled>
+  <!-- Pixelium theme (default style) -->
+  <link rel="stylesheet" href="/static/pixelium-font.css?v=1" id="css-pixelfont">
+  <link rel="stylesheet" href="/static/pixelium-vue.css?v=1" id="css-pixelvue">
+  <link rel="stylesheet" href="/static/pixelium-theme.css?v=1" id="css-pixelium">
   <script>
     (function(){
-      var style = localStorage.getItem('radar_style') || 'classic';
+      var style = localStorage.getItem('radar_style') || 'pixelium';
       document.documentElement.dataset.style = style;
-      if (style === 'pixelium') {
+      // Pixelium is default — already enabled. Disable only if classic.
+      if (style !== 'pixelium') {
         var el;
-        el = document.getElementById('css-pixelium'); if (el) el.removeAttribute('disabled');
-        el = document.getElementById('css-pixelfont'); if (el) el.removeAttribute('disabled');
-        el = document.getElementById('css-pixelvue'); if (el) el.removeAttribute('disabled');
+        el = document.getElementById('css-pixelium'); if (el) el.setAttribute('disabled', '');
+        el = document.getElementById('css-pixelfont'); if (el) el.setAttribute('disabled', '');
+        el = document.getElementById('css-pixelvue'); if (el) el.setAttribute('disabled', '');
       }
     })();
   </script>
