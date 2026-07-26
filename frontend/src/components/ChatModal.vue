@@ -127,12 +127,18 @@
                 @click="showEmojiPicker = !showEmojiPicker"
                 title="表情"
                 aria-label="表情"
-              >😊</button>
+              ><span class="emoji-trigger-glyph" aria-hidden="true">☻</span></button>
               <div v-if="showEmojiPicker" class="emoji-picker" @click.stop>
+                <div class="emoji-picker-hd">
+                  <span>表情仓</span>
+                  <b>{{ activeEmojiLabel }}</b>
+                </div>
                 <div class="emoji-cats">
                   <button v-for="cat in emojiCats" :key="cat.name"
                     :class="{ active: emojiCat === cat.name }"
                     @click="emojiCat = cat.name"
+                    :title="cat.label"
+                    :aria-label="cat.label"
                   >{{ cat.icon }}</button>
                 </div>
                 <div class="emoji-grid">
@@ -392,12 +398,15 @@ function fmtTime(v) { if (!v) return ''; const d = new Date(String(v).replace(' 
 const showEmojiPicker = ref(false)
 const emojiCat = ref('face')
 const emojiCats = [
-  { name: 'face', icon: '😊', emojis: '😀😃😄😁😅😂🤣😊😇🙂🙃😉😌😍🥰😘😗😙😚😋😛😝😜🤪🤨🧐🤓😎🥸🤩🥳😏😒😞😔😟😕🙁☹️😣😖😫😩🥺😢😭😤😠😡🤬🤯😳🥵🥶😱😨😰😥😓🤗🤔🤭🤫🤥😶😐😑😬🙄😯😦😧😮😲🥱😴🤤😪😵🤐🥴🤢🤮🤧😷🤒🤕🤑🤠' },
-  { name: 'hand', icon: '👍', emojis: '👍👎👌✌🤞🤟🤘🤙👈👉👆👇☝️✋🤚🖐🖖👋🤏✍️🙌👏🙏🤝💪🦾🦿🦶🦵🤳👀🫀🫁🧠👅👄👂🦻👃🤲🤜🤛✊👊🤚🖐✋' },
-  { name: 'heart', icon: '❤️', emojis: '❤️🧡💛💚💙💜🖤🤍🤎💔❣️💕💞💓💗💖💘💝💟☮️✝️☪️🕉☸️✡️🔯🕎☯️☦️🛐⛎♈️♉️♊️♋️♌️♍️♎️♏️♐️♑️♒️♓️🆔' },
-  { name: 'item', icon: '🎁', emojis: '🎁🎂🎈🎉🎊🎀🏆🥇🥈🥉🏅🎖️🏵️🎗️🎫🎟️🎪🤹🪄🎭🩰🎨🎬🎤🎧🎼🎹🥁🎷🎺🎸🪕🎻🎲♟️🎯🎳🎮🕹️🎰📱💻⌨️🖥🖨🖱🖲🕹️🗜️💽💾💿📀📼📷📸📹🎥📽🎞📞☎️📟📠📺📻🎙🎚🎛🧭⏰⌚️📡🔋🪫🔌💡🔦🕯️🪔🧯🗑️🛢️💸💵💴💶💷🪙💰💳💎⚖️🪜🔧🔨⚒️🛠️⛏️🔩⚙️🪛🔗⛓️🪝🧰🧲🧪🧫🧬🔬🔭📡💉💊🩹🩺🚪🛏️🪑🚿🛁🧴🧹🧺🧻🧼🧽' },
-  { name: 'nature', icon: '🌿', emojis: '🐶🐱🐭🐹🐰🦊🐻🐼🐻‍❄️🐨🐯🦁🐮🐷🐽🐸🐵🙈🙉🙊🐒🐔🐧🐦🐤🐣🐥🦆🦅🦉🦇🐺🐗🐴🦄🐝🪱🐛🦋🐌🐞🐜🪰🪲🪳🦟🦗🕷🕸🦂🐢🐍🦎🦖🦕🐙🦑🦐🦞🦀🐡🐠🐟🐬🐳🐋🦈🦭🐊🐅🐆🦓🦍🦧🦣🐘🦛🦏🐪🐫🦒🦘🦬🐃🐂🐄🐎🐖🐏🐑🦙🐐🦌🐕🐩🦮🐕‍🦺🐈🐈‍⬛🪶🐓🦃🦤🦚🦜🦢🦩🕊️🐇🦝🦨🦡🦫🦦🦥🐁🐀🐿️🦔🐾🐉🐲🌵🎄🌲🌳🌴🪵🌱🌿☘️🍀🎍🪴🎋🍃🍂🍁🍄🐚🪨🌾💐🌷🌹🥀🌺🌸🌼🌻🌞🌝🌛🌜🌚🌕🌖🌗🌘🌑🌒🌓🌔🌙🌎🌍🌏🪐💫⭐️🌟✨⚡️☄️💥🔥🌪️🌈☀️🌤⛅️🌥☁️🌦🌧⛈🌩🌨❄️☃️⛄️🌬💨💧💦☔️☂️🌊🌫' },
+  { name: 'face', label: '表情', icon: '脸', emojis: '😀😃😄😁😅😂🤣😊😇🙂🙃😉😌😍🥰😘😗😙😚😋😛😝😜🤪🤨🧐🤓😎🥸🤩🥳😏😒😞😔😟😕🙁☹️😣😖😫😩🥺😢😭😤😠😡🤬🤯😳🥵🥶😱😨😰😥😓🤗🤔🤭🤫🤥😶😐😑😬🙄😯😦😧😮😲🥱😴🤤😪😵🤐🥴🤢🤮🤧😷🤒🤕🤑🤠' },
+  { name: 'hand', label: '手势', icon: '手', emojis: '👍👎👌✌🤞🤟🤘🤙👈👉👆👇☝️✋🤚🖐🖖👋🤏✍️🙌👏🙏🤝💪🦾🦿🦶🦵🤳👀🫀🫁🧠👅👄👂🦻👃🤲🤜🤛✊👊🤚🖐✋' },
+  { name: 'heart', label: '符号', icon: '心', emojis: '❤️🧡💛💚💙💜🖤🤍🤎💔❣️💕💞💓💗💖💘💝💟☮️✝️☪️🕉☸️✡️🔯🕎☯️☦️🛐⛎♈️♉️♊️♋️♌️♍️♎️♏️♐️♑️♒️♓️🆔' },
+  { name: 'item', label: '物品', icon: '物', emojis: '🎁🎂🎈🎉🎊🎀🏆🥇🥈🥉🏅🎖️🏵️🎗️🎫🎟️🎪🤹🪄🎭🩰🎨🎬🎤🎧🎼🎹🥁🎷🎺🎸🪕🎻🎲♟️🎯🎳🎮🕹️🎰📱💻⌨️🖥🖨🖱🖲🕹️🗜️💽💾💿📀📼📷📸📹🎥📽🎞📞☎️📟📠📺📻🎙🎚🎛🧭⏰⌚️📡🔋🪫🔌💡🔦🕯️🪔🧯🗑️🛢️💸💵💴💶💷🪙💰💳💎⚖️🪜🔧🔨⚒️🛠️⛏️🔩⚙️🪛🔗⛓️🪝🧰🧲🧪🧫🧬🔬🔭📡💉💊🩹🩺🚪🛏️🪑🚿🛁🧴🧹🧺🧻🧼🧽' },
+  { name: 'nature', label: '自然', icon: '然', emojis: '🐶🐱🐭🐹🐰🦊🐻🐼🐻‍❄️🐨🐯🦁🐮🐷🐽🐸🐵🙈🙉🙊🐒🐔🐧🐦🐤🐣🐥🦆🦅🦉🦇🐺🐗🐴🦄🐝🪱🐛🦋🐌🐞🐜🪰🪲🪳🦟🦗🕷🕸🦂🐢🐍🦎🦖🦕🐙🦑🦐🦞🦀🐡🐠🐟🐬🐳🐋🦈🦭🐊🐅🐆🦓🦍🦧🦣🐘🦛🦏🐪🐫🦒🦘🦬🐃🐂🐄🐎🐖🐏🐑🦙🐐🦌🐕🐩🦮🐕‍🦺🐈🐈‍⬛🪶🐓🦃🦤🦚🦜🦢🦩🕊️🐇🦝🦨🦡🦫🦦🦥🐁🐀🐿️🦔🐾🐉🐲🌵🎄🌲🌳🌴🪵🌱🌿☘️🍀🎍🪴🎋🍃🍂🍁🍄🐚🪨🌾💐🌷🌹🥀🌺🌸🌼🌻🌞🌝🌛🌜🌚🌕🌖🌗🌘🌑🌒🌓🌔🌙🌎🌍🌏🪐💫⭐️🌟✨⚡️☄️💥🔥🌪️🌈☀️🌤⛅️🌥☁️🌦🌧⛈🌩🌨❄️☃️⛄️🌬💨💧💦☔️☂️🌊🌫' },
 ]
+const activeEmojiLabel = computed(() =>
+  (emojiCats.find(c => c.name === emojiCat.value) || emojiCats[0]).label
+)
 const currentEmojis = computed(() => {
   const raw = (emojiCats.find(c => c.name === emojiCat.value) || emojiCats[0]).emojis
   // Split by emoji boundaries: match emoji sequences (base + optional modifiers)
@@ -518,53 +527,77 @@ function insertEmoji(e) { text.value += e; showEmojiPicker.value = false; docume
 
 /* Emoji picker */
 .emoji-wrap { position: relative; }
+.emoji-trigger-glyph { font: 900 18px/1 var(--mono); }
 .emoji-picker {
   position: absolute;
-  bottom: 40px;
+  bottom: 44px;
   left: 0;
   z-index: 200;
-  width: 320px;
+  width: 336px;
   background: var(--panel);
-  border: 1px solid var(--line2);
-  border-radius: 14px;
-  box-shadow: var(--shadow2);
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  box-shadow: 5px 5px 0 var(--ink);
   overflow: hidden;
 }
+.emoji-picker-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 33px;
+  padding: 0 10px;
+  border-bottom: 2px solid var(--ink);
+  background: repeating-linear-gradient(90deg, var(--blue) 0 8px, color-mix(in srgb, var(--blue) 78%, #fff) 8px 16px);
+  color: #fff;
+  text-shadow: 1px 1px 0 var(--ink);
+  font: 900 10px var(--mono);
+  letter-spacing: .08em;
+}
+.emoji-picker-hd b { font: 900 10px var(--font); letter-spacing: 0; }
 .emoji-cats {
   display: flex;
-  gap: 2px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--line);
+  gap: 4px;
+  padding: 7px 8px;
+  border-bottom: 2px solid var(--line2);
   background: var(--bg);
 }
 .emoji-cats button {
-  width: 32px; height: 32px;
-  border: 0; border-radius: 8px;
-  background: transparent;
-  font-size: 16px;
+  width: 34px; height: 30px;
+  border: 1px solid var(--line2); border-radius: 1px;
+  background: var(--panel);
+  color: var(--muted);
+  font: 900 11px var(--font);
   cursor: pointer;
-  transition: background .15s;
+  transition: none;
 }
-.emoji-cats button.active { background: var(--blueS); }
-.emoji-cats button:hover { background: var(--blueS); }
+.emoji-cats button.active { border-color: var(--ink); background: var(--blue); color: #fff; box-shadow: 2px 2px 0 var(--ink); }
+.emoji-cats button:hover { border-color: var(--ink); color: var(--ink); }
+.emoji-cats button.active:hover { color: #fff; }
 .emoji-grid {
   display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  gap: 2px;
-  padding: 6px;
-  max-height: 200px;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  padding: 9px;
+  max-height: 216px;
   overflow-y: auto;
+  background-color: var(--panel);
+  background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 10px 10px;
 }
 .emoji-grid button {
-  width: 28px; height: 28px;
-  border: 0; border-radius: 6px;
-  background: transparent;
+  width: 34px; height: 34px;
+  border: 1px solid transparent; border-radius: 1px;
+  background: var(--panel);
   font-size: 18px;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: background .12s;
+  transition: none;
 }
-.emoji-grid button:hover { background: var(--blueS); transform: scale(1.2); }
+.emoji-grid button:hover { border-color: var(--ink); background: var(--amberS); box-shadow: 2px 2px 0 var(--ink); transform: translate(-1px, -1px); }
+@media (max-width: 440px) {
+  .emoji-picker { left: -78px; width: min(336px, calc(100vw - 28px)); }
+  .emoji-grid { grid-template-columns: repeat(7, 1fr); }
+}
 
 /* 联系人列表可滚动 */
 :deep(.chat-contacts) { min-height: 0; overflow: hidden; }

@@ -477,6 +477,8 @@ def _new_sync(user_id: int, automatic: bool = False) -> tuple[str, bool]:
         "total": 0,
         "added": 0,
         "skipped": 0,
+        "expired_removed": 0,
+        "expired_skipped": 0,
         "errors": 0,
         "failed": False,
         "finished": False,
@@ -491,6 +493,19 @@ def _new_sync(user_id: int, automatic: bool = False) -> tuple[str, bool]:
         # Use a local dict mirroring the DB-stored progress
         pid = dict(_sync_progress_get(sync_id) or progress)
         try:
+            pid["phase"] = "cleaning"
+            pid["message"] = "正在清理共享总表中过期岗位…"
+            _sync_progress_set(sync_id, pid)
+            pid["expired_removed"] = local_records.delete_expired_shared_records()
+            if pid["expired_removed"]:
+                bus.log(
+                    f"GiveMeOC {label}清理过期共享岗位 {pid['expired_removed']} 条",
+                    channel="sync", level="info",
+                )
+
+            pid["phase"] = "scanning"
+            pid["message"] = "正在扫描 GiveMeOC 岗位…"
+            _sync_progress_set(sync_id, pid)
             ids: list[int] = []
             page = 1
             while True:
@@ -521,22 +536,26 @@ def _new_sync(user_id: int, automatic: bool = False) -> tuple[str, bool]:
             _sync_progress_set(sync_id, pid)
             valid_records: list[dict] = []
 
-            def _fetch_one(cid: int) -> dict | None:
+            def _fetch_one(cid: int) -> tuple[dict | None, str]:
                 detail = _fetch_givemeoc_detail(cid)
                 if not detail:
-                    return None
+                    return None, "invalid"
                 fields = _to_shared_fields(detail)
                 if not fields["公司名称"] or not fields["秋招岗位"] or not fields["投递链接"]:
-                    return None
-                return None if local_records.shared_missing_fields(fields) else fields
+                    return None, "invalid"
+                if local_records.is_shared_deadline_expired(fields.get("投递截止时间")):
+                    return None, "expired"
+                return (None, "invalid") if local_records.shared_missing_fields(fields) else (fields, "ok")
 
             with ThreadPoolExecutor(max_workers=GIVEMEOC_MAX_WORKERS) as executor:
                 futures_map = {executor.submit(_fetch_one, cid): cid for cid in ids}
                 for future in as_completed(futures_map):
                     try:
-                        fields = future.result()
+                        fields, status = future.result()
                         if fields:
                             valid_records.append(fields)
+                        elif status == "expired":
+                            pid["expired_skipped"] += 1
                         else:
                             pid["errors"] += 1
                     except Exception:
@@ -557,10 +576,15 @@ def _new_sync(user_id: int, automatic: bool = False) -> tuple[str, bool]:
             pid["finished"] = True
             pid["finished_at"] = datetime.now().isoformat(timespec="seconds")
             pid["message"] = f"{label}完成：新增 {pid['added']} 条，跳过重复 {pid['skipped']} 条"
+            if pid["expired_removed"]:
+                pid["message"] += f"，清理过期 {pid['expired_removed']} 条"
+            if pid["expired_skipped"]:
+                pid["message"] += f"，跳过过期 {pid['expired_skipped']} 条"
             if pid["errors"]:
                 pid["message"] += f"，无效或获取失败 {pid['errors']} 条"
             bus.log(
-                f"GiveMeOC {label}完成：新增 {pid['added']} / 跳过 {pid['skipped']} / 无效 {pid['errors']}",
+                f"GiveMeOC {label}完成：新增 {pid['added']} / 跳过 {pid['skipped']} / "
+                f"清理过期 {pid['expired_removed']} / 跳过过期 {pid['expired_skipped']} / 无效 {pid['errors']}",
                 channel="sync", level="success" if pid["errors"] == 0 else "warn",
             )
         except Exception as exc:

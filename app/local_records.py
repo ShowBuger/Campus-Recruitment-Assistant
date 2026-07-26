@@ -4,13 +4,16 @@ import hashlib
 import time
 import uuid
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
 
 from app import database
+
+
+CHINA_TZ = timezone(timedelta(hours=8))
 
 
 FIELD_COLUMNS = {
@@ -405,6 +408,48 @@ def delete_shared_record(shared_id: str) -> bool:
         cur = db.execute("DELETE FROM shared_job_records WHERE id = ?", (shared_id,))
         db.commit()
         return cur.rowcount > 0
+
+
+def shared_deadline_cutoff_ms(now: datetime | None = None) -> int:
+    """Return midnight today in China time as a millisecond timestamp."""
+    current = now.astimezone(CHINA_TZ) if now else datetime.now(CHINA_TZ)
+    today = current.replace(hour=0, minute=0, second=0, microsecond=0)
+    return int(today.timestamp() * 1000)
+
+
+def is_shared_deadline_expired(deadline: int | str | None, now: datetime | None = None) -> bool:
+    """A deadline is expired only when its calendar date is before today."""
+    if deadline in (None, ""):
+        return False
+    try:
+        return int(deadline) < shared_deadline_cutoff_ms(now)
+    except (TypeError, ValueError):
+        return False
+
+
+def delete_expired_shared_records(now: datetime | None = None) -> int:
+    """Remove expired shared records and unlink any personal copies.
+
+    Personal records remain intact; only their source_shared_id link is cleared.
+    """
+    cutoff = shared_deadline_cutoff_ms(now)
+    with database._write_lock:
+        db = database.get_db()
+        db.execute(
+            """UPDATE job_records SET source_shared_id = NULL
+               WHERE source_shared_id IN (
+                   SELECT id FROM shared_job_records
+                   WHERE deadline IS NOT NULL AND deadline < ?
+               )""",
+            (cutoff,),
+        )
+        cur = db.execute(
+            """DELETE FROM shared_job_records
+               WHERE deadline IS NOT NULL AND deadline < ?""",
+            (cutoff,),
+        )
+        db.commit()
+        return cur.rowcount
 
 
 def update_record(user_id: int, record_id: str, fields: dict) -> bool:
