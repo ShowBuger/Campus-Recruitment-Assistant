@@ -21,7 +21,6 @@ progress_tracker.start_scheduler()
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 PROJECT_DIR = os.path.join(os.path.dirname(__file__), "..")
-WWW_DIST = "/var/www/campus-dashboard/dist"  # nginx 静态文件目录
 
 
 @asynccontextmanager
@@ -58,10 +57,7 @@ app.include_router(progress_tracker.router)
 
 
 def _dist_index():
-    """返回 dist/index.html 的路径，优先从 www 目录读取（与 nginx 保持一致）。"""
-    path = os.path.join(WWW_DIST, "index.html")
-    if os.path.isfile(path):
-        return path
+    """返回 dist/index.html 的路径。"""
     path = os.path.join(STATIC_DIR, "dist", "index.html")
     if os.path.isfile(path):
         return path

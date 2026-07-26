@@ -1,0 +1,4 @@
+interface:
+  display_name: "校招岗位智能推荐"
+  short_description: "基于候选人偏好与简历批量评估岗位匹配度，输出 S/A/B/C 等级评分"
+  default_prompt: "Use $job-recommendation to score and rank campus recruitment positions against a candidate profile."

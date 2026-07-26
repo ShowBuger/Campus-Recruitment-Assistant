@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -13,6 +14,24 @@ from app.routers.ai import PROVIDER_NAMES, _call_ai_provider, _extract_resume_te
 
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 CHUNK_SIZE = 45
+
+SKILL_PATH = Path(__file__).resolve().parents[2] / "skills" / "job-recommendation" / "SKILL.md"
+_SYSTEM_PROMPT: str | None = None
+
+
+def _load_system_prompt() -> str:
+    global _SYSTEM_PROMPT
+    if _SYSTEM_PROMPT is not None:
+        return _SYSTEM_PROMPT
+    if SKILL_PATH.is_file():
+        _SYSTEM_PROMPT = SKILL_PATH.read_text(encoding="utf-8")
+        return _SYSTEM_PROMPT
+    # Fallback inline prompt when skill file is missing
+    _SYSTEM_PROMPT = """你是严谨的校招岗位推荐助手。只能基于候选人偏好、简历和给定岗位信息判断，不能编造事实。
+对每一个输入岗位都给出匹配评分。仅输出 JSON 数组，不要 Markdown 或解释。每项严格为：
+{"record_id":"...","score":0-100,"grade":"S|A|B|C","reason":"不超过40字的具体匹配或不足原因"}
+S=强烈推荐，A=优先推荐，B=值得关注，C=备选。"""
+    return _SYSTEM_PROMPT
 
 
 class RecommendationRequest(BaseModel):
@@ -44,10 +63,7 @@ def _candidate(record: dict) -> dict:
 
 def _rank_chunk(provider: str, api_key: str, model: str, base_url: str, api_mode: str,
                 preference: str, resume_text: str, records: list[dict]) -> list[dict]:
-    system = """你是严谨的校招岗位推荐助手。只能基于候选人偏好、简历和给定岗位信息判断，不能编造事实。
-对每一个输入岗位都给出匹配评分。仅输出 JSON 数组，不要 Markdown 或解释。每项严格为：
-{"record_id":"...","score":0-100,"grade":"S|A|B|C","reason":"不超过40字的具体匹配或不足原因"}
-S=强烈推荐，A=优先推荐，B=值得关注，C=备选。"""
+    system = _load_system_prompt()
     content = f"""【候选人岗位偏好】\n{preference or '未填写，请主要根据简历与岗位判断'}
 
 【候选人简历】\n{resume_text[:18000] if resume_text else '未选择简历，请主要根据岗位偏好判断'}

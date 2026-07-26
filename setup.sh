@@ -52,13 +52,11 @@ else
   warn "未找到 frontend/package.json，跳过前端构建"
 fi
 
-# ── 4. 静态文件目录 ──
-info "同步静态文件到 /var/www/campus-dashboard/..."
-mkdir -p /var/www/campus-dashboard
-if [ -d "static/dist" ]; then
-  cp -r static/dist /var/www/campus-dashboard/dist
-  log "静态文件已同步"
-fi
+# ── 4. 文件权限 ──
+# nginx 需要读取项目 static/ 目录
+info "设置静态文件权限..."
+chmod o+rx /opt/campus-recruitment-assistant
+log "项目目录权限已设置"
 
 # ── 5. JWT 密钥 ──
 if [ ! -f ".env" ]; then
