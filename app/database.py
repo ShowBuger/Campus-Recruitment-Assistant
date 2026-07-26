@@ -263,6 +263,9 @@ def _init_tables(conn: sqlite3.Connection) -> None:
         "kimi_model": "TEXT DEFAULT 'kimi-k3'",
         "kimi_base_url": "TEXT DEFAULT 'https://api.moonshot.cn/v1'",
         "deepseek_base_url": "TEXT DEFAULT 'https://api.deepseek.com'",
+        "recommendation_limit": "INTEGER NOT NULL DEFAULT 12",
+        "recommendation_min_score": "INTEGER NOT NULL DEFAULT 45",
+        "recommendation_model": "TEXT DEFAULT ''",
     }
     for column, declaration in config_migrations.items():
         if column not in config_columns:
@@ -735,6 +738,9 @@ def get_user_config(user_id: int) -> dict:
             "kimi_api_key": "",
             "kimi_model": "kimi-k3",
             "kimi_base_url": "https://api.moonshot.cn/v1",
+            "recommendation_limit": 12,
+            "recommendation_min_score": 45,
+            "recommendation_model": "",
             "configured": False,
         }
     d = dict(row)

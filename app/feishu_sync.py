@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -57,6 +58,13 @@ def _run_cli(*args: str, timeout: int = 90) -> dict:
             [*_cli_prefix(), *args],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
+            env={
+                **os.environ,
+                "LARKSUITE_CLI_NO_UPDATE_NOTIFIER": "1",
+                "LARKSUITE_CLI_NO_SKILLS_NOTIFIER": "1",
+            },
             timeout=timeout,
             check=False,
         )
@@ -67,13 +75,37 @@ def _run_cli(*args: str, timeout: int = 90) -> dict:
     if result.returncode:
         message = error_output or output or "飞书 CLI 调用失败"
         raise FeishuSyncError(message[:800])
-    try:
-        parsed = json.loads(output)
-    except json.JSONDecodeError as exc:
-        raise FeishuSyncError("飞书 CLI 返回了无法解析的数据") from exc
+    parsed = _parse_cli_json(output)
     if isinstance(parsed, dict) and parsed.get("ok") is False:
         error = parsed.get("error") or {}
         raise FeishuSyncError(str(error.get("message") or error.get("hint") or error)[:800])
+    return parsed
+
+
+def _parse_cli_json(output: str) -> dict:
+    """Read the CLI JSON even if it is surrounded by non-JSON notices."""
+    try:
+        parsed = json.loads(output)
+    except json.JSONDecodeError as exc:
+        decoder = json.JSONDecoder()
+        candidates: list[object] = []
+        for match in re.finditer(r"[\[{]", output):
+            try:
+                value, _ = decoder.raw_decode(output[match.start():])
+            except json.JSONDecodeError:
+                continue
+            candidates.append(value)
+        if not candidates:
+            raise FeishuSyncError("飞书 CLI 返回了无法解析的数据") from exc
+        parsed = next(
+            (
+                value for value in reversed(candidates)
+                if isinstance(value, dict) and ("ok" in value or "data" in value)
+            ),
+            candidates[-1],
+        )
+    if not isinstance(parsed, dict):
+        raise FeishuSyncError("飞书 CLI 返回了无法解析的数据")
     return parsed
 
 

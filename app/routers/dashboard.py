@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, HttpUrl
 
-from app import auth as auth_module, bus, database, feishu_sync, local_records, record_excel, state
+from app import auth as auth_module, bus, database, feishu_sync, local_records, qiuzhi_sync, record_excel, state
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -615,6 +615,27 @@ def sync_from_givemeoc(user: dict = Depends(auth_module.get_current_user)):
         "started": started,
         "message": "同步已启动" if started else "已有同步任务正在运行，已连接当前进度",
     }
+
+
+@router.post("/sync-from-qiuzhifangzhou")
+def sync_from_qiuzhifangzhou(user: dict = Depends(auth_module.get_current_user)):
+    """Synchronize the public 求职方舟 campus table into the shared table."""
+    if not (user.get("is_root") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="仅管理员可以同步求职方舟数据")
+    try:
+        removed = local_records.delete_expired_shared_records()
+        fields, scanned = qiuzhi_sync.fetch_shared_fields()
+        valid = [item for item in fields if not local_records.is_shared_deadline_expired(item.get("投递截止时间"))]
+        added, skipped = local_records.create_shared_records(user["user_id"], valid)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"求职方舟数据读取失败：{exc}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"求职方舟同步失败：{exc}") from exc
+    message = f"求职方舟同步完成：扫描 {scanned} 条，新增 {added} 条，跳过重复 {skipped} 条"
+    if removed:
+        message += f"，清理过期 {removed} 条"
+    bus.log(message, channel="sync", level="success")
+    return {"success": True, "scanned": scanned, "added": added, "skipped": skipped, "expired_removed": removed, "message": message}
 
 
 @router.get("/sync-from-givemeoc/progress")

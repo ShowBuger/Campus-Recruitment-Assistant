@@ -51,6 +51,12 @@ class AIConfig(BaseModel):
         return value
 
 
+class RecommendationConfig(BaseModel):
+    recommendation_limit: int = Field(default=12, ge=0, le=5000)
+    recommendation_min_score: int = Field(default=45, ge=0, le=95)
+    recommendation_model: str = Field(default="", max_length=100)
+
+
 def _masked(value: Optional[str], left: int = 6, right: int = 4) -> str:
     value = (value or "").strip()
     if not value:
@@ -70,6 +76,55 @@ def get_config(user: dict = Depends(auth_module.get_current_user)):
         "anthropic": "anthropic_api_key",
         "kimi": "kimi_api_key",
     }
+
+
+@router.get("/recommendation")
+def get_recommendation_config(user: dict = Depends(auth_module.get_current_user)):
+    cfg = database.get_user_config(user["user_id"])
+    return {
+        "recommendation_limit": int(cfg.get("recommendation_limit") if cfg.get("recommendation_limit") is not None else 12),
+        "recommendation_min_score": int(cfg.get("recommendation_min_score") or 45),
+        "recommendation_model": str(cfg.get("recommendation_model") or ""),
+        "ai_provider": cfg.get("ai_provider") or "deepseek",
+        "ai_model": cfg.get(f"{cfg.get('ai_provider') or 'deepseek'}_model") or "",
+    }
+
+
+@router.post("/recommendation")
+def save_recommendation_config(
+    config: RecommendationConfig,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    with database._write_lock:
+        db = database.get_db()
+        db.execute(
+            """UPDATE user_configs
+               SET recommendation_limit = ?, recommendation_min_score = ?, recommendation_model = ?
+               WHERE user_id = ?""",
+            (config.recommendation_limit, config.recommendation_min_score, config.recommendation_model.strip(), user["user_id"]),
+        )
+        db.commit()
+    return {"success": True, "message": "岗位推荐配置已保存"}
+
+
+@router.get("/recommendation/models")
+def get_recommendation_models(user: dict = Depends(auth_module.get_current_user)):
+    cfg = database.get_user_config(user["user_id"])
+    provider = cfg.get("ai_provider") or "deepseek"
+    api_key = cfg.get(f"{provider}_api_key") or ""
+    model = cfg.get(f"{provider}_model") or ""
+    if not api_key:
+        raise HTTPException(status_code=422, detail="请先在 AI 配置中保存当前服务商的 API Key")
+    try:
+        models = ai_provider_utils.fetch_models(
+            provider, api_key,
+            cfg.get(f"{provider}_base_url") or ai_provider_utils.DEFAULT_BASE_URLS[provider],
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"读取当前服务商模型失败：{exc}") from exc
+    if model and model not in models:
+        models.insert(0, model)
+    return {"provider": provider, "models": models, "current_model": model}
     key_field = key_fields.get(provider, "deepseek_api_key")
     configured = bool(cfg.get(key_field))
     return {

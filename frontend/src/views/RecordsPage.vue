@@ -19,6 +19,7 @@ const sortValue = ref('default')
 const importLoading = ref(false)
 const feishuSyncing = ref(false)
 const givemeocSyncing = ref(false)
+const qiuzhiSyncing = ref(false)
 const givemeocProgress = ref('')
 const givemeocShow = ref(false)
 const givemeocPhase = ref('scanning')
@@ -301,6 +302,22 @@ async function addToPersonal(r) {
     await dialog.alert('添加失败：' + e.message, { title: '操作失败', tone: 'danger' })
   }
 }
+
+async function qiuzhiSync() {
+  const confirmed = await dialog.confirm(
+    '将同步求职方舟近 90 天的公开校招岗位到共享总表，并自动跳过重复与过期岗位。',
+    { title: '同步求职方舟岗位', tone: 'info', confirmText: '开始同步' },
+  )
+  if (!confirmed) return
+  qiuzhiSyncing.value = true
+  try {
+    const data = await post('/api/dashboard/sync-from-qiuzhifangzhou')
+    await dialog.alert(data.message || '求职方舟同步完成', { title: '同步完成', tone: 'success' })
+    await loadShared()
+  } catch (error) {
+    await dialog.alert('求职方舟同步失败：' + error.message, { title: '同步失败', tone: 'danger' })
+  } finally { qiuzhiSyncing.value = false }
+}
 </script>
 
 <template>
@@ -334,9 +351,10 @@ async function addToPersonal(r) {
             aria-label="查找总表记录"
           >
         </div>
+        <button v-if="showShared" class="btn btn-primary" @click="app.openRecommendation()">智能筛选</button>
         <select
+          v-if="!showShared"
           v-model="sortValue"
-          :disabled="showShared"
           aria-label="总表排序方式"
         >
           <option value="default">默认排序</option>
@@ -418,11 +436,12 @@ async function addToPersonal(r) {
       <div class="table-actions" v-else>
         <div
           id="shared-admin-actions"
-          :style="{ display: sharedCanDelete ? 'flex' : 'none', gap: '9px', flexWrap: 'wrap' }"
+          :style="{ display: 'flex', gap: '9px', flexWrap: 'wrap' }"
         >
-          <button class="btn btn-primary" @click="sharedNewRecord">新建记录</button>
-          <button class="btn" @click="sharedManageRecords">管理记录</button>
+          <button v-if="sharedCanDelete" class="btn btn-primary" @click="sharedNewRecord">新建记录</button>
+          <button v-if="sharedCanDelete" class="btn" @click="sharedManageRecords">管理记录</button>
           <button v-if="isAdmin()" class="btn" @click="givemeocSync" :disabled="givemeocSyncing">{{ givemeocSyncing ? '同步中...' : 'GiveMeOC 同步' }}</button>
+          <button v-if="isAdmin()" class="btn" @click="qiuzhiSync" :disabled="qiuzhiSyncing">{{ qiuzhiSyncing ? '同步中...' : '求职方舟同步' }}</button>
           <div v-if="givemeocShow" class="shared-sync-status" :class="{ 'is-error': givemeocError, 'is-indeterminate': givemeocIndeterminate }" style="display:grid;width:100%">
             <div class="shared-sync-head"><b>{{ givemeocLabel }}</b><span>{{ givemeocPercent }}</span></div>
             <div class="shared-sync-track"><i :style="{ width: givemeocBarWidth }"></i></div>

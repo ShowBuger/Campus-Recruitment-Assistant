@@ -42,7 +42,7 @@ async function loadAIProvider() {
     const r = await fetch('/api/config', { headers: { Authorization: `Bearer ${auth.token}` } })
     if (!r.ok) return
     const cfg = await r.json()
-    const values = cfg.values || {}
+    const values = cfg?.values || {}
     const provider = values.ai_provider || 'deepseek'
     const model = values[provider + '_model'] || ''
     aiProviderLabel.value = PROVIDER_LABELS[provider] || 'DeepSeek'

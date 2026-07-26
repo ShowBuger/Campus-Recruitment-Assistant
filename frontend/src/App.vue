@@ -13,6 +13,7 @@ import RecordManagerModal from '@/components/RecordManagerModal.vue'
 import HelpModal from '@/components/HelpModal.vue'
 import StatsModal from '@/components/StatsModal.vue'
 import OfferCompareModal from '@/components/OfferCompareModal.vue'
+import RecommendationModal from '@/components/RecommendationModal.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 import AppDialog from '@/components/AppDialog.vue'
 
@@ -68,6 +69,7 @@ onMounted(async () => {
     <HelpModal v-if="app.showHelp" @close="app.showHelp = false" />
     <StatsModal v-if="app.showStats" @close="app.closeStats()" />
     <OfferCompareModal v-if="app.showOffer" @close="app.closeOffer()" />
+    <RecommendationModal v-if="app.showRecommendation" @close="app.closeRecommendation()" />
     <div v-if="showError" class="error-overlay" @click.self="showError = false">
       <div class="error-modal"><h3>&#9888; {{ errorMsg }}</h3><pre>{{ errorDetail }}</pre><div class="btn-row"><button class="btn" @click="copyError">复制详情</button><button class="btn" style="background:var(--blue);color:#fff" @click="showError = false">关闭</button></div></div>
     </div>

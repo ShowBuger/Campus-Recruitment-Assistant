@@ -104,7 +104,7 @@ body.chat-open{overflow:hidden}
 
 /* ---- settings modal ---- */
 .settings-modal{width:min(760px,96vw)}
-.settings-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 20px 0;background:var(--panel)}
+.settings-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:10px 20px 0;background:var(--panel)}
 .settings-tabs button{min-height:40px;border:1px solid var(--line);border-radius:10px 10px 0 0;background:var(--bg);color:var(--sub);font:800 12px var(--font);cursor:pointer;transition:.16s var(--ease)}
 .settings-tabs button.active{border-color:var(--blue);background:var(--blue);color:#fff}
 .settings-page{display:none;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
