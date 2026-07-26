@@ -27,6 +27,10 @@ export const useAppStore = defineStore('app', () => {
   function openManager(shared) { managerShared.value = !!shared; showManager.value = true }
   function closeManager() { showManager.value = false; managerShared.value = false }
 
+  // Chat unread count (shared between ChatModal & Topbar)
+  const chatUnread = ref(0)
+  function setChatUnread(n) { chatUnread.value = n || 0 }
+
   // Tracker pending events (shared between DashboardPage & TrackerSettings)
   const trackerPending = ref([])
   function setTrackerPending(events) { trackerPending.value = events || [] }
@@ -35,5 +39,5 @@ export const useAppStore = defineStore('app', () => {
   return { showConfig, showChat, showRecord, showHelp, showStats, showOffer, showManager, detailId, recordShared, managerShared,
     toggleConfig, toggleChat, toggleHelp, openRecord, closeRecord, openDetail, closeDetail,
     openStats, closeStats, openOffer, closeOffer, openManager, closeManager,
-    trackerPending, setTrackerPending, clearTrackerPending }
+    trackerPending, setTrackerPending, clearTrackerPending, chatUnread, setChatUnread }
 })

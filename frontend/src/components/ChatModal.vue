@@ -23,11 +23,12 @@
             >
               <div class="chat-avatar">{{ u.username.charAt(0).toUpperCase() }}</div>
               <div class="chat-user-main">
-                <div class="chat-user-name">{{ u.username }}</div>
+                <div class="chat-user-name">
+                  {{ u.username }}
+                  <span v-if="u.unread_count" class="chat-count-inline">{{ u.unread_count }}</span>
+                </div>
                 <div class="chat-user-last" v-if="u.last_msg">{{ u.last_msg }}</div>
               </div>
-              <div class="chat-online" :class="{ on: u.is_online }" style="position:static;margin-left:auto" :title="u.is_online ? '在线' : '离线'"></div>
-              <div v-if="u.unread_count" class="chat-count">{{ u.unread_count }}</div>
             </button>
           </div>
         </aside>
@@ -36,7 +37,7 @@
         <div class="chat-panel">
           <div class="chat-head" v-if="activePeer">
             <div class="chat-avatar" style="flex-shrink:0">{{ peerName.charAt(0).toUpperCase() }}</div>
-            <div class="chat-head-info"><b>{{ peerName }}</b><span>{{ peerOnline ? '在线' : '离线' }}</span></div>
+            <div class="chat-head-info"><b>{{ peerName }}</b></div>
           </div>
           <div class="chat-head" v-else>
             <div class="chat-head-info"><b>选择联系人</b><span>发送消息、图片或岗位信息</span></div>
@@ -119,6 +120,28 @@
                 <path d="M3 8h18v12H3V8Z"/><path d="M9 8V5h6v3M3 12h18M10 12v2h4v-2"/>
               </svg>
             </button>
+            <!-- Emoji picker -->
+            <div class="emoji-wrap">
+              <button
+                class="icon-btn chat-tool-btn"
+                @click="showEmojiPicker = !showEmojiPicker"
+                title="表情"
+                aria-label="表情"
+              >😊</button>
+              <div v-if="showEmojiPicker" class="emoji-picker" @click.stop>
+                <div class="emoji-cats">
+                  <button v-for="cat in emojiCats" :key="cat.name"
+                    :class="{ active: emojiCat === cat.name }"
+                    @click="emojiCat = cat.name"
+                  >{{ cat.icon }}</button>
+                </div>
+                <div class="emoji-grid">
+                  <button v-for="e in currentEmojis" :key="e"
+                    @click="insertEmoji(e)"
+                  >{{ e }}</button>
+                </div>
+              </div>
+            </div>
             <textarea
               v-model="text"
               maxlength="3000"
@@ -191,10 +214,12 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import { useAppStore } from '@/stores/app'
 
 defineEmits(['close'])
 const auth = useAuthStore()
 const toast = useToastStore()
+const app = useAppStore()
 
 const users = ref([])
 const messages = ref([])
@@ -240,6 +265,9 @@ async function loadUsers() {
     const r = await fetch('/api/chat/users', { headers: { Authorization: `Bearer ${auth.token}` } })
     const data = await r.json()
     users.value = (data.users || data || []).filter(u => u.id !== auth.user?.id)
+    // Update unread badge
+    const total = users.value.reduce((s, u) => s + (u.unread_count || 0), 0)
+    app.setChatUnread(total)
   } catch { users.value = [] }
 }
 
@@ -358,7 +386,24 @@ function stopPoll() { clearInterval(pollTimer) }
 
 const peerName = computed(() => users.value.find(u => u.id === activePeer.value)?.username || '')
 const peerOnline = computed(() => users.value.find(u => u.id === activePeer.value)?.is_online || false)
-function fmtTime(v) { if (!v) return ''; const d = new Date(v); return isNaN(d) ? '' : d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }
+function fmtTime(v) { if (!v) return ''; const d = new Date(String(v).replace(' ', 'T') + (String(v).includes('Z') ? '' : 'Z')); return isNaN(d) ? '' : d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }
+
+// Emoji picker
+const showEmojiPicker = ref(false)
+const emojiCat = ref('face')
+const emojiCats = [
+  { name: 'face', icon: '😊', emojis: '😀😃😄😁😅😂🤣😊😇🙂🙃😉😌😍🥰😘😗😙😚😋😛😝😜🤪🤨🧐🤓😎🥸🤩🥳😏😒😞😔😟😕🙁☹️😣😖😫😩🥺😢😭😤😠😡🤬🤯😳🥵🥶😱😨😰😥😓🤗🤔🤭🤫🤥😶😐😑😬🙄😯😦😧😮😲🥱😴🤤😪😵🤐🥴🤢🤮🤧😷🤒🤕🤑🤠' },
+  { name: 'hand', icon: '👍', emojis: '👍👎👌✌🤞🤟🤘🤙👈👉👆👇☝️✋🤚🖐🖖👋🤏✍️🙌👏🙏🤝💪🦾🦿🦶🦵🤳👀🫀🫁🧠👅👄👂🦻👃🤲🤜🤛✊👊🤚🖐✋' },
+  { name: 'heart', icon: '❤️', emojis: '❤️🧡💛💚💙💜🖤🤍🤎💔❣️💕💞💓💗💖💘💝💟☮️✝️☪️🕉☸️✡️🔯🕎☯️☦️🛐⛎♈️♉️♊️♋️♌️♍️♎️♏️♐️♑️♒️♓️🆔' },
+  { name: 'item', icon: '🎁', emojis: '🎁🎂🎈🎉🎊🎀🏆🥇🥈🥉🏅🎖️🏵️🎗️🎫🎟️🎪🤹🪄🎭🩰🎨🎬🎤🎧🎼🎹🥁🎷🎺🎸🪕🎻🎲♟️🎯🎳🎮🕹️🎰📱💻⌨️🖥🖨🖱🖲🕹️🗜️💽💾💿📀📼📷📸📹🎥📽🎞📞☎️📟📠📺📻🎙🎚🎛🧭⏰⌚️📡🔋🪫🔌💡🔦🕯️🪔🧯🗑️🛢️💸💵💴💶💷🪙💰💳💎⚖️🪜🔧🔨⚒️🛠️⛏️🔩⚙️🪛🔗⛓️🪝🧰🧲🧪🧫🧬🔬🔭📡💉💊🩹🩺🚪🛏️🪑🚿🛁🧴🧹🧺🧻🧼🧽' },
+  { name: 'nature', icon: '🌿', emojis: '🐶🐱🐭🐹🐰🦊🐻🐼🐻‍❄️🐨🐯🦁🐮🐷🐽🐸🐵🙈🙉🙊🐒🐔🐧🐦🐤🐣🐥🦆🦅🦉🦇🐺🐗🐴🦄🐝🪱🐛🦋🐌🐞🐜🪰🪲🪳🦟🦗🕷🕸🦂🐢🐍🦎🦖🦕🐙🦑🦐🦞🦀🐡🐠🐟🐬🐳🐋🦈🦭🐊🐅🐆🦓🦍🦧🦣🐘🦛🦏🐪🐫🦒🦘🦬🐃🐂🐄🐎🐖🐏🐑🦙🐐🦌🐕🐩🦮🐕‍🦺🐈🐈‍⬛🪶🐓🦃🦤🦚🦜🦢🦩🕊️🐇🦝🦨🦡🦫🦦🦥🐁🐀🐿️🦔🐾🐉🐲🌵🎄🌲🌳🌴🪵🌱🌿☘️🍀🎍🪴🎋🍃🍂🍁🍄🐚🪨🌾💐🌷🌹🥀🌺🌸🌼🌻🌞🌝🌛🌜🌚🌕🌖🌗🌘🌑🌒🌓🌔🌙🌎🌍🌏🪐💫⭐️🌟✨⚡️☄️💥🔥🌪️🌈☀️🌤⛅️🌥☁️🌦🌧⛈🌩🌨❄️☃️⛄️🌬💨💧💦☔️☂️🌊🌫' },
+]
+const currentEmojis = computed(() => {
+  const raw = (emojiCats.find(c => c.name === emojiCat.value) || emojiCats[0]).emojis
+  // Split by emoji boundaries: match emoji sequences (base + optional modifiers)
+  return [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(raw)].map(s => s.segment)
+})
+function insertEmoji(e) { text.value += e; showEmojiPicker.value = false; document.querySelector('.chat-compose textarea')?.focus() }
 </script>
 
 <style scoped>
@@ -465,8 +510,71 @@ function fmtTime(v) { if (!v) return ''; const d = new Date(v); return isNaN(d) 
 .chat-job-search-empty b { display: block; color: var(--ink); font-size: 15px; margin-bottom: 4px; }
 .chat-job-search-empty span { font-size: 12px; }
 
+/* Compose: 5 columns for emoji button */
+:deep(.chat-compose) { grid-template-columns: auto auto auto minmax(0,1fr) auto; }
+:deep(.chat-compose .icon-btn) { height: 36px; width: 36px; }
+:deep(.chat-compose textarea) { height: 36px; min-height: 36px; }
+:deep(.chat-compose .chat-send) { height: 36px; }
+
+/* Emoji picker */
+.emoji-wrap { position: relative; }
+.emoji-picker {
+  position: absolute;
+  bottom: 40px;
+  left: 0;
+  z-index: 200;
+  width: 320px;
+  background: var(--panel);
+  border: 1px solid var(--line2);
+  border-radius: 14px;
+  box-shadow: var(--shadow2);
+  overflow: hidden;
+}
+.emoji-cats {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.emoji-cats button {
+  width: 32px; height: 32px;
+  border: 0; border-radius: 8px;
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.emoji-cats button.active { background: var(--blueS); }
+.emoji-cats button:hover { background: var(--blueS); }
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+  padding: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.emoji-grid button {
+  width: 28px; height: 28px;
+  border: 0; border-radius: 6px;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s;
+}
+.emoji-grid button:hover { background: var(--blueS); transform: scale(1.2); }
+
+/* 联系人列表可滚动 */
+:deep(.chat-contacts) { min-height: 0; overflow: hidden; }
+:deep(.chat-user-list) { flex: 1; min-height: 0; overflow-y: auto; }
+/* 消息计数红点 */
+.chat-count-inline { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 999px; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; vertical-align: middle; }
 /* 移动端适配 */
 @media (max-width: 760px) {
   .chat-modal-window { width: 96vw; height: 94vh; border-radius: 14px; }
+  .chat-compose { grid-template-columns: auto auto auto minmax(0,1fr) !important; }
+  .chat-compose .chat-send { grid-column: 1 / -1; width: 100%; }
 }
 </style>

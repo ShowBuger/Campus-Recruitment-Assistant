@@ -2,8 +2,10 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/utils/api'
+import { useAppStore } from '@/stores/app'
 
 const route = useRoute()
+const appStore = useAppStore()
 const titleMap = { dashboard: '投递信息', board: '投递看板', records: '总表信息', resumes: '简历管理', analysis: '简历分析', admin: '管理页面' }
 const title = computed(() => titleMap[route.name] || '校招信息看板')
 
@@ -137,7 +139,7 @@ onUnmounted(() => {
         <path d="M4 5h16v12H9l-5 4V5Z"/>
         <path d="M8 9h8M8 13h5"/>
       </svg>
-      <span class="nav-unread" id="chat-nav-unread">0</span>
+      <span v-if="appStore.chatUnread" class="nav-unread" id="chat-nav-unread">{{ appStore.chatUnread }}</span>
     </button>
 
     <div class="notification-wrap">
