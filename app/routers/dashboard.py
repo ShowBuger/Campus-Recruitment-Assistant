@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, HttpUrl
 
-from app import auth as auth_module, bus, database, feishu_sync, local_records, qiuzhi_sync, record_excel, state
+from app import auth as auth_module, bus, database, feishu_sync, local_records, qiuzhi_sync, record_excel, state, sync_dedup
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -603,6 +603,181 @@ def _new_sync(user_id: int, automatic: bool = False) -> tuple[str, bool]:
     return sync_id, True
 
 
+def _enabled_sync_sources() -> list[str]:
+    sources = []
+    if (database.get_system_config("sync_source_givemeoc") or "1") == "1":
+        sources.append("givemeoc")
+    if (database.get_system_config("sync_source_qiuzhifangzhou") or "1") == "1":
+        sources.append("qiuzhifangzhou")
+    return sources
+
+
+def _ai_dedup_enabled() -> bool:
+    return (database.get_system_config("sync_ai_dedup_enabled") or "1") == "1"
+
+
+def _new_combined_sync(user_id: int, sources: list[str], automatic: bool = False) -> tuple[str, bool]:
+    """Fetch every enabled source, then deduplicate the combined record set once."""
+    sources = [source for source in ("givemeoc", "qiuzhifangzhou") if source in sources]
+    if not sources:
+        raise ValueError("请至少开启一个同步来源")
+    with _sync_guard:
+        active_id = _active_sync_get()
+        if active_id and active_id != "0":
+            active = _sync_progress_get(active_id)
+            if active is None or not active.get("finished"):
+                return active_id, False
+        sync_id = uuid.uuid4().hex[:12]
+        _active_sync_set(sync_id)
+    progress = {
+        "phase": "preparing", "sources": sources, "current_source": "",
+        "source_index": 0, "source_total": len(sources), "found": 0,
+        "done": 0, "total": 0, "added": 0, "skipped": 0,
+        "expired_removed": 0, "expired_skipped": 0, "errors": 0,
+        "exact_duplicates": 0, "ai_duplicates": 0, "ai_reviewed": 0,
+        "failed": False, "finished": False,
+        "started_at": datetime.now().isoformat(timespec="seconds"),
+        "message": "正在准备统一同步任务…",
+    }
+    _sync_progress_set(sync_id, progress)
+
+    def _run():
+        label = "自动同步" if automatic else "手动同步"
+        pid = dict(progress)
+        combined_records: list[dict] = []
+        source_failures: list[str] = []
+        try:
+            pid["phase"] = "cleaning"
+            pid["message"] = "正在清理共享总表中的过期岗位…"
+            _sync_progress_set(sync_id, pid)
+            pid["expired_removed"] = local_records.delete_expired_shared_records()
+
+            for index, source in enumerate(sources, start=1):
+                pid.update(source_index=index, current_source=source, phase="scanning")
+                source_label = "GiveMeOC" if source == "givemeoc" else "求职方舟"
+                pid["message"] = f"正在读取 {source_label}…"
+                _sync_progress_set(sync_id, pid)
+                try:
+                    if source == "givemeoc":
+                        ids: list[int] = []
+                        page = 1
+                        while True:
+                            rows = _fetch_givemeoc_page(page)
+                            if not rows:
+                                break
+                            for row in rows:
+                                target = str(row.get("target_candidates") or "")
+                                rec_type = str(row.get("recruitment_type") or "")
+                                if "2027届" in target and "秋招" in rec_type and "春招" not in rec_type and "实习" not in rec_type:
+                                    ids.append(row["id"])
+                            page += 1
+                            pid["found"] = len(combined_records) + len(ids)
+                            _sync_progress_set(sync_id, pid)
+                        pid["phase"] = "fetching"
+                        pid["total"] += len(ids)
+                        pid["message"] = f"正在获取 GiveMeOC 岗位详情（{len(ids)} 条）…"
+                        _sync_progress_set(sync_id, pid)
+                        with ThreadPoolExecutor(max_workers=GIVEMEOC_MAX_WORKERS) as executor:
+                            futures = [executor.submit(_fetch_givemeoc_detail, cid) for cid in ids]
+                            for future in as_completed(futures):
+                                detail = future.result()
+                                if detail:
+                                    fields = _to_shared_fields(detail)
+                                    fields["__source"] = "givemeoc"
+                                    if (not local_records.shared_missing_fields(fields)
+                                            and not local_records.is_shared_deadline_expired(fields.get("投递截止时间"))):
+                                        combined_records.append(fields)
+                                    else:
+                                        pid["expired_skipped"] += 1
+                                else:
+                                    pid["errors"] += 1
+                                pid["done"] += 1
+                                if pid["done"] % 5 == 0:
+                                    _sync_progress_set(sync_id, pid)
+                    else:
+                        fields, scanned = qiuzhi_sync.fetch_shared_fields()
+                        pid["total"] += scanned
+                        valid = [
+                            item for item in fields
+                            if qiuzhi_sync.is_2027_autumn_job(item)
+                            and not local_records.is_shared_deadline_expired(item.get("投递截止时间"))
+                        ]
+                        combined_records.extend(valid)
+                        pid["done"] += scanned
+                        pid["expired_skipped"] += max(0, scanned - len(valid))
+                    pid["found"] = len(combined_records)
+                    _sync_progress_set(sync_id, pid)
+                except Exception as exc:
+                    source_failures.append(f"{source_label}：{exc}")
+                    pid["errors"] += 1
+                    _sync_progress_set(sync_id, pid)
+
+            if not combined_records and source_failures:
+                raise RuntimeError("；".join(source_failures))
+            pid["phase"] = "deduplicating"
+            pid["current_source"] = ""
+            pid["message"] = f"正在分析 {len(combined_records)} 条同步候选记录…"
+            _sync_progress_set(sync_id, pid)
+
+            def _dedup_progress(message: str) -> None:
+                pid["phase"] = "ai_deduplicating"
+                pid["message"] = message
+                _sync_progress_set(sync_id, pid)
+
+            records_to_add, dedup_stats = sync_dedup.deduplicate_records(
+                user_id,
+                combined_records,
+                local_records.list_shared_records(user_id),
+                _dedup_progress,
+                use_ai=_ai_dedup_enabled(),
+            )
+            pid["exact_duplicates"] = dedup_stats["exact_skipped"]
+            pid["ai_duplicates"] = dedup_stats["ai_skipped"]
+            pid["ai_reviewed"] = dedup_stats["ai_reviewed"]
+            pid["phase"] = "writing"
+            pid["message"] = f"分析完成，正在写入 {len(records_to_add)} 条需要新增的记录…"
+            _sync_progress_set(sync_id, pid)
+            pid["added"], database_skipped = local_records.create_shared_records(user_id, records_to_add)
+            pid["skipped"] = pid["exact_duplicates"] + pid["ai_duplicates"] + database_skipped
+            pid["finished"] = True
+            pid["phase"] = "finished"
+            pid["finished_at"] = datetime.now().isoformat(timespec="seconds")
+            pid["message"] = (
+                f"{label}完成：汇总 {len(combined_records)} 条，新增 {pid['added']} 条，"
+                f"规则去重 {pid['exact_duplicates']} 条，AI 去重 {pid['ai_duplicates']} 条，新增 {pid['added']} 条"
+            )
+            if dedup_stats["ai_unavailable"]:
+                pid["message"] += f"，AI 未判定 {dedup_stats['ai_unavailable']} 条已安全保留"
+            if source_failures:
+                pid["message"] += "；部分来源失败：" + "；".join(source_failures)
+            bus.log(pid["message"], channel="sync", level="warn" if source_failures else "success")
+        except Exception as exc:
+            pid.update(finished=True, failed=True, phase="failed",
+                       finished_at=datetime.now().isoformat(timespec="seconds"),
+                       message=f"{label}失败：{exc}")
+            bus.log(pid["message"], channel="sync", level="error")
+        finally:
+            _sync_progress_set(sync_id, pid)
+            with _sync_guard:
+                if _active_sync_get() == sync_id:
+                    _active_sync_set(None)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return sync_id, True
+
+
+@router.post("/sync-sources")
+def sync_enabled_sources(user: dict = Depends(auth_module.get_current_user)):
+    if not (user.get("is_root") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="仅管理员可以同步共享岗位")
+    try:
+        sync_id, started = _new_combined_sync(user["user_id"], _enabled_sync_sources())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"success": True, "sync_id": sync_id, "started": started,
+            "message": "同步已启动" if started else "已有同步任务正在运行，已连接当前进度"}
+
+
 @router.post("/sync-from-givemeoc")
 def sync_from_givemeoc(user: dict = Depends(auth_module.get_current_user)):
     """Start a shared-table sync. Administrators can poll its progress."""
@@ -625,17 +800,31 @@ def sync_from_qiuzhifangzhou(user: dict = Depends(auth_module.get_current_user))
     try:
         removed = local_records.delete_expired_shared_records()
         fields, scanned = qiuzhi_sync.fetch_shared_fields()
-        valid = [item for item in fields if not local_records.is_shared_deadline_expired(item.get("投递截止时间"))]
+        valid = [
+            item for item in fields
+            if qiuzhi_sync.is_2027_autumn_job(item)
+            and not local_records.is_shared_deadline_expired(item.get("投递截止时间"))
+        ]
+        invalid = [item for item in fields if item not in valid]
+        # Backfill the source tag for rows imported before source tracking, then
+        # remove only 求职方舟 rows that now fail the stricter filter.
+        local_records.tag_shared_records_source(fields, qiuzhi_sync.SOURCE_NAME)
+        filtered_removed = local_records.delete_shared_records_by_source_fingerprints(
+            qiuzhi_sync.SOURCE_NAME, invalid
+        )
         added, skipped = local_records.create_shared_records(user["user_id"], valid)
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"求职方舟数据读取失败：{exc}") from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"求职方舟同步失败：{exc}") from exc
-    message = f"求职方舟同步完成：扫描 {scanned} 条，新增 {added} 条，跳过重复 {skipped} 条"
+    message = f"求职方舟同步完成：扫描 {scanned} 条，符合条件 {len(valid)} 条，新增 {added} 条，跳过重复 {skipped} 条"
     if removed:
         message += f"，清理过期 {removed} 条"
+    if filtered_removed:
+        message += f"，清理非 2027 秋招或提前批 {filtered_removed} 条"
     bus.log(message, channel="sync", level="success")
-    return {"success": True, "scanned": scanned, "added": added, "skipped": skipped, "expired_removed": removed, "message": message}
+    return {"success": True, "scanned": scanned, "eligible": len(valid), "added": added, "skipped": skipped,
+            "expired_removed": removed, "filtered_removed": filtered_removed, "message": message}
 
 
 @router.get("/sync-from-givemeoc/progress")
@@ -670,7 +859,9 @@ def _sync_scheduler_loop():
             if now == sync_time:
                 root = database.get_user_by_username("root")
                 if root:
-                    _new_sync(root["id"], automatic=True)
+                    sources = _enabled_sync_sources()
+                    if sources:
+                        _new_combined_sync(root["id"], sources, automatic=True)
                 _time_module.sleep(61)
         except Exception:
             pass
@@ -694,12 +885,20 @@ def get_sync_schedule(user: dict = Depends(auth_module.get_current_user)):
         "success": True,
         "enabled": (database.get_system_config("sync_enabled") or "0") == "1",
         "time": database.get_system_config("sync_time") or "04:00",
+        "sources": {
+            "givemeoc": (database.get_system_config("sync_source_givemeoc") or "1") == "1",
+            "qiuzhifangzhou": (database.get_system_config("sync_source_qiuzhifangzhou") or "1") == "1",
+        },
+        "ai_dedup_enabled": _ai_dedup_enabled(),
     }
 
 
 class SyncScheduleBody(BaseModel):
     enabled: bool = False
     time: str = "04:00"
+    givemeoc: bool = True
+    qiuzhifangzhou: bool = True
+    ai_dedup_enabled: bool = True
 
 
 @router.post("/admin/sync-schedule")
@@ -714,6 +913,9 @@ def set_sync_schedule(
         raise HTTPException(status_code=422, detail="时间格式需为 HH:MM")
     database.set_system_config("sync_enabled", "1" if body.enabled else "0")
     database.set_system_config("sync_time", body.time)
+    database.set_system_config("sync_source_givemeoc", "1" if body.givemeoc else "0")
+    database.set_system_config("sync_source_qiuzhifangzhou", "1" if body.qiuzhifangzhou else "0")
+    database.set_system_config("sync_ai_dedup_enabled", "1" if body.ai_dedup_enabled else "0")
     return {
         "success": True,
         "message": f"自动同步{'已启用' if body.enabled else '已禁用'}，时间 {body.time}",

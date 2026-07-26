@@ -305,7 +305,7 @@ async function addToPersonal(r) {
 
 async function qiuzhiSync() {
   const confirmed = await dialog.confirm(
-    '将同步求职方舟近 90 天的公开校招岗位到共享总表，并自动跳过重复与过期岗位。',
+    '将同步求职方舟近 90 天的 2027 届秋招及提前批岗位到共享总表；其他届别和已过期岗位不会保留。',
     { title: '同步求职方舟岗位', tone: 'info', confirmText: '开始同步' },
   )
   if (!confirmed) return
@@ -440,13 +440,6 @@ async function qiuzhiSync() {
         >
           <button v-if="sharedCanDelete" class="btn btn-primary" @click="sharedNewRecord">新建记录</button>
           <button v-if="sharedCanDelete" class="btn" @click="sharedManageRecords">管理记录</button>
-          <button v-if="isAdmin()" class="btn" @click="givemeocSync" :disabled="givemeocSyncing">{{ givemeocSyncing ? '同步中...' : 'GiveMeOC 同步' }}</button>
-          <button v-if="isAdmin()" class="btn" @click="qiuzhiSync" :disabled="qiuzhiSyncing">{{ qiuzhiSyncing ? '同步中...' : '求职方舟同步' }}</button>
-          <div v-if="givemeocShow" class="shared-sync-status" :class="{ 'is-error': givemeocError, 'is-indeterminate': givemeocIndeterminate }" style="display:grid;width:100%">
-            <div class="shared-sync-head"><b>{{ givemeocLabel }}</b><span>{{ givemeocPercent }}</span></div>
-            <div class="shared-sync-track"><i :style="{ width: givemeocBarWidth }"></i></div>
-            <span style="font-size:10px;color:var(--muted)">{{ givemeocDetail }}</span>
-          </div>
         </div>
         <span class="muted">共享总表所有用户均可查看；完整个人记录可在"个人总表 → 管理记录"中上传。</span>
       </div>

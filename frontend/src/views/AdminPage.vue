@@ -18,8 +18,13 @@ const notifLoading = ref(false)
 const pwMap = ref({})
 const syncEnabled = ref(false)
 const syncTime = ref('04:00')
+const syncSources = ref({ givemeoc: true, qiuzhifangzhou: true })
+const aiDedupEnabled = ref(true)
+const sourceSyncing = ref(false)
+const sourceProgress = ref(null)
 const logLines = ref([])
 let logStream = null
+let sourcePollTimer = null
 
 const isRoot = computed(() => auth.user && (auth.user.is_root || auth.user.username === 'root'))
 
@@ -133,17 +138,78 @@ async function loadSyncSchedule() {
     const data = await apiReq('GET', '/api/dashboard/admin/sync-schedule')
     syncEnabled.value = data.enabled
     syncTime.value = data.time || '04:00'
+    syncSources.value = {
+      givemeoc: data.sources?.givemeoc ?? true,
+      qiuzhifangzhou: data.sources?.qiuzhifangzhou ?? true,
+    }
+    aiDedupEnabled.value = data.ai_dedup_enabled ?? true
   } catch (e) {}
 }
 
 async function saveSyncSchedule() {
-  const prevEnabled = syncEnabled.value
   try {
-    const data = await apiReq('POST', '/api/dashboard/admin/sync-schedule', { enabled: syncEnabled.value, time: syncTime.value || '04:00' })
+    const data = await apiReq('POST', '/api/dashboard/admin/sync-schedule', {
+      enabled: syncEnabled.value,
+      time: syncTime.value || '04:00',
+      givemeoc: syncSources.value.givemeoc,
+      qiuzhifangzhou: syncSources.value.qiuzhifangzhou,
+      ai_dedup_enabled: aiDedupEnabled.value,
+    })
     toast.success(data.message || '已保存')
   } catch (e) {
-    syncEnabled.value = prevEnabled
+    await loadSyncSchedule()
     toast.error('保存失败：' + e.message)
+  }
+}
+
+const sourceProgressPercent = computed(() => {
+  const p = sourceProgress.value
+  if (!p) return 0
+  if (p.finished && !p.failed) return 100
+  if (p.phase === 'deduplicating') return 94
+  if (p.phase === 'cleaning' || p.phase === 'preparing') return 4
+  const sourcePart = p.source_total ? ((Number(p.source_index || 1) - 1) / p.source_total) * 80 : 0
+  const itemPart = p.total ? (Number(p.done || 0) / p.total) * (80 / Math.max(1, p.source_total || 1)) : 4
+  return Math.min(92, Math.max(6, Math.round(sourcePart + itemPart + 8)))
+})
+
+function stopSourcePolling() {
+  if (sourcePollTimer) clearInterval(sourcePollTimer)
+  sourcePollTimer = null
+}
+
+async function runSourceSync() {
+  if (!syncSources.value.givemeoc && !syncSources.value.qiuzhifangzhou) {
+    toast.error('请至少开启一个同步来源')
+    return
+  }
+  await saveSyncSchedule()
+  sourceSyncing.value = true
+  sourceProgress.value = { phase: 'preparing', message: '正在创建同步任务…' }
+  try {
+    const started = await apiReq('POST', '/api/dashboard/sync-sources')
+    stopSourcePolling()
+    const poll = async () => {
+      try {
+        const data = await apiReq('GET', '/api/dashboard/sync-from-givemeoc/progress?sync_id=' + encodeURIComponent(started.sync_id))
+        sourceProgress.value = data
+        if (data.finished) {
+          stopSourcePolling()
+          sourceSyncing.value = false
+          data.failed ? toast.error(data.message) : toast.success(data.message)
+        }
+      } catch (e) {
+        stopSourcePolling()
+        sourceSyncing.value = false
+        toast.error('同步进度读取失败：' + e.message)
+      }
+    }
+    await poll()
+    if (sourceSyncing.value) sourcePollTimer = setInterval(poll, 800)
+  } catch (e) {
+    sourceSyncing.value = false
+    sourceProgress.value = { failed: true, finished: true, message: e.message }
+    toast.error('同步启动失败：' + e.message)
   }
 }
 
@@ -168,7 +234,10 @@ onMounted(() => {
   }
 })
 
-onUnmounted(() => { if (logStream) { logStream.close(); logStream = null } })
+onUnmounted(() => {
+  if (logStream) { logStream.close(); logStream = null }
+  stopSourcePolling()
+})
 </script>
 
 <template>
@@ -213,15 +282,42 @@ onUnmounted(() => { if (logStream) { logStream.close(); logStream = null } })
         </div>
         <!-- sync -->
         <div class="admin-panel" :class="{ active: activePanel === 'sync' }" id="admin-panel-sync">
-          <div class="card" id="sync-schedule-card"><div class="card-hd"><span class="dot a"></span><div class="card-title">自动同步</div><div class="card-sub"><span id="sync-schedule-status">{{ syncEnabled ? '已启用 · 每日 ' + syncTime : '已关闭' }}</span></div></div><div class="card-body">
+          <div class="card" id="sync-schedule-card"><div class="card-hd"><span class="dot a"></span><div class="card-title">岗位来源同步</div><div class="card-sub"><span id="sync-schedule-status">{{ syncEnabled ? '自动同步已启用 · 每日 ' + syncTime : '自动同步已关闭' }}</span></div></div><div class="card-body" style="display:grid;gap:16px">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font:13px var(--font);color:var(--ink)">
                 <input type="checkbox" id="sync-schedule-enabled" v-model="syncEnabled" @change="saveSyncSchedule" style="display:none">
-                <span class="toggle-track" :style="{ background: syncEnabled ? 'var(--blue)' : 'var(--line)', width: '36px', height: '20px', borderRadius: '10px', position: 'relative', transition: 'background .2s', flexShrink: 0 }"><span class="toggle-thumb" :style="{ position: 'absolute', top: '2px', left: syncEnabled ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }"></span></span>启用
+                <span class="toggle-track" :style="{ background: syncEnabled ? 'var(--blue)' : 'var(--line)', width: '36px', height: '20px', borderRadius: '10px', position: 'relative', transition: 'background .2s', flexShrink: 0 }"><span class="toggle-thumb" :style="{ position: 'absolute', top: '2px', left: syncEnabled ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }"></span></span>启用自动同步
               </label>
               <span style="font:12px var(--font);color:var(--sub)">每天</span>
               <input id="sync-schedule-time" type="time" v-model="syncTime" @change="saveSyncSchedule" style="width:80px;height:30px;padding:0 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font:12px var(--font);outline:none">
-              <span style="font:11px var(--font);color:var(--muted)">从 GiveMeOC 拉取 2027届 秋招岗位</span>
+            </div>
+            <div>
+              <b style="display:block;margin-bottom:8px;font-size:13px">同步来源</b>
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <label class="sync-source-option">
+                  <input type="checkbox" v-model="syncSources.givemeoc" @change="saveSyncSchedule">
+                  <span><b>GiveMeOC</b><small>2027 届秋招岗位</small></span>
+                </label>
+                <label class="sync-source-option">
+                  <input type="checkbox" v-model="aiDedupEnabled" @change="saveSyncSchedule">
+                  <span><b>AI 去重</b><small>写入前自动复核可能重复的岗位</small></span>
+                </label>
+                <label class="sync-source-option">
+                  <input type="checkbox" v-model="syncSources.qiuzhifangzhou" @change="saveSyncSchedule">
+                  <span><b>求职方舟</b><small>近 90 天秋招及提前批</small></span>
+                </label>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <button class="btn btn-primary" :disabled="sourceSyncing || (!syncSources.givemeoc && !syncSources.qiuzhifangzhou)" @click="runSourceSync">
+                {{ sourceSyncing ? '同步中…' : '立即同步已开启来源' }}
+              </button>
+              <span style="font-size:11px;color:var(--muted)">所有来源获取完成后统一去重并写入共享总表</span>
+            </div>
+            <div v-if="sourceProgress" class="source-sync-progress" :class="{ error: sourceProgress.failed }">
+              <div class="source-sync-progress-head"><b>{{ sourceProgress.finished ? (sourceProgress.failed ? '同步失败' : '同步完成') : '正在同步' }}</b><span>{{ sourceProgressPercent }}%</span></div>
+              <div class="source-sync-progress-track"><i :style="{ width: sourceProgressPercent + '%' }"></i></div>
+              <span>{{ sourceProgress.message }}</span>
             </div>
           </div></div>
         </div>
@@ -253,3 +349,13 @@ onUnmounted(() => { if (logStream) { logStream.close(); logStream = null } })
     <div class="center muted" style="padding:60px">无权限访问</div>
   </section>
 </template>
+
+<style scoped>
+.sync-source-option{display:flex;align-items:center;gap:9px;min-width:210px;padding:11px 13px;border:1px solid var(--line);background:var(--panel);cursor:pointer}
+.sync-source-option input{width:17px;height:17px;accent-color:var(--blue)}
+.sync-source-option span{display:grid;gap:2px}.sync-source-option b{font-size:12px}.sync-source-option small{color:var(--muted);font-size:10px}
+.source-sync-progress{display:grid;gap:7px;padding:12px;border:1px solid var(--line);background:var(--bg)}
+.source-sync-progress-head{display:flex;justify-content:space-between;gap:12px;font-size:12px}.source-sync-progress-head span{font-family:var(--mono)}
+.source-sync-progress-track{height:9px;overflow:hidden;background:var(--line)}.source-sync-progress-track i{display:block;height:100%;background:var(--blue);transition:width .25s ease}
+.source-sync-progress>span{color:var(--muted);font-size:10px}.source-sync-progress.error{border-color:var(--red)}.source-sync-progress.error i{background:var(--red)}
+</style>

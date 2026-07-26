@@ -177,6 +177,7 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             url TEXT NOT NULL,
             deadline INTEGER,
             fingerprint TEXT NOT NULL UNIQUE,
+            source TEXT NOT NULL DEFAULT 'manual',
             created_by INTEGER,
             created_at TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
@@ -239,6 +240,9 @@ def _init_tables(conn: sqlite3.Connection) -> None:
            ON job_records(user_id, source_shared_id)
            WHERE source_shared_id IS NOT NULL"""
     )
+    shared_columns = {row["name"] for row in conn.execute("PRAGMA table_info(shared_job_records)")}
+    if "source" not in shared_columns:
+        conn.execute("ALTER TABLE shared_job_records ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'")
     notification_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(notifications)")
     }
@@ -791,6 +795,14 @@ def create_recommendation_run(run: dict) -> None:
              run.get("phase", "preparing"), run.get("message", ""), int(run.get("scanned", 0)),
              int(run.get("total_chunks", 0)), int(run.get("completed_chunks", 0))),
         )
+        db.execute(
+            """DELETE FROM recommendation_runs
+               WHERE user_id = ? AND id NOT IN (
+                   SELECT id FROM recommendation_runs
+                   WHERE user_id = ? ORDER BY created_at DESC LIMIT 10
+               )""",
+            (run["user_id"], run["user_id"]),
+        )
         db.commit()
 
 
@@ -811,7 +823,7 @@ def update_recommendation_run(run_id: str, values: dict) -> None:
         db.commit()
 
 
-def list_recommendation_runs(user_id: int, limit: int = 20) -> list[dict]:
+def list_recommendation_runs(user_id: int, limit: int = 10) -> list[dict]:
     db = get_db()
     rows = db.execute(
         """SELECT id, preference, resume_filename, provider, model, status, phase, message,
@@ -820,6 +832,17 @@ def list_recommendation_runs(user_id: int, limit: int = 20) -> list[dict]:
         (user_id, limit),
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def delete_recommendation_run(user_id: int, run_id: str) -> bool:
+    with _write_lock:
+        db = get_db()
+        cursor = db.execute(
+            "DELETE FROM recommendation_runs WHERE id = ? AND user_id = ?",
+            (run_id, user_id),
+        )
+        db.commit()
+        return cursor.rowcount > 0
 
 
 def get_recommendation_run(user_id: int, run_id: str) -> dict | None:

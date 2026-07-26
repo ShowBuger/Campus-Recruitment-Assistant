@@ -222,6 +222,17 @@ def get_recommendation_history(run_id: str, user: dict = Depends(auth_module.get
     return run
 
 
+@router.delete("/history/{run_id}")
+def delete_recommendation_history(run_id: str, user: dict = Depends(auth_module.get_current_user)):
+    if not database.delete_recommendation_run(user["user_id"], run_id):
+        raise HTTPException(status_code=404, detail="未找到该筛选历史")
+    with _RUNS_LOCK:
+        run = _RUNS.get(run_id)
+        if run and run.get("user_id") == user["user_id"]:
+            _RUNS.pop(run_id, None)
+    return {"ok": True, "message": "筛选历史已删除"}
+
+
 @router.get("/{run_id}")
 def get_recommendation_run(run_id: str, user: dict = Depends(auth_module.get_current_user)):
     with _RUNS_LOCK:

@@ -184,7 +184,19 @@ def _shared_values(fields: dict) -> dict:
         "batch": str(fields.get("批次") or "秋招").strip() or "秋招",
         "url": _url_value(fields.get("投递链接")).strip(),
         "deadline": fields.get("投递截止时间"),
+        "source": str(fields.get("__source") or "manual").strip() or "manual",
     }
+
+
+def _shared_fingerprint(values: dict) -> str:
+    canonical = json.dumps({
+        "company": values["company"].casefold(),
+        "company_type": values["company_type"].casefold(),
+        "job": values["job"].casefold(),
+        "directions": sorted(item.casefold() for item in values["directions"]),
+        "url": values["url"].casefold(),
+    }, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def shared_missing_fields(fields: dict) -> list[str]:
@@ -225,27 +237,20 @@ def create_shared_record(user_id: int, fields: dict) -> tuple[dict, bool]:
     if missing:
         raise ValueError("缺少共享必填项：" + "、".join(missing))
     values = _shared_values(fields)
-    canonical = json.dumps({
-        "company": values["company"].casefold(),
-        "company_type": values["company_type"].casefold(),
-        "job": values["job"].casefold(),
-        "directions": sorted(item.casefold() for item in values["directions"]),
-        "url": values["url"].casefold(),
-    }, ensure_ascii=False, sort_keys=True)
-    fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    fingerprint = _shared_fingerprint(values)
     shared_id = "shr" + uuid.uuid4().hex
     with database._write_lock:
         db = database.get_db()
         cur = db.execute(
             """INSERT OR IGNORE INTO shared_job_records
                (id, company, company_type, directions, job, city, batch, url,
-                deadline, fingerprint, created_by)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                deadline, fingerprint, source, created_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 shared_id, values["company"], values["company_type"],
                 json.dumps(values["directions"], ensure_ascii=False), values["job"],
                 values["city"], values["batch"], values["url"], values["deadline"],
-                fingerprint, user_id,
+                fingerprint, values["source"], user_id,
             ),
         )
         created = cur.rowcount > 0
@@ -271,13 +276,7 @@ def create_shared_records(user_id: int, records: list[dict]) -> tuple[int, int]:
         if missing:
             raise ValueError("缺少共享必填项：" + "、".join(missing))
         values = _shared_values(fields)
-        canonical = json.dumps({
-            "company": values["company"].casefold(),
-            "company_type": values["company_type"].casefold(),
-            "job": values["job"].casefold(),
-            "directions": sorted(item.casefold() for item in values["directions"]),
-            "url": values["url"].casefold(),
-        }, ensure_ascii=False, sort_keys=True)
+        fingerprint = _shared_fingerprint(values)
         prepared.append((
             "shr" + uuid.uuid4().hex,
             values["company"],
@@ -288,7 +287,8 @@ def create_shared_records(user_id: int, records: list[dict]) -> tuple[int, int]:
             values["batch"],
             values["url"],
             values["deadline"],
-            hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+            fingerprint,
+            values["source"],
             user_id,
         ))
     if not prepared:
@@ -300,8 +300,8 @@ def create_shared_records(user_id: int, records: list[dict]) -> tuple[int, int]:
             db.executemany(
                 """INSERT OR IGNORE INTO shared_job_records
                    (id, company, company_type, directions, job, city, batch, url,
-                    deadline, fingerprint, created_by)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    deadline, fingerprint, source, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 prepared,
             )
             db.commit()
@@ -310,6 +310,50 @@ def create_shared_records(user_id: int, records: list[dict]) -> tuple[int, int]:
             raise
         added = db.total_changes - before
     return added, len(prepared) - added
+
+
+def tag_shared_records_source(records: list[dict], source: str) -> int:
+    """Mark existing rows that match a source feed, including rows imported before source tracking."""
+    fingerprints = [_shared_fingerprint(_shared_values(fields)) for fields in records]
+    if not fingerprints:
+        return 0
+    with database._write_lock:
+        db = database.get_db()
+        total = 0
+        for index in range(0, len(fingerprints), 900):
+            part = fingerprints[index:index + 900]
+            marks = ",".join("?" for _ in part)
+            cur = db.execute(
+                f"UPDATE shared_job_records SET source = ? WHERE fingerprint IN ({marks})",
+                (source, *part),
+            )
+            total += cur.rowcount
+        db.commit()
+        return total
+
+
+def delete_shared_records_by_source_fingerprints(source: str, records: list[dict]) -> int:
+    fingerprints = [_shared_fingerprint(_shared_values(fields)) for fields in records]
+    if not fingerprints:
+        return 0
+    with database._write_lock:
+        db = database.get_db()
+        total = 0
+        for index in range(0, len(fingerprints), 900):
+            part = fingerprints[index:index + 900]
+            marks = ",".join("?" for _ in part)
+            db.execute(
+                f"UPDATE job_records SET source_shared_id = NULL WHERE source_shared_id IN "
+                f"(SELECT id FROM shared_job_records WHERE source = ? AND fingerprint IN ({marks}))",
+                (source, *part),
+            )
+            cur = db.execute(
+                f"DELETE FROM shared_job_records WHERE source = ? AND fingerprint IN ({marks})",
+                (source, *part),
+            )
+            total += cur.rowcount
+        db.commit()
+        return total
 
 
 def _serialize_shared(row: dict, is_added: bool) -> dict:
@@ -408,6 +452,24 @@ def delete_shared_record(shared_id: str) -> bool:
         cur = db.execute("DELETE FROM shared_job_records WHERE id = ?", (shared_id,))
         db.commit()
         return cur.rowcount > 0
+
+
+def delete_shared_records(shared_ids: list[str]) -> int:
+    """Delete several shared records and clear their personal-table links."""
+    ids = [item for item in dict.fromkeys(shared_ids) if str(item).startswith("shr")]
+    if not ids:
+        return 0
+    with database._write_lock:
+        db = database.get_db()
+        deleted = 0
+        for offset in range(0, len(ids), 900):
+            part = ids[offset:offset + 900]
+            marks = ",".join("?" for _ in part)
+            db.execute(f"UPDATE job_records SET source_shared_id = NULL WHERE source_shared_id IN ({marks})", part)
+            cursor = db.execute(f"DELETE FROM shared_job_records WHERE id IN ({marks})", part)
+            deleted += cursor.rowcount
+        db.commit()
+        return deleted
 
 
 def shared_deadline_cutoff_ms(now: datetime | None = None) -> int:
