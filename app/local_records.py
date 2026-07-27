@@ -11,6 +11,7 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 from app import database
+from app.qiuzhi_sync import _normalize_batch
 
 
 CHINA_TZ = timezone(timedelta(hours=8))
@@ -181,7 +182,7 @@ def _shared_values(fields: dict) -> dict:
         "directions": directions,
         "job": str(fields.get("秋招岗位") or "").strip(),
         "city": str(fields.get("城市") or "").strip(),
-        "batch": str(fields.get("批次") or "秋招").strip() or "秋招",
+        "batch": _normalize_batch(fields.get("批次") or "秋招"),
         "url": _url_value(fields.get("投递链接")).strip(),
         "deadline": fields.get("投递截止时间"),
         "source": str(fields.get("__source") or "manual").strip() or "manual",

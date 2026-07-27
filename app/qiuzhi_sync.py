@@ -12,6 +12,29 @@ SOURCE_NAME = "qiuzhifangzhou"
 def _deadline_ms(value: str | None) -> int | None:
     if not value:
         return None
+    try:
+        return int(datetime.strptime(str(value)[:10], "%Y-%m-%d").timestamp() * 1000)
+    except ValueError:
+        return None
+
+
+def _normalize_batch(raw: str) -> str:
+    """Normalize batch value: strip year prefix, map to standard labels."""
+    batch = str(raw or "").strip()
+    if not batch:
+        return "秋招"
+    # Strip leading year prefix like "27" or "2027"
+    import re as _re
+    batch = _re.sub(r"^(27|2027)\s*", "", batch)
+    if "提前批" in batch:
+        return "提前批"
+    if "秋招" in batch:
+        return "秋招"
+    if "春招" in batch:
+        return "春招"
+    if "实习" in batch:
+        return "实习"
+    return batch or "秋招"
 
 
 def is_2027_autumn_job(fields: dict) -> bool:
@@ -21,10 +44,6 @@ def is_2027_autumn_job(fields: dict) -> bool:
         ("27" in batch or "2027" in batch)
         and ("秋招" in batch or "提前批" in batch)
     )
-    try:
-        return int(datetime.strptime(str(value)[:10], "%Y-%m-%d").timestamp() * 1000)
-    except ValueError:
-        return None
 
 
 def fetch_shared_fields(days: int = 90, request_days: int = 3) -> tuple[list[dict], int]:
