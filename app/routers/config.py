@@ -76,6 +76,28 @@ def get_config(user: dict = Depends(auth_module.get_current_user)):
         "anthropic": "anthropic_api_key",
         "kimi": "kimi_api_key",
     }
+    key_field = key_fields.get(provider, "deepseek_api_key")
+    configured = bool(cfg.get(key_field))
+    return {
+        "configured": configured,
+        "missing": [] if configured else [key_field],
+        "values": {
+            "ai_provider": provider,
+            "deepseek_api_key_masked": _masked(cfg.get("deepseek_api_key", "")),
+            "deepseek_model": cfg.get("deepseek_model", "") or "deepseek-v4-flash",
+            "deepseek_base_url": cfg.get("deepseek_base_url", "") or ai_provider_utils.DEFAULT_BASE_URLS["deepseek"],
+            "openai_api_key_masked": _masked(cfg.get("openai_api_key", "")),
+            "openai_model": cfg.get("openai_model", "") or "gpt-5.4-mini",
+            "openai_base_url": cfg.get("openai_base_url", "") or ai_provider_utils.DEFAULT_BASE_URLS["openai"],
+            "openai_api_mode": cfg.get("openai_api_mode", "") or "responses",
+            "anthropic_api_key_masked": _masked(cfg.get("anthropic_api_key", "")),
+            "anthropic_model": cfg.get("anthropic_model", "") or "claude-sonnet-5",
+            "anthropic_base_url": cfg.get("anthropic_base_url", "") or ai_provider_utils.DEFAULT_BASE_URLS["anthropic"],
+            "kimi_api_key_masked": _masked(cfg.get("kimi_api_key", "")),
+            "kimi_model": cfg.get("kimi_model", "") or "kimi-k3",
+            "kimi_base_url": cfg.get("kimi_base_url", "") or ai_provider_utils.DEFAULT_BASE_URLS["kimi"],
+        },
+    }
 
 
 @router.get("/recommendation")
@@ -125,28 +147,6 @@ def get_recommendation_models(user: dict = Depends(auth_module.get_current_user)
     if model and model not in models:
         models.insert(0, model)
     return {"provider": provider, "models": models, "current_model": model}
-    key_field = key_fields.get(provider, "deepseek_api_key")
-    configured = bool(cfg.get(key_field))
-    return {
-        "configured": configured,
-        "missing": [] if configured else [key_field],
-        "values": {
-            "ai_provider": provider,
-            "deepseek_api_key_masked": _masked(cfg.get("deepseek_api_key", "")),
-            "deepseek_model": cfg.get("deepseek_model", "") or "deepseek-v4-flash",
-            "deepseek_base_url": cfg.get("deepseek_base_url", "") or ai_provider_utils.DEFAULT_BASE_URLS["deepseek"],
-            "openai_api_key_masked": _masked(cfg.get("openai_api_key", "")),
-            "openai_model": cfg.get("openai_model", "") or "gpt-5.4-mini",
-            "openai_base_url": cfg.get("openai_base_url", "") or ai_provider_utils.DEFAULT_BASE_URLS["openai"],
-            "openai_api_mode": cfg.get("openai_api_mode", "") or "responses",
-            "anthropic_api_key_masked": _masked(cfg.get("anthropic_api_key", "")),
-            "anthropic_model": cfg.get("anthropic_model", "") or "claude-sonnet-5",
-            "anthropic_base_url": cfg.get("anthropic_base_url", "") or ai_provider_utils.DEFAULT_BASE_URLS["anthropic"],
-            "kimi_api_key_masked": _masked(cfg.get("kimi_api_key", "")),
-            "kimi_model": cfg.get("kimi_model", "") or "kimi-k3",
-            "kimi_base_url": cfg.get("kimi_base_url", "") or ai_provider_utils.DEFAULT_BASE_URLS["kimi"],
-        },
-    }
 
 
 def _config_values(cfg: AIConfig, user_id: int) -> dict:

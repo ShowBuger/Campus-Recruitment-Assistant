@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask show" @click.self="$emit('close')">
+  <div class="modal-mask show" @mousedown.self="$emit('close')">>
     <div class="modal settings-modal">
       <div class="modal-hd">
         <div>
@@ -57,6 +57,7 @@
                 <label for="cfg-deepseek-key">API Key</label>
                 <input id="cfg-deepseek-key" type="password" autocomplete="off" :placeholder="maskedKeys.deepseek ? '已保存：'+maskedKeys.deepseek : 'sk-...'" :class="{ 'secret-saved': maskedKeys.deepseek }" v-model="config.deepseek_api_key">
                 <div class="help" id="cfg-deepseek-key-help" :class="{ saved: maskedKeys.deepseek }">{{ maskedKeys.deepseek ? '已保存密钥：'+maskedKeys.deepseek : '尚未保存密钥' }}</div>
+                <a class="provider-api-link" href="https://platform.deepseek.com/usage" target="_blank" rel="noopener">获取 API →</a>
               </div>
               <div class="form-group">
                 <label for="cfg-deepseek-model-picker">模型名称</label>
@@ -176,6 +177,7 @@
                 <label for="cfg-kimi-key">API Key</label>
                 <input id="cfg-kimi-key" type="password" autocomplete="off" :placeholder="maskedKeys.kimi ? '已保存：'+maskedKeys.kimi : 'sk-...'" :class="{ 'secret-saved': maskedKeys.kimi }" v-model="config.kimi_api_key">
                 <div class="help" id="cfg-kimi-key-help" :class="{ saved: maskedKeys.kimi }">{{ maskedKeys.kimi ? '已保存密钥：'+maskedKeys.kimi : '尚未保存密钥' }}</div>
+                <a class="provider-api-link" href="https://platform.kimi.com/console/account" target="_blank" rel="noopener">获取 API →</a>
               </div>
               <div class="form-group">
                 <label for="cfg-kimi-model-picker">模型名称</label>
@@ -450,5 +452,10 @@ onMounted(async () => {
     recommendationConfig.recommendation_model = recommendation?.recommendation_model || recommendation?.ai_model || ''
     recommendationProviderLabel.value = recommendation?.ai_provider || '当前服务商'
   } catch (err) { toast.error(err.message || '加载岗位推荐配置失败') }
+  try {
+    const data = await get('/api/config/recommendation/models')
+    recommendationModels.value = data.models || []
+    if (!recommendationConfig.recommendation_model) recommendationConfig.recommendation_model = data.current_model || ''
+  } catch (_) { /* models not loadable without API key */ }
 })
 </script>

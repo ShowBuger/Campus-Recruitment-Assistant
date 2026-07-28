@@ -73,18 +73,69 @@ def _url(record: dict) -> str:
         return raw
 
 
+def _url_domain(url: str) -> str:
+    """Extract the domain (netloc) from a URL for structural comparison."""
+    if not url:
+        return ""
+    try:
+        return urlsplit(url).netloc.casefold()
+    except ValueError:
+        return ""
+
+
+def url_similarity(left: str, right: str) -> float:
+    """Compare two URLs by domain match + path prefix similarity.
+
+    Returns a float in [0, 1]:
+    - 1.0: exact match after normalization
+    - 0.70–0.95: same domain with path prefix overlap
+    - 0.45: same domain, different top-level paths
+    - 0.0: different domains or empty input
+    """
+    a = _url({"url": left}) if isinstance(left, str) else _url(left)
+    b = _url({"url": right}) if isinstance(right, str) else _url(right)
+    if not a or not b:
+        return 0.0
+    if a == b:
+        return 1.0
+    try:
+        pa = urlsplit(a)
+        pb = urlsplit(b)
+    except ValueError:
+        return 0.0
+    if pa.netloc.casefold() != pb.netloc.casefold():
+        return 0.0
+    seg_a = [s.casefold() for s in pa.path.strip("/").split("/") if s]
+    seg_b = [s.casefold() for s in pb.path.strip("/").split("/") if s]
+    if seg_a == seg_b:
+        return 0.95
+    if not seg_a or not seg_b:
+        return 0.70
+    common = 0
+    for sa, sb in zip(seg_a, seg_b):
+        if sa == sb:
+            common += 1
+        else:
+            break
+    if common == 0:
+        return 0.45
+    return 0.70 + 0.25 * (common / max(len(seg_a), len(seg_b)))
+
+
 def _company(record: dict) -> str:
     return str(_value(record, "company", "公司名称") or "").strip()
 
 
 def _record_payload(record: dict) -> dict:
     directions = _value(record, "dir", "嵌入式方向", []) or []
+    url = str(_value(record, "url", "投递链接") or "")
     return {
         "record_id": str(record.get("record_id") or record.get("id") or ""),
         "company": _company(record),
         "batch": str(_value(record, "batch", "批次", "秋招") or "秋招"),
         "job": str(_value(record, "job", "秋招岗位") or ""),
-        "url": str(_value(record, "url", "投递链接") or ""),
+        "url": url,
+        "url_domain": _url_domain(url),
         "city": str(_value(record, "city", "城市") or ""),
         "directions": directions if isinstance(directions, list) else [str(directions)],
     }

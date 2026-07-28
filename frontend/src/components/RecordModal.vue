@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useToastStore } from '@/stores/toast'
 import { useAppStore } from '@/stores/app'
+import { inputDateChina } from '@/utils/date'
 
 const emit = defineEmits(['close', 'saved'])
 const store = useDashboardStore()
@@ -22,7 +23,7 @@ const dateRefs = { 'record-date': applyDate, 'record-exam': examDate, 'record-in
 
 function onFocus(e) { e.target.type = 'date'; try { e.target.showPicker?.() } catch {} }
 function onBlur(e) { if (!e.target.value) e.target.type = 'text' }
-function inputDate(ts) { if (!ts) return ''; const d = new Date(ts); return isNaN(d) ? '' : new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10) }
+function inputDate(ts) { return inputDateChina(ts) }
 
 function reset() {
   editId.value = ''; company.value = ''; job.value = ''; city.value = ''; batch.value = '秋招'; progress.value = '已投递'; url.value = ''
@@ -73,7 +74,7 @@ defineExpose({ editId, company, job, city, batch, progress, url, applyDate, exam
 </script>
 
 <template>
-  <div class="modal-mask show" @click.self="emit('close')">
+  <div class="modal-mask show" @mousedown.self="emit('close')">>
     <div class="modal">
       <div class="modal-hd"><div><h2>{{ isShared ? '新建共享记录' : (editId ? '编辑投递记录' : '新增投递记录') }}</h2><p>{{ isShared ? '公司、岗位、方向和入口均为必填项。' : (editId ? '修改后将保存到本地总表。' : '在本地总表中新建记录，公司名称可以重复，时间均可留空。') }}</p></div><button class="icon-btn" @click="emit('close')" title="关闭">&times;</button></div>
       <form @submit.prevent="submit">

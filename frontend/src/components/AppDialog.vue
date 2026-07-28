@@ -5,7 +5,7 @@
         v-if="dialog.visible"
         class="app-dialog-mask"
         role="presentation"
-        @click.self="dialog.cancel()"
+        @mousedown.self="dialog.cancel()"
       >
         <section
           ref="panel"

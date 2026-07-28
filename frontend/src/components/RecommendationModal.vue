@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { del, get, post } from '@/utils/api'
 import { useToastStore } from '@/stores/toast'
+import { fmtDateFullChina } from '@/utils/date'
 
 const emit = defineEmits(['close'])
 const toast = useToastStore()
@@ -122,8 +123,7 @@ function historyTime(value) {
 
 function deadline(value) {
   if (!value) return '无截止日期'
-  const date = new Date(value)
-  return isNaN(date) ? '无截止日期' : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  return fmtDateFullChina(value) || '无截止日期'
 }
 
 async function addToPersonal(job) {
@@ -154,7 +154,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="modal-mask show" @click.self="emit('close')">
+  <div class="modal-mask show" @mousedown.self="emit('close')">>
     <div class="modal recommendation-modal">
       <div class="modal-hd">
         <div><h2>智能岗位筛选</h2><p>按输入偏好和已上传简历，从共享总表中分级推荐合适岗位。</p></div>
@@ -194,7 +194,7 @@ onUnmounted(() => {
     </div>
   </div>
 
-  <div v-if="historyResult" class="modal-mask show recommendation-history-mask" @click.self="historyResult = null">
+  <div v-if="historyResult" class="modal-mask show recommendation-history-mask" @mousedown.self="historyResult = null">>
     <div class="modal recommendation-history-modal">
       <div class="modal-hd">
         <div><h2>筛选结果</h2><p>{{ selectedHistory?.preference || '按简历筛选' }} · {{ selectedHistory?.created_at ? historyTime(selectedHistory.created_at) : '' }}</p></div>

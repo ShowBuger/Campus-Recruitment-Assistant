@@ -3,9 +3,11 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/utils/api'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 const titleMap = { dashboard: '投递信息', board: '投递看板', records: '总表信息', resumes: '简历管理', analysis: '简历分析', admin: '管理页面' }
 const title = computed(() => titleMap[route.name] || '校招信息看板')
 
@@ -65,9 +67,18 @@ function toggleNotifications(event) {
   if (opening) { loadNotifications(true); loadReminders() }
 }
 
+async function loadChatUnread() {
+  try {
+    const data = await api('GET', '/api/chat/users', undefined, { silent: true })
+    const users = data?.users || data || []
+    const total = users.filter(u => u.id !== authStore.user?.id).reduce((s, u) => s + (u.unread_count || 0), 0)
+    appStore.setChatUnread(total)
+  } catch (_) {}
+}
+
 function startNotifPoll() {
   stopNotifPoll()
-  notifPollTimer = setInterval(() => { loadNotifications(false); loadReminders() }, 30000)
+  notifPollTimer = setInterval(() => { loadNotifications(false); loadReminders(); loadChatUnread() }, 30000)
 }
 function stopNotifPoll() { if (notifPollTimer) { clearInterval(notifPollTimer); notifPollTimer = null } }
 
@@ -125,6 +136,7 @@ onMounted(() => {
   document.addEventListener('click', onDocumentClick)
   loadNotifications(false)
   loadReminders()
+  loadChatUnread()
   startNotifPoll()
 })
 

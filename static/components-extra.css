@@ -33,7 +33,7 @@ body.chat-open{overflow:hidden}
 .chat-modal-bar .icon-btn{width:34px;height:34px}
 .chat-modal-window .chat-shell{width:100%;height:auto;min-height:0;flex:1;border:0;border-radius:0;box-shadow:none}
 .chat-top-btn{position:relative}
-.chat-top-btn .nav-unread{position:absolute;top:-6px;right:-6px;margin:0}
+.chat-top-btn .nav-unread{display:inline-flex;position:absolute;top:-6px;right:-6px;margin:0}
 .chat-tool-btn{color:var(--muted);background:var(--bg)}
 .chat-tool-btn:hover{color:var(--blue);background:var(--blueS)}
 .chat-tool-btn .tool-icon{width:18px;height:18px}
@@ -220,3 +220,7 @@ body.chat-open{overflow:hidden}
   .invite-current>span{grid-column:1 / -1}
   .live-clock-unit{min-width:20px;font-size:12px}
 }
+
+/* Provider API platform link */
+.provider-api-link{display:inline-block;margin-top:4px;font-size:12px;color:var(--blue);text-decoration:none}
+.provider-api-link:hover{text-decoration:underline}

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import ProgressBadge from '@/components/ProgressBadge.vue'
+import { fmtDateChina, fmtDateFullChina } from '@/utils/date'
 import TooltipCell from '@/components/TooltipCell.vue'
 import { get, post } from '@/utils/api'
 import { useAppStore } from '@/stores/app'
@@ -93,14 +94,10 @@ function dirText(dir) {
 }
 
 function fmtDate(ts) {
-  if (!ts) return '—'
-  const d = new Date(ts)
-  return isNaN(d) ? '—' : String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+  return fmtDateChina(ts)
 }
 function fmtDateFull(ts) {
-  if (!ts) return ''
-  const d = new Date(ts)
-  return isNaN(d) ? '' : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+  return fmtDateFullChina(ts)
 }
 
 onMounted(async () => {

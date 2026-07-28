@@ -5,6 +5,7 @@ import { useAppStore } from '@/stores/app'
 import { useDialogStore } from '@/stores/dialog'
 import ProgressBadge from '@/components/ProgressBadge.vue'
 import TooltipCell from '@/components/TooltipCell.vue'
+import { fmtDateChina, fmtDateFullChina, calendarDateChina } from '@/utils/date'
 
 const store = useDashboardStore()
 const app = useAppStore()
@@ -114,8 +115,8 @@ function clearFilter() {
   draftFilter.value = []
 }
 
-function formatDate(ts) { if (!ts) return '—'; const d = new Date(ts); return isNaN(d) ? '—' : String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
-function formatDateFull(ts) { if (!ts) return ''; const d = new Date(ts); return isNaN(d) ? '' : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
+function formatDate(ts) { return fmtDateChina(ts) }
+function formatDateFull(ts) { return fmtDateFullChina(ts) }
 
 // ---- Calendar (exact replica of original renderCalendar) ----
 const calendarMonth = ref(new Date())
@@ -124,7 +125,7 @@ const DAY = 86400000
 
 function calendarKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 
-function calendarDate(ts) { if (!ts) return null; const d = new Date(ts); return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate()) }
+function calendarDate(ts) { return calendarDateChina(ts) }
 
 function calendarEvents() {
   const groups = {}
@@ -134,15 +135,12 @@ function calendarEvents() {
     if (!groups[key]) groups[key] = []
     groups[key].push({ date, type, label, company: r.company || '—', job: r.job || '', ...(extra || {}) })
   }
-  records.value.forEach(r => {
-    add(r.apply_date, 'apply', '投递', r, { rid: r.record_id, etype: 'apply' })
-    add(r.exam_date, 'exam', '机考/笔试', r, { rid: r.record_id, etype: 'exam' })
-    add(r.interview1, 'interview', '一面', r, { rid: r.record_id, etype: 'interview1' })
-    add(r.interview2, 'interview', '二面', r, { rid: r.record_id, etype: 'interview2' })
-    add(r.interview3, 'interview', '三面', r, { rid: r.record_id, etype: 'interview3' })
-    add(r.warm, 'warm', '保温', r, { rid: r.record_id, etype: 'warm' })
-    add(r.result, 'result', '结果', r, { rid: r.record_id, etype: 'result' })
-    add(r.deadline, 'deadline', '截止', r, { rid: r.record_id, etype: 'deadline' })
+	  records.value.forEach(r => {
+	    add(r.exam_date, 'exam', '机考/笔试', r, { rid: r.record_id, etype: 'exam' })
+	    add(r.interview1, 'interview', '一面', r, { rid: r.record_id, etype: 'interview1' })
+	    add(r.interview2, 'interview', '二面', r, { rid: r.record_id, etype: 'interview2' })
+	    add(r.interview3, 'interview', '三面', r, { rid: r.record_id, etype: 'interview3' })
+	    add(r.deadline, 'deadline', '截止', r, { rid: r.record_id, etype: 'deadline' })
   })
   localEvents.value.forEach(e => { add(e.date, 'other', e.label, { company: '我的日程', job: '' }, { lid: e.id }) })
   return groups
@@ -178,7 +176,7 @@ const countdownItems = computed(() => {
   Object.entries(events.value).forEach(([key, items]) => {
     items.forEach(item => {
       const days = Math.round((new Date(item.date.getFullYear(), item.date.getMonth(), item.date.getDate()) - today) / DAY)
-      if (days >= 0) upcoming.push({ item, days, key })
+      if (days >= 0 && days <= 15) upcoming.push({ item, days, key })
     })
   })
   upcoming.sort((a, b) => a.item.date - b.item.date || a.item.company.localeCompare(b.item.company))
@@ -437,7 +435,7 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
     </div>
 
     <!-- Day Detail Modal -->
-    <div class="modal-mask show" v-if="dayDetailKey" @click.self="closeDayDetail">
+    <div class="modal-mask show" v-if="dayDetailKey" @mousedown.self="closeDayDetail">>
       <div class="modal" style="width:min(520px,94vw)">
         <div class="modal-hd"><div><h2>{{ dayDetailKey }}</h2><p>{{ dayDetailItems.length }} 个日程</p></div><button class="icon-btn" @click="closeDayDetail" title="关闭">&times;</button></div>
         <div class="modal-body">
@@ -458,7 +456,7 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
     </div>
 
     <!-- Calendar Event Modal -->
-    <div class="modal-mask show" v-if="showEventModal" @click.self="showEventModal = false">
+    <div class="modal-mask show" v-if="showEventModal" @mousedown.self="showEventModal = false">>
       <div class="modal" style="width:min(520px,94vw)">
         <div class="modal-hd"><div><h2>新建日程</h2><p>{{ calEventDate || '—' }}</p></div><button class="icon-btn" @click="showEventModal = false" title="关闭">&times;</button></div>
         <div class="modal-body">
@@ -474,7 +472,7 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
   </div>
 
   <!-- Tracker pending events modal (on dashboard, match old tracker-test-modal) -->
-  <div class="modal-mask" :class="{ show: showTrackerModal }" @click.self="showTrackerModal = false">
+  <div class="modal-mask" :class="{ show: showTrackerModal }" @mousedown.self="showTrackerModal = false">>
     <div class="modal tracker-test-modal">
       <div class="modal-hd">
         <div><h2>{{ trackerModalTitle }}</h2><p>{{ trackerModalSummary }}</p></div>

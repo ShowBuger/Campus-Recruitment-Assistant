@@ -6,6 +6,7 @@ import { useDialogStore } from '@/stores/dialog'
 import ProgressBadge from '@/components/ProgressBadge.vue'
 import TooltipCell from '@/components/TooltipCell.vue'
 import { post } from '@/utils/api'
+import { boardDwellChina } from '@/utils/date'
 
 const store = useDashboardStore()
 const toast = useToastStore()
@@ -34,14 +35,7 @@ function applicationRecords() { return store.data?.main?.recent || [] }
 
 /* 停留天数 */
 function boardDwell(ts) {
-  if (!ts) return { text: '—', days: -1 }
-  var entered = new Date(ts)
-  if (isNaN(entered)) return { text: '—', days: -1 }
-  var now = new Date(), today = new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-      enteredDay = new Date(entered.getFullYear(), entered.getMonth(), entered.getDate())
-  var days = Math.floor((today - enteredDay) / DAY)
-  if (days < 0) days = 0
-  return { text: days < 30 ? days + ' 天' : Math.floor(days / 30) + ' 个月', days: days }
+  return boardDwellChina(ts)
 }
 
 /* 排序键 */

@@ -26,6 +26,22 @@ const logLines = ref([])
 let logStream = null
 let sourcePollTimer = null
 
+const aiDedupRunning = ref(false)
+async function runAiDedup() {
+  aiDedupRunning.value = true
+  sourceProgress.value = { phase: 'ai_dedup', message: 'AI 正在分析共享总表中的重复记录…' }
+  try {
+    const data = await apiReq('POST', '/api/dashboard/shared/records/ai-dedup')
+    sourceProgress.value = { finished: true, message: data.message }
+    data.duplicates_removed > 0 ? toast.success(data.message) : toast.info(data.message)
+  } catch (e) {
+    sourceProgress.value = { failed: true, finished: true, message: e.message }
+    toast.error('AI 去重失败：' + e.message)
+  } finally {
+    aiDedupRunning.value = false
+  }
+}
+
 const isRoot = computed(() => auth.user && (auth.user.is_root || auth.user.username === 'root'))
 
 const userCountStr = computed(() => {
@@ -43,11 +59,30 @@ function formatSystemTime(value) {
 async function apiReq(method, url, body) {
   const headers = { Authorization: 'Bearer ' + auth.token }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
-  const res = await fetch(url, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined })
-  if (res.status === 401) { auth.clear(); throw new Error('登录已过期') }
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.detail || data.error || '请求失败')
-  return data
+  const maxRetries = 1
+  let lastError
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(30_000)
+      })
+      if (res.status === 401) { auth.clear(); throw new Error('登录已过期') }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || data.error || '请求失败')
+      return data
+    } catch (e) {
+      lastError = e
+      if (e.message === '登录已过期') throw e
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
+        continue
+      }
+    }
+  }
+  throw lastError
 }
 
 async function loadAdminUsers() {
@@ -257,7 +292,7 @@ onUnmounted(() => {
             <div id="admin-user-list">
               <div v-if="!users.length" class="center">暂无用户</div>
               <div v-for="user in users" :key="user.id" class="admin-user-card">
-                <span class="uname"><b>{{ user.username }} <i>#{{ user.id }}</i></b><small>最近登录 · {{ user.last_login_at ? formatSystemTime(user.last_login_at) : '尚未登录' }}</small></span>
+                <span class="uname"><b>{{ user.username }} <i>#{{ user.id }}</i></b><small>最近在线 · {{ user.last_seen_at ? formatSystemTime(user.last_seen_at) : '尚未上线' }}</small></span>
                 <span class="umeta" :style="{ color: user.is_online ? 'var(--green)' : 'var(--muted)' }">{{ user.is_online ? '● 在线' : '○ 离线' }}</span>
                 <label class="urole"><input type="checkbox" v-model="user.is_admin" :disabled="!isRoot || user.is_root || user.username === 'root'" @change="toggleAdmin(user)">{{ user.is_root ? 'Root Admin' : (user.is_admin ? '管理员' : '普通') }}</label>
                 <span class="udate">{{ formatSystemTime(user.created_at) }}</span>
@@ -299,18 +334,24 @@ onUnmounted(() => {
                   <span><b>GiveMeOC</b><small>2027 届秋招岗位</small></span>
                 </label>
                 <label class="sync-source-option">
-                  <input type="checkbox" v-model="aiDedupEnabled" @change="saveSyncSchedule">
-                  <span><b>AI 去重</b><small>写入前自动复核可能重复的岗位</small></span>
-                </label>
-                <label class="sync-source-option">
                   <input type="checkbox" v-model="syncSources.qiuzhifangzhou" @change="saveSyncSchedule">
                   <span><b>求职方舟</b><small>近 90 天秋招及提前批</small></span>
                 </label>
               </div>
             </div>
+            <div style="margin-top:4px">
+              <b style="display:block;margin-bottom:8px;font-size:13px">AI 功能</b>
+              <label class="sync-source-option">
+                <input type="checkbox" v-model="aiDedupEnabled" @change="saveSyncSchedule">
+                <span><b>AI 去重</b><small>同步写入前自动复核可能重复的岗位</small></span>
+              </label>
+            </div>
             <div style="display:flex;align-items:center;gap:10px">
               <button class="btn btn-primary" :disabled="sourceSyncing || (!syncSources.givemeoc && !syncSources.qiuzhifangzhou)" @click="runSourceSync">
                 {{ sourceSyncing ? '同步中…' : '立即同步已开启来源' }}
+              </button>
+              <button class="btn" :disabled="aiDedupRunning" @click="runAiDedup">
+                {{ aiDedupRunning ? 'AI 去重中…' : '对已有数据 AI 去重' }}
               </button>
               <span style="font-size:11px;color:var(--muted)">所有来源获取完成后统一去重并写入共享总表</span>
             </div>

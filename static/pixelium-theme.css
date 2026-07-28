@@ -877,6 +877,7 @@ tr:hover td { background: var(--blueS); }
 /* Modern chat workspace */
 .chat-top-btn { position: relative; }
 .chat-top-btn .nav-unread {
+  display: inline-flex;
   position: absolute;
   top: -7px;
   right: -7px;

@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask show" @click.self="$emit('close')">
+  <div class="modal-mask show" @mousedown.self="$emit('close')">>
     <div class="modal help-modal">
       <div class="modal-hd"><div><h2>欢迎使用校招信息看板</h2><p>几分钟了解主要功能与推荐使用顺序</p></div><button class="icon-btn" @click="$emit('close')" title="关闭帮助" aria-label="关闭帮助">&times;</button></div>
       <div class="modal-body help-body">

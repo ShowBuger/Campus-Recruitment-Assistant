@@ -43,7 +43,7 @@
     </div>
 
     <!-- Results Modal (test sync preview / pending events confirmation) -->
-    <div class="modal-mask" :class="{ show: showResultsModal }" @click.self="showResultsModal = false">
+    <div class="modal-mask" :class="{ show: showResultsModal }" @mousedown.self="showResultsModal = false">>
       <div class="modal tracker-test-modal">
         <div class="modal-hd">
           <div><h2>{{ resultsTitle }}</h2><p>{{ resultsSummary }}</p></div>

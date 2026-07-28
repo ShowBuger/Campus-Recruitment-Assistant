@@ -1029,6 +1029,51 @@ def remove_shared_record(
     return {"success": True, "message": "共享记录已删除"}
 
 
+@router.post("/shared/records/ai-dedup")
+def ai_dedup_shared_records(user: dict = Depends(auth_module.get_current_user)):
+    """对共享总表中已存在的所有记录进行 AI 智能去重。
+
+    通过 AI 批量比对相同公司、相同批次的记录，将确认重复的后续记录删除，
+    保留最早入库的记录。仅管理员可调用。
+    """
+    if not (user.get("is_root") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="仅管理员可以对共享总表执行 AI 去重")
+    user_id = user["user_id"]
+    cfg = database.get_user_config(user_id)
+    provider = str(cfg.get("ai_provider") or "deepseek")
+    api_key = str(cfg.get(f"{provider}_api_key") or "")
+    if not api_key:
+        raise HTTPException(status_code=422, detail="请先在系统配置中设置 AI 密钥")
+
+    records = local_records.list_shared_records(user_id)
+    if len(records) < 2:
+        return {"success": True, "total": len(records), "duplicates_removed": 0,
+                "reviewed": 0, "message": "共享总表记录不足 2 条，无需去重"}
+
+    duplicate_ids, stats = sync_dedup.find_ai_duplicates(user_id, records)
+    removed = 0
+    if duplicate_ids:
+        removed = local_records.delete_shared_records(duplicate_ids)
+    message = (
+        f"AI 去重完成：共 {len(records)} 条记录，"
+        f"AI 复核 {stats['ai_reviewed']} 组，"
+        f"确认重复 {len(duplicate_ids)} 条，"
+        f"已删除 {removed} 条"
+    )
+    if stats["ai_unavailable"]:
+        message += f"，{stats['ai_unavailable']} 组 AI 调用失败已安全保留"
+    bus.log(message, channel="sync", level="success")
+    return {
+        "success": True,
+        "total": len(records),
+        "duplicates_removed": removed,
+        "reviewed": stats["ai_reviewed"],
+        "ai_duplicates": stats["ai_duplicates"],
+        "ai_unavailable": stats["ai_unavailable"],
+        "message": message,
+    }
+
+
 @router.put("/records/{record_id}")
 @router.post("/records/{record_id}/update")
 def edit_application(

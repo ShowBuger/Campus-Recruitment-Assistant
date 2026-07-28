@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask show" @click.self="$emit('close')">
+  <div class="modal-mask show" @mousedown.self="$emit('close')">>
     <div class="modal record-detail-modal">
       <div class="modal-hd">
         <div>
@@ -188,6 +188,7 @@ import { useDashboardStore } from '@/stores/dashboard'
 import { useToastStore } from '@/stores/toast'
 import { useDialogStore } from '@/stores/dialog'
 import { get, post } from '@/utils/api'
+import { inputDateChina } from '@/utils/date'
 
 const props = defineProps({
   recordId: { type: String, required: true }
@@ -207,10 +208,7 @@ const initialAiState = ref('')
 // ---------- helper functions (ported from original JS) ----------
 
 function inputDate(v) {
-  if (!v) return ''
-  const d = new Date(v)
-  if (isNaN(d)) return String(v).slice(0, 10)
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+  return inputDateChina(v)
 }
 
 function shareMissing(r) {

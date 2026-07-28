@@ -40,7 +40,7 @@ def get_db() -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA cache_size=-8000")  # 8MB cache
-    conn.execute("PRAGMA busy_timeout=5000")  # 等待 5 秒而非立即抛出 database locked
+    conn.execute("PRAGMA busy_timeout=15000")  # 等待 15 秒避免 database locked 错误
     if not _tables_initialized:
         with _write_lock:
             if not _tables_initialized:
