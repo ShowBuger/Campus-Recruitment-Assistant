@@ -71,6 +71,12 @@ function formatTrackerTime(value) {
   return isNaN(d) ? value : d.toLocaleString('zh-CN', { hour12: false })
 }
 
+function formatTrackerEventTime(value) {
+  if (!value) return ''
+  const d = new Date(Number(value))
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString('zh-CN', { hour12: false })
+}
+
 // ---- calendar event modal ----
 const showEventModal = ref(false)
 const calEventDate = ref('')
@@ -488,7 +494,10 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
             <div class="tracker-event-meta">
               <span v-if="item.created_at">{{ formatTrackerTime(item.created_at) }}</span>
               <span>置信度 {{ Math.round((item.confidence || 0) * 100) }}%</span>
+              <span v-if="item.scheduled_ms">安排 {{ formatTrackerEventTime(item.scheduled_ms) }}</span>
+              <span v-if="item.deadline_ms">截止 {{ formatTrackerEventTime(item.deadline_ms) }}</span>
               <span v-if="item.reason">{{ item.reason }}</span>
+              <span v-if="item.time_reason">{{ item.time_reason }}</span>
               <span v-if="!item.record_id" class="tracker-unmatched">未匹配个人总表岗位，可直接新增后再完善信息</span>
             </div>
             <div v-if="item.progress === '面试'" class="tracker-round-picker">
@@ -503,7 +512,7 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
             <div class="tracker-event-actions">
               <button v-if="item.record_id" class="btn btn-primary" @click="actTrackerPopupEvent(item.id, 'confirm')">接受</button>
               <button v-else class="btn btn-primary" @click="actTrackerPopupEvent(item.id, 'create')">一键添加记录</button>
-              <button class="btn" @click="actTrackerPopupEvent(item.id, 'ignore')">放弃</button>
+              <button class="btn" @click="actTrackerPopupEvent(item.id, 'ignore')">忽略</button>
             </div>
           </article>
         </div>

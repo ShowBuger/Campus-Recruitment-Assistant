@@ -59,6 +59,10 @@
               <div class="tracker-event-meta">
                 <span v-if="item.created_at">{{ formatTime(item.created_at) }}</span>
                 <span>置信度 {{ Math.round(Number(item.confidence || 0) * 100) }}%</span>
+                <span v-if="item.scheduled_ms">安排 {{ formatEventTime(item.scheduled_ms) }}</span>
+                <span v-if="item.deadline_ms">截止 {{ formatEventTime(item.deadline_ms) }}</span>
+                <span v-if="item.reason">{{ item.reason }}</span>
+                <span v-if="item.time_reason">{{ item.time_reason }}</span>
                 <span v-if="!item.record_id && item.progress !== '非招聘邮件' && item.progress !== '判断失败'" class="tracker-unmatched">请先在个人总表维护相同公司名称</span>
                 <span v-if="item.error" class="tracker-unmatched">{{ item.error }}</span>
               </div>
@@ -248,6 +252,14 @@ function formatTime(value) {
   if (!value) return ''
   const date = new Date(String(value).replace(' ', 'T') + 'Z')
   return isNaN(date) ? value : date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function formatEventTime(value) {
+  if (!value) return ''
+  const date = new Date(Number(value))
+  return Number.isNaN(date.getTime())
+    ? String(value)
+    : date.toLocaleString('zh-CN', { hour12: false })
 }
 
 // --- data loading ---

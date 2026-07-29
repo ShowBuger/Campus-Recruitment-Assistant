@@ -489,6 +489,11 @@ tr:hover td { background: var(--blueS); }
   box-shadow: 8px 8px 0 rgba(0,0,0,.45);
 }
 .modal-hd, .modal-ft { border-color: var(--ink); border-width: 2px; }
+.record-timeline-modal { width: min(680px, calc(100vw - 28px)); }
+.record-timeline-open-btn { border: 2px solid var(--ink); border-radius: 2px; box-shadow: 2px 2px 0 var(--ink); }
+.record-timeline-open-btn:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--ink); }
+.record-timeline-card, .record-timeline-empty { border: 2px solid var(--ink); border-radius: 2px; box-shadow: 2px 2px 0 var(--line2); }
+.record-timeline-item > i { border-radius: 1px; border-color: var(--ink); box-shadow: none; }
 .toast { border: 2px solid var(--ink); border-radius: 2px; box-shadow: 4px 4px 0 var(--ink); }
 .notification-panel, .progress-filter-menu {
   border: 2px solid var(--ink);

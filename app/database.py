@@ -352,6 +352,8 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             ON email_tracker_cache(user_id, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_email_tracker_tasks_user
             ON email_tracker_tasks(user_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_email_tracker_events_record
+            ON email_tracker_events(user_id, record_id, created_at DESC);
         CREATE TABLE IF NOT EXISTS ai_model_cache (
             user_id INTEGER NOT NULL,
             provider TEXT NOT NULL,
@@ -423,14 +425,17 @@ def _init_tables(conn: sqlite3.Connection) -> None:
         "deadline_ms": "INTEGER",
         "interview_round": "INTEGER",
         "time_reason": "TEXT NOT NULL DEFAULT ''",
+        "previous_progress": "TEXT NOT NULL DEFAULT ''",
+        "resulting_progress": "TEXT NOT NULL DEFAULT ''",
+        "resolution": "TEXT NOT NULL DEFAULT ''",
+        "processed_at": "TEXT",
     }
     for column, declaration in event_migrations.items():
         if column not in event_columns:
             conn.execute(
                 f"ALTER TABLE email_tracker_events ADD COLUMN {column} {declaration}"
             )
-    # Processed entries are operational history; pending entries remain actionable.
-    conn.execute("DELETE FROM email_tracker_events WHERE status != 'pending'")
+    # Keep processed entries as the per-application progress timeline.
     # Default sync schedule
     conn.execute(
         "INSERT OR IGNORE INTO system_config (key, value) VALUES ('sync_enabled', '0')"

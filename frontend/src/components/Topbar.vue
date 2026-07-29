@@ -53,10 +53,23 @@ async function loadNotifications(markRead) {
 
 async function loadReminders() {
   try {
-    const data = await api('GET', '/api/dashboard/calendar/local-events', undefined, { silent: true })
-    const events = data?.events || data || []
+    const [localData, trackerData] = await Promise.all([
+      api('GET', '/api/dashboard/calendar/local-events', undefined, { silent: true }),
+      api('GET', '/api/progress-tracker/reminders', undefined, { silent: true })
+    ])
+    const events = localData?.events || localData || []
     const today = new Date().toISOString().slice(0, 10)
-    reminders.value = (Array.isArray(events) ? events : []).filter(e => e.date >= today).slice(0, 5)
+    const localReminders = (Array.isArray(events) ? events : [])
+      .filter(e => e.date >= today)
+      .map(e => ({ ...e, event_ms: new Date(e.date + 'T09:00:00').getTime(), source: 'manual' }))
+    const trackerReminders = (trackerData?.reminders || []).map(e => ({
+      ...e,
+      date: new Date(Number(e.event_ms)).toLocaleDateString('zh-CN'),
+      source: 'tracker'
+    }))
+    reminders.value = [...localReminders, ...trackerReminders]
+      .sort((a, b) => Number(a.event_ms || 0) - Number(b.event_ms || 0))
+      .slice(0, 8)
   } catch (_) { reminders.value = [] }
 }
 
@@ -174,9 +187,10 @@ onUnmounted(() => {
         <div class="reminder-block" id="reminder-block" v-if="reminders.length">
           <div class="reminder-head"><span>📌 待办提醒</span><span class="reminder-sub">{{ reminders.length }} 项</span></div>
           <div id="reminder-list">
-            <div v-for="r in reminders" :key="r.date+r.label" style="padding:4px 0;font-size:12px;line-height:1.4">
-              <span style="color:var(--blue);font-weight:800">{{ r.date }}</span>
+            <div v-for="r in reminders" :key="r.id || r.date+r.label" style="padding:4px 0;font-size:12px;line-height:1.4">
+              <span :style="{ color: r.urgent ? 'var(--red)' : 'var(--blue)', fontWeight: 800 }">{{ r.date }}</span>
               <span style="margin-left:6px">{{ r.label }}</span>
+              <span v-if="r.source === 'tracker'" style="margin-left:5px;color:var(--muted);font-size:10px">邮箱识别</span>
             </div>
           </div>
         </div>

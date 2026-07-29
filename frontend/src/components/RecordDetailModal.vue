@@ -6,7 +6,10 @@
           <h2 id="total-edit-title">{{ record?.company || '记录详情' }}</h2>
           <p id="total-edit-description">在一个窗口中查看和修改完整记录。</p>
         </div>
-        <button class="icon-btn" @click="$emit('close')" title="关闭">&times;</button>
+        <div class="record-detail-hd-actions">
+          <button class="btn record-timeline-open-btn" type="button" @click="openTimeline">进度时间线</button>
+          <button class="icon-btn" @click="$emit('close')" title="关闭">&times;</button>
+        </div>
       </div>
 
       <form id="total-edit-form" @submit.prevent="handleSubmit">
@@ -179,6 +182,45 @@
         </div>
       </form>
     </div>
+
+    <div class="modal-mask show record-timeline-mask" v-if="showTimeline" @mousedown.self="showTimeline = false">
+      <div class="modal record-timeline-modal">
+        <div class="modal-hd">
+          <div>
+            <h2>{{ record?.company || '记录详情' }} · 进度时间线</h2>
+            <p>汇总个人总表节点和邮箱智能识别历史。</p>
+          </div>
+          <button class="icon-btn" type="button" @click="showTimeline = false" title="关闭">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="record-progress-timeline">
+            <div v-if="timelineLoading" class="record-timeline-empty">正在读取进度历史…</div>
+            <div v-else-if="!timeline.length" class="record-timeline-empty">暂无进度节点，邮箱识别或手动填写时间后会显示在这里。</div>
+            <article v-for="item in timeline" :key="timelineKey(item)" class="record-timeline-item" :class="'is-' + item.status">
+              <i></i>
+              <div class="record-timeline-card">
+                <div class="record-timeline-head">
+                  <b>{{ item.label || item.progress }}</b>
+                  <span>{{ formatTimelineTime(item.event_ms) }}</span>
+                </div>
+                <p v-if="item.resolution">{{ item.resolution }}</p>
+                <p v-else-if="item.reason">{{ item.reason }}</p>
+                <div v-if="item.kind === 'email'" class="record-timeline-meta">
+                  <span>邮箱识别</span>
+                  <span>置信度 {{ Math.round(Number(item.confidence || 0) * 100) }}%</span>
+                  <span v-if="item.deadline_ms">截止 {{ formatTimelineTime(item.deadline_ms) }}</span>
+                  <span v-if="item.status === 'pending'">待确认</span>
+                  <span v-else-if="item.status === 'ignored'">已忽略</span>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+        <div class="modal-ft">
+          <button class="btn btn-primary" type="button" @click="showTimeline = false">关闭</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -204,11 +246,48 @@ const submitting = ref(false)
 const enriching = ref(false)
 const resumes = ref([])
 const initialAiState = ref('')
+const timeline = ref([])
+const timelineLoading = ref(false)
+const showTimeline = ref(false)
 
 // ---------- helper functions (ported from original JS) ----------
 
 function inputDate(v) {
   return inputDateChina(v)
+}
+
+function timelineKey(item) {
+  return `${item.kind}-${item.id || item.label}-${item.event_ms || 0}`
+}
+
+function formatTimelineTime(value) {
+  if (!value) return '时间未识别'
+  const date = new Date(Number(value))
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  })
+}
+
+async function loadTimeline() {
+  timelineLoading.value = true
+  try {
+    const data = await get(
+      `/api/progress-tracker/records/${encodeURIComponent(props.recordId)}/timeline`,
+      { silent: true }
+    )
+    timeline.value = data.timeline || []
+  } catch (_) {
+    timeline.value = []
+  } finally {
+    timelineLoading.value = false
+  }
+}
+
+async function openTimeline() {
+  showTimeline.value = true
+  await loadTimeline()
 }
 
 function shareMissing(r) {

@@ -171,6 +171,27 @@ body.chat-open{overflow:hidden}
 .tracker-event-state.applied{color:var(--green)}
 .tracker-test-modal{width:min(680px,94vw)}
 .tracker-test-modal .tracker-event-list{max-height:min(62vh,560px)}
+
+/* ---- per-record smart progress timeline ---- */
+.record-detail-hd-actions{display:flex;align-items:center;gap:8px}
+.record-timeline-open-btn{height:32px;padding:0 11px;color:var(--blue);border-color:color-mix(in srgb,var(--blue) 36%,var(--line));background:var(--blueS);font-size:11px}
+.record-timeline-mask{z-index:11000}
+.record-timeline-modal{width:min(680px,94vw);max-height:min(760px,88vh);display:flex;flex-direction:column;overflow:hidden}
+.record-timeline-modal .modal-body{min-height:120px;overflow-y:auto}
+.record-timeline-modal .record-progress-timeline{padding-right:2px}
+.record-progress-timeline{grid-column:1/-1;position:relative;display:grid;gap:0;padding:4px 2px 8px 8px}
+.record-progress-timeline:before{content:"";position:absolute;top:10px;bottom:14px;left:15px;width:2px;background:var(--line)}
+.record-timeline-item{position:relative;display:grid;grid-template-columns:18px minmax(0,1fr);gap:9px;padding:0 0 12px}
+.record-timeline-item>i{z-index:1;width:10px;height:10px;margin-top:9px;border:2px solid var(--panel);border-radius:50%;background:var(--blue);box-shadow:0 0 0 2px var(--blueS)}
+.record-timeline-item.is-ignored>i{background:var(--muted);box-shadow:0 0 0 2px var(--line)}
+.record-timeline-item.is-pending>i{background:var(--amber);box-shadow:0 0 0 2px var(--amberS)}
+.record-timeline-card{min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.record-timeline-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.record-timeline-head b{font-size:12px}.record-timeline-head span{color:var(--muted);font-size:10px}
+.record-timeline-card p{margin:5px 0 0;color:var(--sub);font-size:11px;line-height:1.5}
+.record-timeline-meta{display:flex;flex-wrap:wrap;gap:5px 10px;margin-top:6px;color:var(--muted);font-size:10px}
+.record-timeline-empty{grid-column:1/-1;padding:13px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:11px;text-align:center;background:var(--bg)}
+@media(max-width:620px){.record-detail-hd-actions{gap:6px}.record-timeline-open-btn{padding:0 8px}.record-timeline-modal{max-height:90vh}.record-timeline-head{align-items:flex-start;flex-direction:column;gap:3px}}
 .tracker-test-result{cursor:default}
 .tracker-time-meta{color:var(--blue);font-weight:800}
 .tracker-round-picker{display:flex;align-items:center;gap:8px;margin-top:9px;color:var(--sub);font-size:11px;font-weight:700}

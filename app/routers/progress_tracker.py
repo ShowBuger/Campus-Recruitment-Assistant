@@ -1,5 +1,6 @@
 """Generic IMAP recruitment progress tracker."""
 import email
+import html
 import hashlib
 import imaplib
 import json
@@ -7,7 +8,7 @@ import re
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.header import decode_header
 from email.message import Message
 from email.utils import parsedate_to_datetime
@@ -78,6 +79,20 @@ IGNORE_PATTERNS = (
 )
 
 DATE_FIELDS = {"已投递": "投递时间", "机考": "机考时间", "面试": "一面", "OC": "结果", "已挂": "结果"}
+PROGRESS_RANK = {"未投递": 0, "已投递": 1, "机考": 2, "面试": 3, "OC": 4}
+TERMINAL_PROGRESS = {"已挂", "放弃"}
+CHINA_TZ = timezone(timedelta(hours=8))
+
+_FULL_DATE_TIME_RE = re.compile(
+    r"(?P<year>20\d{2})\s*(?:年|[-/.])\s*"
+    r"(?P<month>\d{1,2})\s*(?:月|[-/.])\s*"
+    r"(?P<day>\d{1,2})\s*日?"
+    r"(?:\s*(?P<hour>\d{1,2})\s*(?::|时)\s*(?P<minute>\d{1,2})?\s*分?)?"
+)
+_MONTH_DAY_TIME_RE = re.compile(
+    r"(?P<month>\d{1,2})\s*月\s*(?P<day>\d{1,2})\s*日"
+    r"(?:\s*(?P<hour>\d{1,2})\s*(?::|时)\s*(?P<minute>\d{1,2})?\s*分?)?"
+)
 
 
 class TrackerConfig(BaseModel):
@@ -172,6 +187,119 @@ def _message_text(message: Message) -> str:
         if sum(map(len, parts)) > 20000:
             break
     return re.sub(r"\s+", " ", " ".join(parts))[:20000]
+
+
+def _parse_datetime_after_label(
+    text: str,
+    labels: tuple[str, ...],
+    received_ms: int | None,
+    *,
+    date_only_hour: int,
+    date_only_minute: int,
+) -> int | None:
+    """Parse a China-time datetime following one of the trusted field labels."""
+    label_pattern = re.compile(
+        r"(?:" + "|".join(re.escape(label) for label in labels) + r")"
+        r"(?:\s*[（(]北京时间[）)])?\s*[：:]?\s*",
+        re.I,
+    )
+    reference = datetime.fromtimestamp(
+        (received_ms or int(time.time() * 1000)) / 1000,
+        tz=CHINA_TZ,
+    )
+    for label_match in label_pattern.finditer(text):
+        fragment = text[label_match.end():label_match.end() + 100]
+        date_match = _FULL_DATE_TIME_RE.search(fragment)
+        year = reference.year
+        if date_match:
+            year = int(date_match.group("year"))
+        else:
+            date_match = _MONTH_DAY_TIME_RE.search(fragment)
+        if not date_match:
+            continue
+        hour_text = date_match.group("hour")
+        minute_text = date_match.group("minute")
+        hour = int(hour_text) if hour_text is not None else date_only_hour
+        minute = int(minute_text) if minute_text is not None else (
+            0 if hour_text is not None else date_only_minute
+        )
+        try:
+            parsed = datetime(
+                year,
+                int(date_match.group("month")),
+                int(date_match.group("day")),
+                hour,
+                minute,
+                tzinfo=CHINA_TZ,
+            )
+        except ValueError:
+            continue
+        return int(parsed.timestamp() * 1000)
+    return None
+
+
+def _extract_message_times(
+    subject: str,
+    body: str,
+    received_ms: int | None,
+    progress: str,
+) -> dict:
+    """Extract explicit times from mail text without asking the model to do epoch math."""
+    text = html.unescape(f"{subject} {body}")
+    scheduled_labels = (
+        ("开始时间", "考试时间", "笔试时间", "测评时间")
+        if progress == "机考"
+        else ("面试时间", "面试安排", "开始时间")
+        if progress == "面试"
+        else ()
+    )
+    scheduled_ms = (
+        _parse_datetime_after_label(
+            text, scheduled_labels, received_ms,
+            date_only_hour=9, date_only_minute=0,
+        )
+        if scheduled_labels else None
+    )
+    deadline_ms = _parse_datetime_after_label(
+        text,
+        ("结束时间", "截止时间", "截止日期", "有效期至", "有效期截止"),
+        received_ms,
+        date_only_hour=23,
+        date_only_minute=59,
+    )
+    return {"scheduled_ms": scheduled_ms, "deadline_ms": deadline_ms}
+
+
+def _normalize_result_times(result: dict | None, message: dict) -> dict | None:
+    """Override model epoch arithmetic when the mail contains explicit labels."""
+    if not result:
+        return result
+    extracted = _extract_message_times(
+        message.get("subject", ""),
+        message.get("body", ""),
+        message.get("received_ms"),
+        str(result.get("progress") or ""),
+    )
+    details = []
+    if extracted["scheduled_ms"] is not None:
+        result["scheduled_ms"] = extracted["scheduled_ms"]
+        details.append(
+            "安排时间"
+            + datetime.fromtimestamp(
+                extracted["scheduled_ms"] / 1000, tz=CHINA_TZ
+            ).strftime("%Y-%m-%d %H:%M")
+        )
+    if extracted["deadline_ms"] is not None:
+        result["deadline_ms"] = extracted["deadline_ms"]
+        details.append(
+            "截止时间"
+            + datetime.fromtimestamp(
+                extracted["deadline_ms"] / 1000, tz=CHINA_TZ
+            ).strftime("%Y-%m-%d %H:%M")
+        )
+    if details:
+        result["time_reason"] = "邮件原文确定解析：" + "，".join(details)
+    return result
 
 
 # ── 本地关键词识别辅助函数 ──────────────────────────
@@ -612,25 +740,69 @@ def _fetch_message_prefix(client, cfg: dict, uid: int) -> tuple[object, Message]
     raise RuntimeError(f"无法读取邮件 UID {uid}")
 
 
-def _apply_event(user_id: int, event: dict, interview_round: int | None = None) -> None:
+def _current_progress(record: dict) -> str:
+    progress = record.get("fields", {}).get("进展") or []
+    if not isinstance(progress, list):
+        progress = [progress] if progress else []
+    return str(progress[0] if progress else "未投递").strip() or "未投递"
+
+
+def _record_event_time(event: dict) -> int:
+    """Choose the actionable time written to the personal tracker."""
+    if event.get("progress") == "机考" and event.get("deadline_ms"):
+        return int(event["deadline_ms"])
+    return int(
+        event.get("scheduled_ms")
+        or event.get("received_ms")
+        or int(time.time() * 1000)
+    )
+
+
+def _apply_event(
+    user_id: int, event: dict, interview_round: int | None = None
+) -> dict:
     if not event.get("record_id"):
         raise ValueError("该邮件尚未匹配到个人总表岗位")
-    fields = {"进展": [event["progress"]]}
+    record = local_records.get_record(user_id, event["record_id"])
+    if not record:
+        raise LookupError("对应岗位已不存在")
+    previous = _current_progress(record)
+    proposed = str(event["progress"])
+    resulting = proposed
+    resolution = "已更新进展"
+
+    # Older or delayed emails may arrive after a later stage. Preserve the
+    # historical date but never let them silently move the application back.
+    if (
+        previous not in TERMINAL_PROGRESS
+        and proposed not in TERMINAL_PROGRESS
+        and PROGRESS_RANK.get(proposed, -1) < PROGRESS_RANK.get(previous, -1)
+    ):
+        resulting = previous
+        resolution = f"已补充{proposed}时间，当前进展保持{previous}"
+    elif previous in TERMINAL_PROGRESS and proposed not in TERMINAL_PROGRESS:
+        resulting = previous
+        resolution = f"已记录{proposed}事件，终止状态保持{previous}"
+
+    fields = {"进展": [resulting]}
     date_field = DATE_FIELDS.get(event["progress"])
     if date_field:
-        # Prefer AI-extracted scheduled time over email received time
-        ts = event.get("scheduled_ms") or event.get("received_ms") or int(time.time() * 1000)
-        fields[date_field] = ts
-        # For 面试, map interview_round to the correct date field
         if event["progress"] == "面试":
-            round_field = {1: "一面", 2: "二面", 3: "三面"}.get(
-                interview_round or event.get("interview_round")
+            date_field = {1: "一面", 2: "二面", 3: "三面"}.get(
+                interview_round or event.get("interview_round"),
+                date_field,
             )
-            if round_field and round_field != date_field:
-                fields[round_field] = ts
+        # Exams are actionable until their deadline; interviews use start time.
+        ts = _record_event_time(event)
+        fields[date_field] = ts
     if not local_records.update_record(user_id, event["record_id"], fields):
         raise LookupError("对应岗位已不存在")
     state.set_cache(user_id, local_records.get_dashboard_data(user_id))
+    return {
+        "previous_progress": previous,
+        "resulting_progress": resulting,
+        "resolution": resolution,
+    }
 
 
 def sync_user(user_id: int, *, test_only: bool = False, progress_callback=None) -> dict:
@@ -739,11 +911,15 @@ def sync_user(user_id: int, *, test_only: bool = False, progress_callback=None) 
                 item["uid"]: _recognize(item["subject"], item["body"], records, sender=item.get("sender", ""))
                 for item in messages
             }
+        message_map = {item["uid"]: item for item in messages}
+        for uid, result in results.items():
+            message = message_map.get(uid)
+            if message:
+                results[uid] = _normalize_result_times(result, message)
         report("整理识别结果", 82, len(messages))
 
         if test_only:
             previews = []
-            message_map = {item["uid"]: item for item in messages}
             for uid in reversed(uids):
                 item = message_map.get(uid)
                 if not item:
@@ -765,6 +941,10 @@ def sync_user(user_id: int, *, test_only: bool = False, progress_callback=None) 
                     "decision_tier": result.get("decision_tier", "IGNORE") if result else "IGNORE",
                     "reason": result.get("reason", "") if result else "",
                     "record_id": result.get("record_id") if result else None,
+                    "scheduled_ms": result.get("scheduled_ms") if result else None,
+                    "deadline_ms": result.get("deadline_ms") if result else None,
+                    "interview_round": result.get("interview_round") if result else None,
+                    "time_reason": result.get("time_reason", "") if result else "",
                     "status": "preview", "created_at": "",
                 })
             report("完成", 100, len(previews))
@@ -786,30 +966,36 @@ def sync_user(user_id: int, *, test_only: bool = False, progress_callback=None) 
                 continue
             result["received_ms"] = item["received_ms"]
             event_status = "pending"
+            outcome = {
+                "previous_progress": "",
+                "resulting_progress": "",
+                "resolution": "",
+            }
             if (
                 cfg.get("mode") == "auto"
                 and result["record_id"]
                 and result.get("decision_tier") == "AUTO"
                 and result["confidence"] >= .94
             ):
-                _apply_event(user_id, result)
+                outcome = _apply_event(user_id, result)
                 event_status, applied = "applied", applied + 1
-            if event_status == "applied":
-                detected += 1
-                continue
             with database._write_lock:
                 db.execute(
                     """INSERT OR IGNORE INTO email_tracker_events
                        (user_id, message_uid, subject, sender, received_ms, company, job,
                        progress, confidence, decision_tier, reason, record_id, status,
-                       scheduled_ms, deadline_ms, interview_round, time_reason)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       scheduled_ms, deadline_ms, interview_round, time_reason,
+                       previous_progress, resulting_progress, resolution, processed_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                               ?, ?, ?, CASE WHEN ? = 'applied' THEN datetime('now') ELSE NULL END)""",
                     (user_id, uid, item["subject"], item["sender"],
                      item["received_ms"], result["company"], result["job"], result["progress"],
                      result["confidence"], result.get("decision_tier", "REVIEW_LOW"),
                      result.get("reason", "")[:200], result["record_id"], event_status,
                      result.get("scheduled_ms"), result.get("deadline_ms"),
-                     result.get("interview_round"), result.get("time_reason", "")[:120]),
+                     result.get("interview_round"), result.get("time_reason", "")[:120],
+                     outcome["previous_progress"], outcome["resulting_progress"],
+                     outcome["resolution"], event_status),
                 )
                 db.commit()
             detected += 1
@@ -939,6 +1125,132 @@ def get_tracker(user: dict = Depends(auth_module.get_current_user)):
         },
         "events": [dict(row) for row in events],
     }
+
+
+@router.get("/records/{record_id}/timeline")
+def get_record_timeline(
+    record_id: str, user: dict = Depends(auth_module.get_current_user)
+):
+    record = local_records.get_record(user["user_id"], record_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="岗位记录不存在")
+    fields = record["fields"]
+    rows = database.get_db().execute(
+        """SELECT id, subject, sender, received_ms, progress, confidence,
+                  decision_tier, reason, scheduled_ms, deadline_ms,
+                  interview_round, time_reason, status, previous_progress,
+                  resulting_progress, resolution, created_at, processed_at
+           FROM email_tracker_events
+           WHERE user_id = ? AND record_id = ?
+           ORDER BY COALESCE(scheduled_ms, received_ms) ASC, id ASC
+           LIMIT 100""",
+        (user["user_id"], record_id),
+    ).fetchall()
+    events = [dict(row) for row in rows]
+
+    timeline = []
+    date_nodes = (
+        ("投递时间", "已投递", None),
+        ("机考时间", "机考", None),
+        ("一面", "面试", 1),
+        ("二面", "面试", 2),
+        ("三面", "面试", 3),
+        ("保温", "保温", None),
+        ("结果", "结果", None),
+    )
+    for field, progress, round_number in date_nodes:
+        value = fields.get(field)
+        has_email_source = any(
+            event.get("status") == "applied"
+            and (
+                event.get("progress") == progress
+                or (progress == "结果" and event.get("progress") in {"OC", "已挂"})
+            )
+            and (
+                progress != "面试"
+                or not round_number
+                or event.get("interview_round") == round_number
+            )
+            for event in events
+        )
+        if value and not has_email_source:
+            timeline.append({
+                "kind": "record",
+                "progress": progress,
+                "label": field,
+                "event_ms": value,
+                "interview_round": round_number,
+                "status": "recorded",
+                "resolution": "个人总表已记录",
+            })
+    for event in events:
+        label = event["progress"]
+        if event["progress"] == "面试" and event.get("interview_round"):
+            label = f"{event['interview_round']} 面"
+        timeline.append({
+            **event,
+            "kind": "email",
+            "label": label,
+            "event_ms": event.get("scheduled_ms") or event.get("received_ms"),
+        })
+    timeline.sort(key=lambda item: (int(item.get("event_ms") or 0), item["kind"] == "email"))
+    return {
+        "record_id": record_id,
+        "current_progress": _current_progress(record),
+        "timeline": timeline,
+    }
+
+
+@router.get("/reminders")
+def get_tracker_reminders(user: dict = Depends(auth_module.get_current_user)):
+    now_ms = int(time.time() * 1000)
+    rows = database.get_db().execute(
+        """SELECT e.id, e.record_id, e.company, e.job, e.progress, e.status,
+                  e.scheduled_ms, e.deadline_ms, e.interview_round,
+                  r.company AS saved_company, r.job AS saved_job
+           FROM email_tracker_events e
+           LEFT JOIN job_records r
+             ON r.id = e.record_id AND r.user_id = e.user_id
+           WHERE e.user_id = ?
+             AND e.status IN ('pending', 'applied')
+             AND (
+               e.deadline_ms >= ?
+               OR e.scheduled_ms >= ?
+             )
+           ORDER BY
+             CASE
+               WHEN e.deadline_ms IS NOT NULL THEN e.deadline_ms
+               ELSE e.scheduled_ms
+             END ASC
+           LIMIT 10""",
+        (user["user_id"], now_ms - 24 * 60 * 60 * 1000, now_ms),
+    ).fetchall()
+    reminders = []
+    for row in rows:
+        item = dict(row)
+        company = item.get("saved_company") or item.get("company") or "待匹配公司"
+        round_text = (
+            f"{item['interview_round']}面"
+            if item.get("progress") == "面试" and item.get("interview_round")
+            else item.get("progress")
+        )
+        candidates = []
+        if item.get("scheduled_ms") and item["scheduled_ms"] >= now_ms:
+            candidates.append(("schedule", item["scheduled_ms"], f"{company} · {round_text}"))
+        if item.get("deadline_ms") and item["deadline_ms"] >= now_ms - 24 * 60 * 60 * 1000:
+            candidates.append(("deadline", item["deadline_ms"], f"{company} · {round_text}截止"))
+        for kind, event_ms, label in candidates:
+            reminders.append({
+                "id": f"tracker-{item['id']}-{kind}",
+                "record_id": item.get("record_id"),
+                "event_ms": event_ms,
+                "label": label,
+                "kind": kind,
+                "urgent": event_ms <= now_ms + 24 * 60 * 60 * 1000,
+                "status": item.get("status"),
+            })
+    reminders.sort(key=lambda item: item["event_ms"])
+    return {"reminders": reminders[:10]}
 
 
 @router.post("")
@@ -1113,9 +1425,15 @@ def act_event(event_id: int, body: EventAction, user: dict = Depends(auth_module
     event = dict(row)
     if event["status"] != "pending":
         raise HTTPException(status_code=409, detail="该识别结果已经处理")
+    outcome = {
+        "previous_progress": "",
+        "resulting_progress": "",
+        "resolution": "",
+    }
+    resulting_record_id = event.get("record_id")
     if body.action == "confirm":
         try:
-            _apply_event(user["user_id"], event, body.interview_round)
+            outcome = _apply_event(user["user_id"], event, body.interview_round)
         except (ValueError, LookupError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     elif body.action == "create":
@@ -1130,15 +1448,47 @@ def act_event(event_id: int, body: EventAction, user: dict = Depends(auth_module
         }
         date_field = DATE_FIELDS.get(event["progress"])
         if date_field:
-            fields[date_field] = event.get("received_ms") or int(time.time() * 1000)
-        local_records.create_record(user["user_id"], fields)
+            if event["progress"] == "面试":
+                date_field = {1: "一面", 2: "二面", 3: "三面"}.get(
+                    body.interview_round or event.get("interview_round"),
+                    date_field,
+                )
+            fields[date_field] = _record_event_time(event)
+        created = local_records.create_record(user["user_id"], fields)
+        resulting_record_id = created["record_id"]
+        outcome = {
+            "previous_progress": "未投递",
+            "resulting_progress": event["progress"],
+            "resolution": "已根据招聘邮件新增投递记录",
+        }
         state.set_cache(user["user_id"], local_records.get_dashboard_data(user["user_id"]))
+    else:
+        outcome["resolution"] = "用户已忽略该识别结果"
+    event_status = "ignored" if body.action == "ignore" else "applied"
     with database._write_lock:
-        db.execute("DELETE FROM email_tracker_events WHERE id = ? AND user_id = ?",
-                   (event_id, user["user_id"]))
+        db.execute(
+            """UPDATE email_tracker_events
+               SET status = ?, record_id = ?, interview_round = COALESCE(?, interview_round),
+                   previous_progress = ?, resulting_progress = ?, resolution = ?,
+                   processed_at = datetime('now')
+               WHERE id = ? AND user_id = ?""",
+            (
+                event_status, resulting_record_id, body.interview_round,
+                outcome["previous_progress"], outcome["resulting_progress"],
+                outcome["resolution"], event_id, user["user_id"],
+            ),
+        )
         db.commit()
-    messages = {"confirm": "进度已更新", "create": "已新增投递记录", "ignore": "已放弃该更新"}
-    return {"success": True, "message": messages[body.action]}
+    messages = {
+        "confirm": outcome["resolution"] or "进度已更新",
+        "create": "已新增投递记录并保留邮件事件",
+        "ignore": "已忽略，识别结果已保留在历史中",
+    }
+    return {
+        "success": True,
+        "message": messages[body.action],
+        "resulting_progress": outcome["resulting_progress"],
+    }
 
 
 def _scheduler_loop():
