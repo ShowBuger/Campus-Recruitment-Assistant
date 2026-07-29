@@ -61,7 +61,7 @@ async function deleteShared(r) {
 </script>
 
 <template>
-  <div class="modal-mask show" @mousedown.self="emit('close')">>
+  <div class="modal-mask show" @mousedown.self="emit('close')">
     <div class="modal" style="width:min(720px,96vw)">
       <div class="modal-hd"><div><h2>{{ isShared ? '管理共享记录' : '查找记录' }}</h2><p>{{ isShared ? '搜索并管理共享总表中的记录。' : '搜索并打开需要查看或修改的记录。' }}</p></div><button class="icon-btn" @click="emit('close')" title="关闭">&times;</button></div>
       <div class="modal-body">

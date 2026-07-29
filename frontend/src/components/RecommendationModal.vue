@@ -1,11 +1,22 @@
+<script>
+// Module-level cache (persists across v-if remounts)
+let _cachedModels = []
+let _cachedProvider = ''
+</script>
+
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { del, get, post } from '@/utils/api'
 import { useToastStore } from '@/stores/toast'
-import { fmtDateFullChina } from '@/utils/date'
 
 const emit = defineEmits(['close'])
 const toast = useToastStore()
+
+const showConfig = ref(false)
+const configSaving = ref(false)
+const configModels = ref([..._cachedModels])
+const configProviderLabel = ref('')
+const recConfig = reactive({ recommendation_limit: 12, recommendation_min_score: 45, recommendation_model: '' })
 const preference = ref('')
 const resumeFilename = ref('')
 const resumes = ref([])
@@ -80,6 +91,15 @@ async function viewHistory(history, silent = false) {
     const data = await get('/api/recommendations/history/' + encodeURIComponent(history.id))
     selectedHistory.value = data
     historyResult.value = data.result || { items: [] }
+    try {
+      const dashboard = await get('/api/dashboard', { timeout: 10000 })
+      const personalIds = new Set((dashboard?.main?.recent || []).map(r => r.record_id))
+      if (historyResult.value?.items) {
+        historyResult.value.items.forEach(job => {
+          if (personalIds.has(job.record_id)) job.is_added = true
+        })
+      }
+    } catch (_) {}
   } catch (error) {
     if (!silent) toast.error(error.message || '读取筛选历史失败')
   }
@@ -121,10 +141,6 @@ function historyTime(value) {
   return isNaN(date) ? String(value) : `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-function deadline(value) {
-  if (!value) return '无截止日期'
-  return fmtDateFullChina(value) || '无截止日期'
-}
 
 async function addToPersonal(job) {
   if (!job?.record_id || job.is_added || job.adding) return
@@ -140,9 +156,42 @@ async function addToPersonal(job) {
   }
 }
 
+async function loadRecConfig() {
+  try {
+    const data = await get('/api/config/recommendation')
+    recConfig.recommendation_limit = data?.recommendation_limit ?? 12
+    recConfig.recommendation_min_score = data?.recommendation_min_score ?? 45
+    recConfig.recommendation_model = data?.recommendation_model || data?.ai_model || ''
+    configProviderLabel.value = _cachedProvider || data?.ai_provider || '当前服务商'
+    if (_cachedModels.length) configModels.value = [..._cachedModels]
+  } catch (_) {}
+}
+
+async function loadRecModels() {
+  try {
+    const data = await get('/api/config/recommendation/models')
+    configModels.value = data.models || []
+    _cachedModels = data.models || []
+    _cachedProvider = data.provider || ''
+    configProviderLabel.value = data.provider || '当前服务商'
+    if (!recConfig.recommendation_model) recConfig.recommendation_model = data.current_model || ''
+  } catch (err) { toast.error(err.message || '读取推荐模型失败') }
+}
+
+async function saveRecConfig() {
+  configSaving.value = true
+  try {
+    const data = await post('/api/config/recommendation', recConfig)
+    toast.success(data.message || '岗位推荐配置已保存')
+  } catch (err) {
+    toast.error(err.message || '岗位推荐配置保存失败')
+  } finally { configSaving.value = false }
+}
+
 onMounted(async () => {
   try { resumes.value = (await get('/api/resumes')).files || [] } catch { resumes.value = [] }
   loadHistory()
+  loadRecConfig()
   liveRefreshTimer = setInterval(refreshLiveData, 1500)
 })
 
@@ -154,7 +203,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="modal-mask show" @mousedown.self="emit('close')">>
+  <div class="modal-mask show" @mousedown.self="emit('close')">
     <div class="modal recommendation-modal">
       <div class="modal-hd">
         <div><h2>智能岗位筛选</h2><p>按输入偏好和已上传简历，从共享总表中分级推荐合适岗位。</p></div>
@@ -162,13 +211,18 @@ onUnmounted(() => {
       </div>
       <div class="modal-body recommendation-body">
         <div class="recommendation-form">
-          <div class="form-group"><label for="recommend-preference">岗位偏好</label>
-            <textarea id="recommend-preference" v-model="preference" rows="3" placeholder="例如：上海或杭州，嵌入式 Linux / BSP / 驱动，偏 C++，机器人或汽车电子方向"></textarea>
+          <div class="recommendation-form-body">
+            <div class="form-group"><label for="recommend-preference">岗位偏好</label>
+              <textarea id="recommend-preference" v-model="preference" rows="3" placeholder="例如：上海或杭州，嵌入式 Linux / BSP / 驱动，偏 C++，机器人或汽车电子方向"></textarea>
+            </div>
+            <div class="form-group"><label for="recommend-resume">关联简历（可选）</label>
+              <select id="recommend-resume" v-model="resumeFilename"><option value="">不使用简历，仅按偏好筛选</option><option v-for="file in resumes" :key="file.name" :value="file.name">{{ file.name }}</option></select>
+            </div>
           </div>
-          <div class="form-group"><label for="recommend-resume">关联简历（可选）</label>
-            <select id="recommend-resume" v-model="resumeFilename"><option value="">不使用简历，仅按偏好筛选</option><option v-for="file in resumes" :key="file.name" :value="file.name">{{ file.name }}</option></select>
+          <div class="recommendation-form-actions">
+            <button class="btn" @click="showConfig = true">配置</button>
+            <button class="btn btn-primary" :disabled="loading" @click="runRecommendation">{{ loading ? '正在匹配…' : '开始智能筛选' }}</button>
           </div>
-          <button class="btn btn-primary" :disabled="loading" @click="runRecommendation">{{ loading ? '正在匹配…' : '开始智能筛选' }}</button>
         </div>
 
         <div v-if="loading && progress" class="recommendation-progress" role="status">
@@ -194,7 +248,22 @@ onUnmounted(() => {
     </div>
   </div>
 
-  <div v-if="historyResult" class="modal-mask show recommendation-history-mask" @mousedown.self="historyResult = null">>
+  <div v-if="showConfig" class="modal-mask show recommendation-history-mask" @mousedown.self="showConfig = false">
+    <div class="modal recommendation-history-modal" style="width:min(520px,96vw)">
+      <div class="modal-hd">
+        <div><h2>智能筛选配置</h2><p>调整推荐模型、数量门槛和最低分</p></div>
+        <button class="icon-btn" @click="showConfig = false" title="关闭">&times;</button>
+      </div>
+      <div class="modal-body" style="display:grid;gap:12px;padding:16px">
+        <div class="form-group"><label>推荐模型</label><div class="model-input-row"><select v-model="recConfig.recommendation_model"><option value="">使用 AI 配置当前模型</option><option v-for="model in configModels" :key="model" :value="model">{{ model }}</option></select><button class="btn" type="button" @click="loadRecModels">读取模型</button></div><div class="help">当前服务商：{{ configProviderLabel || '未读取' }}</div></div>
+        <div class="form-group"><label>单次推荐数量</label><input v-model.number="recConfig.recommendation_limit" type="number" min="0" max="5000"><div class="help">填 0 表示不设上限。</div></div>
+        <div class="form-group"><label>最低推荐分</label><input v-model.number="recConfig.recommendation_min_score" type="number" min="0" max="95"><div class="help">分数越高，结果越严格。</div></div>
+        <button class="btn btn-primary" @click="saveRecConfig" :disabled="configSaving">{{ configSaving ? '保存中…' : '保存配置' }}</button>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="historyResult" class="modal-mask show recommendation-history-mask" @mousedown.self="historyResult = null">
     <div class="modal recommendation-history-modal">
       <div class="modal-hd">
         <div><h2>筛选结果</h2><p>{{ selectedHistory?.preference || '按简历筛选' }} · {{ selectedHistory?.created_at ? historyTime(selectedHistory.created_at) : '' }}</p></div>
@@ -205,17 +274,17 @@ onUnmounted(() => {
           <div class="recommendation-summary">扫描 {{ historyResult.scanned || selectedHistory?.scanned || 0 }} 条共享岗位 · {{ historyResult.resume_used ? '已结合简历' : '按岗位偏好' }} · {{ historyItems.length }} 条推荐<span v-if="historyResult.partial">（当前已完成批次，结果将继续追加）</span></div>
           <div v-if="!historyItems.length" class="center muted">这次筛选暂时没有符合当前门槛的岗位。</div>
           <div v-if="historyItems.length" class="recommendation-columns" aria-hidden="true">
-            <span>推荐</span><span>公司</span><span>岗位</span><span>地点 / 方向</span><span>截止日期</span><span>推荐理由</span><span>操作</span>
+            <span>推荐</span><span>公司</span><span>岗位</span><span>地点 / 方向</span><span>批次</span><span>推荐理由</span><span>操作</span>
           </div>
           <article v-for="job in historyItems" :key="job.record_id" class="recommendation-card">
             <div class="recommendation-grade" :class="'grade-' + job.recommendation_grade"><b>{{ job.recommendation_grade }}</b><span>{{ job.recommendation_score }} 分</span></div>
             <strong class="recommendation-company">{{ job.company || '—' }}</strong>
             <div class="recommendation-job">{{ job.job || '—' }}</div>
             <div class="recommendation-location"><span>{{ job.city || '地点待定' }}</span><span>{{ (job.dir || []).join(' / ') || '方向待补充' }}</span></div>
-            <time class="recommendation-deadline">{{ deadline(job.deadline) }}</time>
+            <span class="recommendation-batch">{{ job.batch || '—' }}</span>
             <p class="recommendation-reason">{{ gradeTitle[job.recommendation_grade] }} · {{ job.recommendation_reason }}</p>
             <div class="recommendation-actions">
-              <button class="btn btn-primary" :disabled="job.is_added || job.adding" @click="addToPersonal(job)">{{ job.adding ? '添加中…' : (job.is_added ? '已添加' : '添加至个人') }}</button>
+              <button class="btn btn-primary" :disabled="job.is_added || job.adding" @click="addToPersonal(job)">{{ job.adding ? '添加中…' : (job.is_added ? '已添加' : '添加个人') }}</button>
               <a v-if="job.url" :href="job.url" target="_blank" rel="noreferrer" class="btn">查看岗位</a>
             </div>
           </article>
@@ -229,8 +298,10 @@ onUnmounted(() => {
 .recommendation-modal { width:min(1320px,98vw); }
 .recommendation-history-mask { z-index:10010; }.recommendation-history-modal { width:min(1320px,98vw); }.recommendation-history-result-body { max-height:82vh; overflow:auto; }
 .recommendation-body { display:grid; gap:14px; max-height:80vh; overflow:auto; }
-.recommendation-form { display:grid; grid-template-columns:minmax(0,1fr) 235px auto; align-items:end; gap:10px; padding:12px; border:2px solid var(--ink); background:var(--bg); box-shadow:3px 3px 0 var(--ink); }
+.recommendation-form { display:flex; flex-direction:column; gap:12px; padding:14px; border:2px solid var(--ink); background:var(--bg); box-shadow:3px 3px 0 var(--ink); }
+.recommendation-form-body { display:grid; grid-template-columns:minmax(0,1fr) 235px; gap:10px; align-items:end; }
 .recommendation-form textarea { resize:vertical; min-height:74px; }
+.recommendation-form-actions { display:flex; justify-content:space-between; align-items:center; }
 .recommendation-progress { display:grid; gap:7px; padding:11px 12px; border:1px solid var(--line2); background:var(--bg); color:var(--sub); font-size:11px; }.recommendation-progress > div:first-child { display:flex; justify-content:space-between; gap:12px; }.recommendation-progress b { color:var(--ink); }.recommendation-progress-track { height:8px; background:var(--line2); overflow:hidden; }.recommendation-progress-track i { display:block; height:100%; min-width:4px; background:var(--blue); transition:width .3s ease; }.recommendation-progress small { color:var(--muted); font:900 10px var(--mono); }
 .recommendation-history { display:grid; gap:7px; border-top:2px solid var(--ink); padding-top:13px; }.recommendation-history-hd { display:flex; justify-content:space-between; align-items:center; gap:12px; }.recommendation-history h3 { margin:0; font-size:14px; }.recommendation-history-hd span { color:var(--muted); font-size:10px; }.recommendation-history-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:stretch; }.recommendation-history-item { min-width:0; display:grid; gap:5px; text-align:left; border:1px solid var(--line2); background:var(--panel); padding:9px 11px; color:var(--ink); cursor:pointer; }.recommendation-history-item:hover, .recommendation-history-item.active { border-color:var(--ink); box-shadow:3px 3px 0 var(--ink); }.recommendation-history-delete { align-self:stretch; color:var(--red); }.recommendation-history-top, .recommendation-history-meta { display:flex; justify-content:space-between; gap:10px; align-items:center; }.recommendation-history-top b { font:900 11px var(--mono); }.recommendation-history-summary { font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }.recommendation-history-meta { justify-content:flex-start; flex-wrap:wrap; color:var(--muted); font-size:10px; }.history-status-finished { color:var(--green); }.history-status-failed { color:var(--red); }.history-status-running { color:var(--blue); }
 .recommendation-result { display:grid; gap:0; min-width:1000px; }
@@ -242,5 +313,6 @@ onUnmounted(() => {
 .recommendation-grade b { font-size:20px; line-height:1; }.recommendation-grade span { font-size:9px; margin-top:3px; }
 .grade-S { background:var(--blue); color:#fff; }.grade-A { background:var(--greenS); }.grade-C { background:var(--bg); color:var(--muted); }
 .recommendation-company, .recommendation-job { font-size:12px; overflow-wrap:anywhere; }.recommendation-location { display:grid; gap:3px; color:var(--sub); font-size:11px; overflow-wrap:anywhere; }.recommendation-deadline { color:var(--sub); font:700 11px var(--mono); }.recommendation-reason { margin:0; color:var(--sub); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }.recommendation-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-start; }
-@media (max-width:720px) { .recommendation-modal { width:min(98vw,1320px); }.recommendation-form { grid-template-columns:1fr; }.recommendation-body { max-height:82vh; }.recommendation-result { min-width:900px; } }
+.recommendation-batch { font:700 11px var(--mono); color:var(--sub); }
+@media (max-width:720px) { .recommendation-modal { width:min(98vw,1320px); }.recommendation-form-body { grid-template-columns:1fr; }.recommendation-body { max-height:82vh; }.recommendation-result { min-width:900px; } }
 </style>

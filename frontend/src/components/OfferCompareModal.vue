@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask show" @mousedown.self="$emit('close')">>
+  <div class="modal-mask show" @mousedown.self="$emit('close')">
     <div class="modal offer-compare-modal">
       <div class="modal-hd">
         <div>

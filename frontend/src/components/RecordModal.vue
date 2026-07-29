@@ -74,7 +74,7 @@ defineExpose({ editId, company, job, city, batch, progress, url, applyDate, exam
 </script>
 
 <template>
-  <div class="modal-mask show" @mousedown.self="emit('close')">>
+  <div class="modal-mask show" @mousedown.self="emit('close')">
     <div class="modal">
       <div class="modal-hd"><div><h2>{{ isShared ? '新建共享记录' : (editId ? '编辑投递记录' : '新增投递记录') }}</h2><p>{{ isShared ? '公司、岗位、方向和入口均为必填项。' : (editId ? '修改后将保存到本地总表。' : '在本地总表中新建记录，公司名称可以重复，时间均可留空。') }}</p></div><button class="icon-btn" @click="emit('close')" title="关闭">&times;</button></div>
       <form @submit.prevent="submit">

@@ -885,6 +885,8 @@ tr:hover td { background: var(--blueS); }
   border: 2px solid var(--panel);
 }
 body.chat-open { overflow: hidden; }
+/* Hide-applied toggle button — pixel active state */
+.hide-applied-btn.active{box-shadow:2px 2px 0 rgba(37,99,235,.3)}
 #page-chat.chat-modal {
   position: fixed;
   inset: 0;

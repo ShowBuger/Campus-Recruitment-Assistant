@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask show" @mousedown.self="$emit('close')">>
+  <div class="modal-mask show" @mousedown.self="$emit('close')">
     <div class="modal settings-modal">
       <div class="modal-hd">
         <div>
@@ -26,14 +26,6 @@
           @click="tab = 'tracker'"
           role="tab"
         >进度跟踪</button>
-        <button
-          id="settings-tab-recommendation"
-          class="btn"
-          :class="{ active: tab === 'recommendation' }"
-          type="button"
-          @click="tab = 'recommendation'"
-          role="tab"
-        >岗位推荐</button>
       </div>
 
       <div class="modal-body">
@@ -210,17 +202,6 @@
         <section id="settings-page-tracker" class="settings-page tracker-settings" :class="{ active: tab === 'tracker' }">
           <TrackerSettings ref="trackerRef" />
         </section>
-        <section id="settings-page-recommendation" class="settings-page" :class="{ active: tab === 'recommendation' }">
-          <div class="provider-panel active">
-            <div class="provider-name">智能岗位推荐</div>
-            <p class="help">使用 AI 配置中的当前服务商，对共享岗位进行语义匹配和 S/A/B/C 分级。</p>
-            <div class="grid-2 recommendation-config-grid">
-              <div class="form-group"><label for="recommendation-model">推荐模型</label><div class="model-input-row"><select id="recommendation-model" v-model="recommendationConfig.recommendation_model"><option value="">使用 AI 配置当前模型</option><option v-for="model in recommendationModels" :key="model" :value="model">{{ model }}</option></select><button class="btn" type="button" @click="loadRecommendationModels">读取模型</button></div><div class="help">当前服务商：{{ recommendationProviderLabel }}</div></div>
-              <div class="form-group"><label for="recommendation-limit">单次推荐数量</label><input id="recommendation-limit" v-model.number="recommendationConfig.recommendation_limit" type="number" min="0" max="5000"><div class="help">填 0 表示不设上限。</div></div>
-              <div class="form-group"><label for="recommendation-min-score">最低推荐分</label><input id="recommendation-min-score" v-model.number="recommendationConfig.recommendation_min_score" type="number" min="0" max="95"><div class="help">分数越高，结果越严格；建议从 45 分开始。</div></div>
-            </div>
-          </div>
-        </section>
       </div>
 
       <div class="modal-ft settings-footer">
@@ -233,9 +214,6 @@
           <button class="btn" id="tracker-test" @click="trackerRef?.testSync()" :disabled="trackerRef?.syncing">测试同步</button>
           <button class="btn" id="tracker-sync" @click="trackerRef?.startSync()" :disabled="trackerRef?.syncing">立即同步</button>
           <button class="btn btn-primary" id="tracker-save" @click="trackerRef?.save()" :disabled="trackerRef?.saving">保存跟踪配置</button>
-        </div>
-        <div class="settings-page-actions" :class="{ active: tab === 'recommendation' }" id="settings-actions-recommendation">
-          <button class="btn btn-primary" @click="saveRecommendationConfig" :disabled="recommendationSaving">{{ recommendationSaving ? '保存中…' : '保存推荐配置' }}</button>
         </div>
       </div>
     </div>
@@ -254,10 +232,6 @@ const tab = ref('ai')
 const trackerRef = ref(null)
 const testing = ref(false)
 const saving = ref(false)
-const recommendationSaving = ref(false)
-const recommendationModels = ref([])
-const recommendationProviderLabel = ref('未读取')
-const recommendationConfig = reactive({ recommendation_limit: 12, recommendation_min_score: 45, recommendation_model: '' })
 
 // Loaded model options for providers that support dynamic loading
 const openaiModelOptions = ref([])
@@ -403,25 +377,6 @@ async function saveConfig() {
   }
 }
 
-async function saveRecommendationConfig() {
-  recommendationSaving.value = true
-  try {
-    const data = await post('/api/config/recommendation', recommendationConfig)
-    toast.success(data.message || '岗位推荐配置已保存')
-  } catch (err) {
-    toast.error(err.message || '岗位推荐配置保存失败')
-  } finally { recommendationSaving.value = false }
-}
-
-async function loadRecommendationModels() {
-  try {
-    const data = await get('/api/config/recommendation/models')
-    recommendationModels.value = data.models || []
-    recommendationProviderLabel.value = data.provider || '当前服务商'
-    if (!recommendationConfig.recommendation_model) recommendationConfig.recommendation_model = data.current_model || ''
-    toast.success(`已读取 ${recommendationModels.value.length} 个可用模型`)
-  } catch (err) { toast.error(err.message || '读取推荐模型失败') }
-}
 
 onMounted(async () => {
   try {
@@ -445,17 +400,5 @@ onMounted(async () => {
   } catch (err) {
     toast.error(err.message || '加载配置失败')
   }
-  try {
-    const recommendation = await get('/api/config/recommendation')
-    recommendationConfig.recommendation_limit = recommendation?.recommendation_limit ?? 12
-    recommendationConfig.recommendation_min_score = recommendation?.recommendation_min_score ?? 45
-    recommendationConfig.recommendation_model = recommendation?.recommendation_model || recommendation?.ai_model || ''
-    recommendationProviderLabel.value = recommendation?.ai_provider || '当前服务商'
-  } catch (err) { toast.error(err.message || '加载岗位推荐配置失败') }
-  try {
-    const data = await get('/api/config/recommendation/models')
-    recommendationModels.value = data.models || []
-    if (!recommendationConfig.recommendation_model) recommendationConfig.recommendation_model = data.current_model || ''
-  } catch (_) { /* models not loadable without API key */ }
 })
 </script>

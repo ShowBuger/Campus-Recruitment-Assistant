@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask show" @mousedown.self="$emit('close')">>
+  <div class="modal-mask show" @mousedown.self="$emit('close')">
     <div class="chat-modal-window">
       <div class="chat-modal-bar">
         <div><b>站内聊天</b><span>{{ activePeer ? '消息、图片与岗位分享' : '与已注册用户即时沟通' }}</span></div>
@@ -161,7 +161,7 @@
     </div>
 
     <!-- 岗位转发弹窗 -->
-    <div v-if="showJobPicker" class="modal-mask show" @mousedown.self="showJobPicker = false">>
+    <div v-if="showJobPicker" class="modal-mask show" @mousedown.self="showJobPicker = false">
       <div class="modal chat-job-dialog">
         <div class="modal-hd">
           <div><h2>转发岗位信息</h2><p>从个人总表或共享总表选择岗位</p></div>

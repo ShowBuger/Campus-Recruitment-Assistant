@@ -385,7 +385,7 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
             </div>
           </div>
         </div>
-        <div class="card-sub">{{ filteredRecords.length }} 条</div>
+<div class="card-sub">{{ filteredRecords.length }} 条</div>
       </div>
 
       <div class="tbl" style="max-height:440px">
@@ -435,7 +435,7 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
     </div>
 
     <!-- Day Detail Modal -->
-    <div class="modal-mask show" v-if="dayDetailKey" @mousedown.self="closeDayDetail">>
+    <div class="modal-mask show" v-if="dayDetailKey" @mousedown.self="closeDayDetail">
       <div class="modal" style="width:min(520px,94vw)">
         <div class="modal-hd"><div><h2>{{ dayDetailKey }}</h2><p>{{ dayDetailItems.length }} 个日程</p></div><button class="icon-btn" @click="closeDayDetail" title="关闭">&times;</button></div>
         <div class="modal-body">
@@ -456,7 +456,7 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
     </div>
 
     <!-- Calendar Event Modal -->
-    <div class="modal-mask show" v-if="showEventModal" @mousedown.self="showEventModal = false">>
+    <div class="modal-mask show" v-if="showEventModal" @mousedown.self="showEventModal = false">
       <div class="modal" style="width:min(520px,94vw)">
         <div class="modal-hd"><div><h2>新建日程</h2><p>{{ calEventDate || '—' }}</p></div><button class="icon-btn" @click="showEventModal = false" title="关闭">&times;</button></div>
         <div class="modal-body">
@@ -472,7 +472,7 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
   </div>
 
   <!-- Tracker pending events modal (on dashboard, match old tracker-test-modal) -->
-  <div class="modal-mask" :class="{ show: showTrackerModal }" @mousedown.self="showTrackerModal = false">>
+  <div class="modal-mask" :class="{ show: showTrackerModal }" @mousedown.self="showTrackerModal = false">
     <div class="modal tracker-test-modal">
       <div class="modal-hd">
         <div><h2>{{ trackerModalTitle }}</h2><p>{{ trackerModalSummary }}</p></div>

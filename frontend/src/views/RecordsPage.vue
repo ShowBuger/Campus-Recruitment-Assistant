@@ -13,6 +13,7 @@ const store = useDashboardStore()
 const auth = useAuthStore()
 const dialog = useDialogStore()
 const showShared = ref(false)
+const hideApplied = ref(false)
 const sharedRecords = ref([])
 const sharedCanDelete = ref(false)
 const searchQuery = ref('')
@@ -52,6 +53,9 @@ const displayRecords = computed(() => {
       ].join(' ').toLowerCase()
       return haystack.indexOf(query) >= 0
     })
+  }
+  if (!showShared.value && hideApplied.value) {
+    items = items.filter(r => !r.apply_date)
   }
   if (!showShared.value && sortValue.value !== 'default') {
     const sorted = items.map((r, i) => ({ r, i }))
@@ -349,6 +353,7 @@ async function qiuzhiSync() {
           >
         </div>
         <button v-if="showShared" class="btn btn-primary" @click="app.openRecommendation()">智能筛选</button>
+        <button v-if="!showShared" class="btn hide-applied-btn" :class="{ active: hideApplied }" @click="hideApplied = !hideApplied">{{ hideApplied ? '✓ 已隐藏已投递' : '隐藏已投递' }}</button>
         <select
           v-if="!showShared"
           v-model="sortValue"

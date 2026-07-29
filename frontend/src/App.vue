@@ -70,7 +70,7 @@ onMounted(async () => {
     <StatsModal v-if="app.showStats" @close="app.closeStats()" />
     <OfferCompareModal v-if="app.showOffer" @close="app.closeOffer()" />
     <RecommendationModal v-if="app.showRecommendation" @close="app.closeRecommendation()" />
-    <div v-if="showError" class="error-overlay" @mousedown.self="showError = false">>
+    <div v-if="showError" class="error-overlay" @mousedown.self="showError = false">
       <div class="error-modal"><h3>&#9888; {{ errorMsg }}</h3><pre>{{ errorDetail }}</pre><div class="btn-row"><button class="btn" @click="copyError">复制详情</button><button class="btn" style="background:var(--blue);color:#fff" @click="showError = false">关闭</button></div></div>
     </div>
   </div>

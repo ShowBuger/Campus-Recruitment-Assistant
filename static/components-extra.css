@@ -224,3 +224,8 @@ body.chat-open{overflow:hidden}
 /* Provider API platform link */
 .provider-api-link{display:inline-block;margin-top:4px;font-size:12px;color:var(--blue);text-decoration:none}
 .provider-api-link:hover{text-decoration:underline}
+
+
+/* Hide-applied toggle button */
+.hide-applied-btn{font-size:12px;padding:5px 12px;transition:background .15s,color .15s,border-color .15s}
+.hide-applied-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
