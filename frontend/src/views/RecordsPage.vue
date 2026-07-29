@@ -353,7 +353,6 @@ async function qiuzhiSync() {
           >
         </div>
         <button v-if="showShared" class="btn btn-primary" @click="app.openRecommendation()">智能筛选</button>
-        <button v-if="!showShared" class="btn hide-applied-btn" :class="{ active: hideApplied }" @click="hideApplied = !hideApplied">{{ hideApplied ? '✓ 已隐藏已投递' : '隐藏已投递' }}</button>
         <select
           v-if="!showShared"
           v-model="sortValue"
@@ -363,6 +362,7 @@ async function qiuzhiSync() {
           <option value="priority-desc">优先级：高到低</option>
           <option value="priority-asc">优先级：低到高</option>
         </select>
+        <button v-if="!showShared" class="btn hide-applied-btn" :class="{ active: hideApplied }" @click="hideApplied = !hideApplied">{{ hideApplied ? '已隐藏' : '隐藏已投递' }}</button>
       </div>
       <div class="tbl" style="max-height:calc(100vh - 160px)">
         <table class="data-table master-table">

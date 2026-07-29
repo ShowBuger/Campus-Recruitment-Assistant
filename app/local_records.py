@@ -473,6 +473,75 @@ def delete_shared_records(shared_ids: list[str]) -> int:
         return deleted
 
 
+def merge_shared_records(duplicate_to_survivor: dict[str, str]) -> int:
+    """Delete duplicate shared rows while preserving personal-table links.
+
+    If a user already copied both rows, the extra personal record remains but is
+    detached from the deleted shared row to satisfy the per-user unique link.
+    """
+    requested = {
+        str(duplicate_id): str(survivor_id)
+        for duplicate_id, survivor_id in duplicate_to_survivor.items()
+        if (
+            str(duplicate_id).startswith("shr")
+            and str(survivor_id).startswith("shr")
+            and str(duplicate_id) != str(survivor_id)
+        )
+    }
+    if not requested:
+        return 0
+    with database._write_lock:
+        db = database.get_db()
+        ids = list(dict.fromkeys([*requested.keys(), *requested.values()]))
+        existing_ids: set[str] = set()
+        for offset in range(0, len(ids), 900):
+            part = ids[offset:offset + 900]
+            marks = ",".join("?" for _ in part)
+            existing_ids.update(
+                row["id"]
+                for row in db.execute(
+                    f"SELECT id FROM shared_job_records WHERE id IN ({marks})", part
+                ).fetchall()
+            )
+        merge_map = {
+            duplicate_id: survivor_id
+            for duplicate_id, survivor_id in requested.items()
+            if duplicate_id in existing_ids and survivor_id in existing_ids
+        }
+        if not merge_map:
+            return 0
+        try:
+            for duplicate_id, survivor_id in merge_map.items():
+                linked = db.execute(
+                    "SELECT id, user_id FROM job_records WHERE source_shared_id = ?",
+                    (duplicate_id,),
+                ).fetchall()
+                for row in linked:
+                    already_linked = db.execute(
+                        """SELECT id FROM job_records
+                           WHERE user_id = ? AND source_shared_id = ? LIMIT 1""",
+                        (row["user_id"], survivor_id),
+                    ).fetchone()
+                    db.execute(
+                        "UPDATE job_records SET source_shared_id = ? WHERE id = ?",
+                        (None if already_linked else survivor_id, row["id"]),
+                    )
+            duplicate_ids = list(merge_map)
+            deleted = 0
+            for offset in range(0, len(duplicate_ids), 900):
+                part = duplicate_ids[offset:offset + 900]
+                marks = ",".join("?" for _ in part)
+                cursor = db.execute(
+                    f"DELETE FROM shared_job_records WHERE id IN ({marks})", part
+                )
+                deleted += cursor.rowcount
+            db.commit()
+            return deleted
+        except Exception:
+            db.rollback()
+            raise
+
+
 def shared_deadline_cutoff_ms(now: datetime | None = None) -> int:
     """Return midnight today in China time as a millisecond timestamp."""
     current = now.astimezone(CHINA_TZ) if now else datetime.now(CHINA_TZ)

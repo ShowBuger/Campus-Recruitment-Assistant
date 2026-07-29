@@ -29,14 +29,14 @@ let sourcePollTimer = null
 const aiDedupRunning = ref(false)
 async function runAiDedup() {
   aiDedupRunning.value = true
-  sourceProgress.value = { phase: 'ai_dedup', message: 'AI 正在分析共享总表中的重复记录…' }
+  sourceProgress.value = { phase: 'ai_dedup', message: '正在用规则和 AI 分析共享总表中的重复记录…' }
   try {
     const data = await apiReq('POST', '/api/dashboard/shared/records/ai-dedup')
     sourceProgress.value = { finished: true, message: data.message }
     data.duplicates_removed > 0 ? toast.success(data.message) : toast.info(data.message)
   } catch (e) {
     sourceProgress.value = { failed: true, finished: true, message: e.message }
-    toast.error('AI 去重失败：' + e.message)
+    toast.error('智能去重失败：' + e.message)
   } finally {
     aiDedupRunning.value = false
   }
@@ -351,7 +351,7 @@ onUnmounted(() => {
                 {{ sourceSyncing ? '同步中…' : '立即同步已开启来源' }}
               </button>
               <button class="btn" :disabled="aiDedupRunning" @click="runAiDedup">
-                {{ aiDedupRunning ? 'AI 去重中…' : '对已有数据 AI 去重' }}
+                {{ aiDedupRunning ? '智能去重中…' : '对已有数据智能去重' }}
               </button>
               <span style="font-size:11px;color:var(--muted)">所有来源获取完成后统一去重并写入共享总表</span>
             </div>

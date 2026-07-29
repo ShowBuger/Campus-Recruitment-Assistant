@@ -348,7 +348,7 @@ GIVEMEOC_HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Referer": "https://www.givemeoc.com/",
 }
-GIVEMEOC_MAX_WORKERS = 16
+GIVEMEOC_MAX_WORKERS = 6
 
 DATE_PATTERN = re.compile(r"(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})")
 
@@ -402,21 +402,39 @@ def _parse_givemeoc_deadline(deadline_str: str) -> int | None:
 
 def _fetch_givemeoc_page(page: int) -> list[dict]:
     """Fetch one page from givemeoc list API."""
-    resp = requests.get(
+    resp = _givemeoc_get(
         GIVEMEOC_LIST_URL,
         params={"page": page, "per_page": 100, "order_by": "update_time", "order": "desc"},
-        headers=GIVEMEOC_HEADERS,
-        timeout=30,
     )
     resp.raise_for_status()
+    # The list API starts throttling burst pagination around page 15.
+    _time_module.sleep(0.35)
     return resp.json().get("data", [])
+
+
+def _givemeoc_get(url: str, params: dict | None = None) -> requests.Response:
+    """GET GiveMeOC with bounded retry/backoff for rate limits and 5xx errors."""
+    response = None
+    for attempt in range(6):
+        response = requests.get(
+            url, params=params, headers=GIVEMEOC_HEADERS, timeout=30
+        )
+        if response.status_code not in {429, 500, 502, 503, 504}:
+            return response
+        retry_after = response.headers.get("Retry-After")
+        try:
+            delay = float(retry_after) if retry_after else min(30.0, 2.0 ** attempt)
+        except (TypeError, ValueError):
+            delay = min(30.0, 2.0 ** attempt)
+        _time_module.sleep(max(1.0, delay))
+    return response
 
 
 def _fetch_givemeoc_detail(company_id: int) -> dict | None:
     """Fetch single company detail from givemeoc."""
     try:
         url = GIVEMEOC_DETAIL_URL.format(company_id=company_id)
-        resp = requests.get(url, headers=GIVEMEOC_HEADERS, timeout=30)
+        resp = _givemeoc_get(url)
         if resp.status_code == 200:
             return resp.json()
         return None
@@ -1031,34 +1049,30 @@ def remove_shared_record(
 
 @router.post("/shared/records/ai-dedup")
 def ai_dedup_shared_records(user: dict = Depends(auth_module.get_current_user)):
-    """对共享总表中已存在的所有记录进行 AI 智能去重。
+    """对共享总表中已存在的所有记录进行规则 + AI 智能去重。
 
-    通过 AI 批量比对相同公司、相同批次的记录，将确认重复的后续记录删除，
-    保留最早入库的记录。仅管理员可调用。
+    先合并规范化链接、公司、岗位均能确定的重复项，再由 AI 复核模糊项。
+    合并时保留最早入库记录，并迁移个人总表关联。仅管理员可调用。
     """
     if not (user.get("is_root") or user.get("is_admin")):
         raise HTTPException(status_code=403, detail="仅管理员可以对共享总表执行 AI 去重")
     user_id = user["user_id"]
-    cfg = database.get_user_config(user_id)
-    provider = str(cfg.get("ai_provider") or "deepseek")
-    api_key = str(cfg.get(f"{provider}_api_key") or "")
-    if not api_key:
-        raise HTTPException(status_code=422, detail="请先在系统配置中设置 AI 密钥")
 
     records = local_records.list_shared_records(user_id)
     if len(records) < 2:
         return {"success": True, "total": len(records), "duplicates_removed": 0,
                 "reviewed": 0, "message": "共享总表记录不足 2 条，无需去重"}
 
-    duplicate_ids, stats = sync_dedup.find_ai_duplicates(user_id, records)
+    duplicate_map, stats = sync_dedup.find_ai_duplicates(user_id, records)
     removed = 0
-    if duplicate_ids:
-        removed = local_records.delete_shared_records(duplicate_ids)
+    if duplicate_map:
+        removed = local_records.merge_shared_records(duplicate_map)
     message = (
-        f"AI 去重完成：共 {len(records)} 条记录，"
+        f"智能去重完成：共 {len(records)} 条记录，"
+        f"规则确认 {stats['rule_duplicates']} 条，"
         f"AI 复核 {stats['ai_reviewed']} 组，"
-        f"确认重复 {len(duplicate_ids)} 条，"
-        f"已删除 {removed} 条"
+        f"AI 确认 {stats['ai_duplicates']} 条，"
+        f"已合并 {removed} 条"
     )
     if stats["ai_unavailable"]:
         message += f"，{stats['ai_unavailable']} 组 AI 调用失败已安全保留"
@@ -1067,6 +1081,7 @@ def ai_dedup_shared_records(user: dict = Depends(auth_module.get_current_user)):
         "success": True,
         "total": len(records),
         "duplicates_removed": removed,
+        "rule_duplicates": stats["rule_duplicates"],
         "reviewed": stats["ai_reviewed"],
         "ai_duplicates": stats["ai_duplicates"],
         "ai_unavailable": stats["ai_unavailable"],
