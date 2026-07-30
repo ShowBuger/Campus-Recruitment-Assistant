@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', Object.freeze({
   widgetAction: (type, action) => ipcRenderer.invoke('desktop:widget-action', type, action),
   showMainWindow: () => ipcRenderer.invoke('desktop:show-main'),
   windowControl: action => ipcRenderer.invoke('desktop:window-control', action),
+  setSkin: skin => ipcRenderer.invoke('desktop:set-skin', skin),
   onWindowState: callback => {
     if (typeof callback !== 'function') return () => {}
     const listener = (_event, state) => callback(state)

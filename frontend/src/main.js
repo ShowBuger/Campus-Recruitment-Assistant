@@ -7,6 +7,7 @@ import WidgetApp from './WidgetApp.vue'
 const widgetType = new URLSearchParams(window.location.search).get('desktopWidget')
 if (widgetType) document.documentElement.classList.add('desktop-widget-mode')
 else if (window.electronAPI?.customTitlebar) document.documentElement.classList.add('desktop-main-mode')
+if (!widgetType) window.electronAPI?.setSkin?.(document.documentElement.dataset.style || 'pixelium')
 
 function syncStyleSheets(style) {
   const pixelium = style === 'pixelium'

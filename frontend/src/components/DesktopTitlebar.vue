@@ -42,7 +42,7 @@ onUnmounted(() => removeStateListener?.())
   </header>
 </template>
 
-<style scoped>
+<style>
 .desktop-titlebar{
   -webkit-app-region:drag;
   position:relative;
@@ -68,5 +68,14 @@ onUnmounted(() => removeStateListener?.())
 .desktop-window-controls button:active{background:rgba(255,255,255,.22);box-shadow:none;text-shadow:none;transform:none}
 .desktop-window-controls .desktop-window-close:hover{background:var(--red);color:#fff}
 .desktop-window-controls svg{width:14px;height:14px;fill:currentColor;shape-rendering:crispEdges}
+html[data-style="aurora"] .desktop-titlebar{border-bottom:1px solid rgba(255,255,255,.4);background:linear-gradient(100deg,rgba(101,81,216,.88),rgba(59,141,173,.82),rgba(58,169,143,.78));box-shadow:0 8px 28px rgba(54,45,130,.2);backdrop-filter:blur(24px) saturate(170%)}
+html[data-style="aurora"] .desktop-titlebar-brand{text-shadow:none}
+html[data-style="aurora"] .desktop-titlebar-pixel{border:0;border-radius:50%;background:#ffe074;box-shadow:0 0 13px #ffe074}
+html[data-style="anime"] .desktop-titlebar{border-bottom:2px solid #24335e;background:linear-gradient(100deg,#354f9e 0 68%,#df6279 68%);box-shadow:none}
+html[data-style="anime"] .desktop-titlebar-brand{text-shadow:2px 2px 0 #24335e}
+html[data-style="anime"] .desktop-titlebar-pixel{border-radius:50%;background:#ffd071;box-shadow:2px 2px 0 #24335e}
+html[data-style="terminal"] .desktop-titlebar{border-bottom:1px solid var(--blue);background:#08130e;color:#aef2c9}
+html[data-style="terminal"] .desktop-titlebar-brand{text-shadow:none}
+html[data-style="terminal"] .desktop-titlebar-pixel{border:0;background:var(--blue);box-shadow:0 0 10px var(--blue)}
 @media(max-width:720px){.desktop-titlebar-brand small{display:none}}
 </style>

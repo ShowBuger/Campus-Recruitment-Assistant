@@ -18,6 +18,7 @@ import ToastContainer from '@/components/ToastContainer.vue'
 import AppDialog from '@/components/AppDialog.vue'
 import DesktopTitlebar from '@/components/DesktopTitlebar.vue'
 import DesktopLogin from '@/components/DesktopLogin.vue'
+import DesktopSkinLayer from '@/components/DesktopSkinLayer.vue'
 
 
 const auth = useAuthStore()
@@ -66,6 +67,7 @@ onMounted(async () => {
   <div class="app" v-if="auth.isLoggedIn">
     <DesktopTitlebar v-if="hasCustomTitlebar" />
     <SidebarNav />
+    <DesktopSkinLayer v-if="hasCustomTitlebar" @open-help="app.toggleHelp()" />
     <main class="main">
       <Topbar @open-config="app.toggleConfig()" @open-chat="app.toggleChat()" @open-help="app.toggleHelp()" />
       <router-view />

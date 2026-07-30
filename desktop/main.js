@@ -425,6 +425,23 @@ function createTray() {
 }
 
 ipcMain.handle('desktop:get-version', () => app.getVersion())
+ipcMain.handle('desktop:set-skin', (_event, requestedSkin) => {
+  const skin = ['classic', 'pixelium', 'aurora', 'anime', 'terminal'].includes(requestedSkin)
+    ? requestedSkin
+    : 'pixelium'
+  if (!mainWindow || mainWindow.isDestroyed()) return skin
+  try {
+    if (process.platform === 'win32' && typeof mainWindow.setBackgroundMaterial === 'function') {
+      mainWindow.setBackgroundMaterial(skin === 'aurora' ? 'mica' : 'none')
+    } else if (process.platform === 'darwin' && typeof mainWindow.setVibrancy === 'function') {
+      mainWindow.setVibrancy(skin === 'aurora' ? 'under-window' : null, { animationDuration: 180 })
+    }
+    mainWindow.setBackgroundColor(skin === 'aurora' ? '#00000000' : '#f5f6fa')
+  } catch (error) {
+    console.warn('Unable to apply native skin material:', error.message)
+  }
+  return skin
+})
 ipcMain.handle('desktop:window-control', (event, action) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win || win !== mainWindow) throw new Error('窗口操作不可用')

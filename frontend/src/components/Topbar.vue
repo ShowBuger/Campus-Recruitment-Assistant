@@ -119,13 +119,14 @@ function enableSheet(id, on) {
 }
 
 function applyStyle(name) {
-  if (!['classic', 'pixelium', 'aurora', 'terminal'].includes(name)) name = 'pixelium'
+  if (!['classic', 'pixelium', 'aurora', 'anime', 'terminal'].includes(name)) name = 'pixelium'
   currentStyle.value = name
   document.documentElement.dataset.style = name
   try { localStorage.setItem('radar_style', name) } catch (_) {}
   enableSheet('css-pixelium', name === 'pixelium')
   enableSheet('css-pixelfont', name === 'pixelium')
   enableSheet('css-pixelvue', name === 'pixelium')
+  window.electronAPI?.setSkin?.(name)
   showStylePanel.value = false
 }
 
@@ -297,6 +298,11 @@ onUnmounted(() => {
         <div class="style-item" :class="{ active: currentStyle === 'aurora' }" data-style="aurora" @click="applyStyle('aurora')">
           <i class="style-swatch swatch-aurora" aria-hidden="true"></i>
           <div>极光玻璃<small>柔光、渐变与通透层次</small></div>
+          <span class="style-check">✓</span>
+        </div>
+        <div class="style-item" :class="{ active: currentStyle === 'anime' }" data-style="anime" @click="applyStyle('anime')">
+          <i class="style-swatch swatch-anime" aria-hidden="true"></i>
+          <div>星愿手账<small>原创角色与漫画贴纸组件</small></div>
           <span class="style-check">✓</span>
         </div>
         <div class="style-item" :class="{ active: currentStyle === 'terminal' }" data-style="terminal" @click="applyStyle('terminal')">
