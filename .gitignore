@@ -15,6 +15,7 @@ data/app.db
 data/app.db-*
 data/users/
 data/backups/
+data/desktop-releases/
 data/logs/
 data/dashboard.pid
 data/dashboard.log

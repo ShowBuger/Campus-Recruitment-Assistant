@@ -23,6 +23,8 @@ const aiDedupEnabled = ref(true)
 const sourceSyncing = ref(false)
 const sourceProgress = ref(null)
 const logLines = ref([])
+const backups = ref([])
+const backupLoading = ref(false)
 let logStream = null
 let sourcePollTimer = null
 
@@ -52,8 +54,16 @@ const userCountStr = computed(() => {
 
 function formatSystemTime(value) {
   if (!value) return ''
-  const date = new Date(String(value).replace(' ', 'T') + 'Z')
+  const raw = String(value).replace(' ', 'T')
+  const date = new Date(/[zZ]$|[+-]\d\d:\d\d$/.test(raw) ? raw : raw + 'Z')
   return isNaN(date) ? value : date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function formatBytes(value) {
+  const bytes = Number(value || 0)
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
 }
 
 async function apiReq(method, url, body) {
@@ -165,6 +175,53 @@ async function sendNotif() {
 function switchPanel(panel) {
   activePanel.value = panel
   if (panel === 'logs') startLogStream()
+  if (panel === 'backups') loadBackups()
+}
+
+async function loadBackups() {
+  if (!isRoot.value) return
+  try {
+    const data = await apiReq('GET', '/api/admin/backups')
+    backups.value = data.backups || []
+  } catch (e) { toast.error('备份信息加载失败：' + e.message) }
+}
+
+async function createBackup() {
+  backupLoading.value = true
+  try {
+    await apiReq('POST', '/api/admin/backups')
+    await loadBackups()
+    toast.success('数据库备份已创建')
+  } catch (e) { toast.error('创建备份失败：' + e.message) }
+  finally { backupLoading.value = false }
+}
+
+async function restoreBackup(backup) {
+  const confirmed = await dialog.confirm(
+    '确定恢复备份“' + backup.name + '”吗？\n当前数据库会先自动备份，恢复后所有用户需要重新登录。',
+    { title: '恢复数据库', tone: 'warning', confirmText: '确认恢复' },
+  )
+  if (!confirmed) return
+  backupLoading.value = true
+  try {
+    const data = await apiReq('POST', '/api/admin/backups/' + encodeURIComponent(backup.name) + '/restore')
+    toast.success(data.message || '数据库已恢复')
+    await loadBackups()
+  } catch (e) { toast.error('恢复失败：' + e.message) }
+  finally { backupLoading.value = false }
+}
+
+async function deleteBackup(backup) {
+  const confirmed = await dialog.confirm(
+    '确定删除备份“' + backup.name + '”吗？此操作不可撤销。',
+    { title: '删除备份', tone: 'danger', confirmText: '永久删除' },
+  )
+  if (!confirmed) return
+  try {
+    await apiReq('DELETE', '/api/admin/backups/' + encodeURIComponent(backup.name))
+    backups.value = backups.value.filter(item => item.name !== backup.name)
+    toast.success('备份已删除')
+  } catch (e) { toast.error('删除失败：' + e.message) }
 }
 
 async function loadSyncSchedule() {
@@ -284,6 +341,7 @@ onUnmounted(() => {
         <button class="admin-nav-item" :class="{ active: activePanel === 'sync' }" data-panel="sync" @click="switchPanel('sync')">自动同步</button>
         <button class="admin-nav-item" :class="{ active: activePanel === 'notice' }" data-panel="notice" @click="switchPanel('notice')">发布通知</button>
         <button class="admin-nav-item" :class="{ active: activePanel === 'logs' }" data-panel="logs" @click="switchPanel('logs')">系统日志</button>
+        <button v-if="isRoot" class="admin-nav-item" :class="{ active: activePanel === 'backups' }" data-panel="backups" @click="switchPanel('backups')">备份信息</button>
       </nav>
       <div class="admin-content-pane">
         <!-- users -->
@@ -383,6 +441,30 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+        <!-- backups -->
+        <div v-if="isRoot" class="admin-panel" :class="{ active: activePanel === 'backups' }" id="admin-panel-backups">
+          <div class="card">
+            <div class="card-hd">
+              <span class="dot g"></span>
+              <div class="card-title">数据库备份</div>
+              <div class="card-sub">每 12 小时自动备份</div>
+            </div>
+            <div class="card-body backup-panel">
+              <div class="backup-toolbar">
+                <div><b>整库快照</b><p>恢复前会自动创建一份当前数据库快照。</p></div>
+                <button class="btn btn-primary" :disabled="backupLoading" @click="createBackup">{{ backupLoading ? '处理中…' : '立即备份' }}</button>
+              </div>
+              <div v-if="!backups.length" class="center muted">暂无备份</div>
+              <div v-for="backup in backups" :key="backup.name" class="backup-row">
+                <div><b>{{ backup.name }}</b><span>{{ formatSystemTime(backup.created_at) }} · {{ formatBytes(backup.size) }}</span></div>
+                <div>
+                  <button class="btn" :disabled="backupLoading" @click="restoreBackup(backup)">恢复</button>
+                  <button class="btn btn-danger" :disabled="backupLoading" @click="deleteBackup(backup)">删除</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -399,4 +481,8 @@ onUnmounted(() => {
 .source-sync-progress-head{display:flex;justify-content:space-between;gap:12px;font-size:12px}.source-sync-progress-head span{font-family:var(--mono)}
 .source-sync-progress-track{height:9px;overflow:hidden;background:var(--line)}.source-sync-progress-track i{display:block;height:100%;background:var(--blue);transition:width .25s ease}
 .source-sync-progress>span{color:var(--muted);font-size:10px}.source-sync-progress.error{border-color:var(--red)}.source-sync-progress.error i{background:var(--red)}
+.backup-panel{display:grid;gap:12px}.backup-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.backup-toolbar p{margin-top:3px;color:var(--muted);font-size:11px}.backup-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid var(--line);background:var(--bg)}
+.backup-row>div:first-child{display:grid;gap:3px;min-width:0}.backup-row b{overflow:hidden;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.backup-row span{color:var(--muted);font-size:10px}.backup-row>div:last-child{display:flex;gap:7px}
+@media(max-width:620px){.backup-toolbar,.backup-row{align-items:stretch;flex-direction:column}.backup-row>div:last-child{display:grid;grid-template-columns:1fr 1fr}}
 </style>

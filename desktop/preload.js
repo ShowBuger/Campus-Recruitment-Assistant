@@ -1,29 +1,28 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
-contextBridge.exposeInMainWorld('electronAPI', {
-  /** 前端判断当前是否在 Electron 桌面环境 */
+contextBridge.exposeInMainWorld('electronAPI', Object.freeze({
   isElectron: true,
-
-  /** 发送系统原生通知 */
-  notify(title, body) {
-    const { Notification } = require('electron')
-    if (Notification.isSupported()) {
-      const n = new Notification({ title, body, icon: 'assets/icon.png' })
-      n.show()
-    }
-  },
-
-  /** 获取应用版本号 */
-  getAppVersion() {
-    return process.env.npm_package_version || '1.0.0'
-  },
-
-  /** 在系统浏览器中打开链接 */
-  openExternal(url) {
-    const { shell } = require('electron')
-    shell.openExternal(url)
-  },
-
-  /** 获取当前平台 */
+  customTitlebar: true,
   platform: process.platform,
-})
+  getAppVersion: () => ipcRenderer.invoke('desktop:get-version'),
+  checkForUpdates: () => ipcRenderer.invoke('desktop:check-for-updates'),
+  showWidget: type => ipcRenderer.invoke('desktop:widget-show', type),
+  getWidgetState: type => ipcRenderer.invoke('desktop:widget-state', type),
+  widgetAction: (type, action) => ipcRenderer.invoke('desktop:widget-action', type, action),
+  showMainWindow: () => ipcRenderer.invoke('desktop:show-main'),
+  windowControl: action => ipcRenderer.invoke('desktop:window-control', action),
+  onWindowState: callback => {
+    if (typeof callback !== 'function') return () => {}
+    const listener = (_event, state) => callback(state)
+    ipcRenderer.on('desktop-window-state', listener)
+    return () => ipcRenderer.removeListener('desktop-window-state', listener)
+  },
+  openExternal: url => ipcRenderer.invoke('desktop:open-external', url),
+  notify: (title, body) => ipcRenderer.send('desktop:notify', title, body),
+  onUpdateStatus: callback => {
+    if (typeof callback !== 'function') return () => {}
+    const listener = (_event, status) => callback(status)
+    ipcRenderer.on('desktop-update-status', listener)
+    return () => ipcRenderer.removeListener('desktop-update-status', listener)
+  },
+}))

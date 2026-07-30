@@ -10,6 +10,15 @@
 /* ---- topbar live clock ---- */
 .topbar #last-updated{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--muted);font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 .topbar #last-updated i{color:var(--sub);font-style:normal}
+.desktop-download-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 10px;white-space:nowrap}
+.desktop-download-btn .tool-icon{width:15px;height:15px}
+@media(max-width:1080px){.desktop-download-btn span{display:none}.desktop-download-btn{width:36px;padding:0}}
+.desktop-update-progress{position:fixed;right:18px;bottom:18px;z-index:1600;width:min(340px,calc(100vw - 36px));padding:13px 14px;border:1px solid var(--border);border-radius:10px;background:var(--panel);box-shadow:0 8px 26px rgba(15,23,42,.18);color:var(--text)}
+.desktop-update-progress-head{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:13px;font-weight:700}
+.desktop-update-progress-track{height:8px;margin:9px 0 6px;overflow:hidden;border-radius:999px;background:var(--line)}
+.desktop-update-progress-track i{display:block;height:100%;border-radius:inherit;background:var(--blue);transition:width .2s ease}
+.desktop-update-progress small{color:var(--muted);font-variant-numeric:tabular-nums}
+.desktop-update-progress.error{border-color:var(--red)}
 .live-clock-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px var(--greenS);animation:clockDot 2s ease-in-out infinite}
 @keyframes clockDot{50%{opacity:.4}}
 .live-clock-unit{display:inline-grid;min-width:22px;place-items:center;color:var(--ink);font-size:13px;font-weight:800;line-height:1}
@@ -173,7 +182,9 @@ body.chat-open{overflow:hidden}
 .tracker-test-modal .tracker-event-list{max-height:min(62vh,560px)}
 
 /* ---- per-record smart progress timeline ---- */
-.record-detail-hd-actions{display:flex;align-items:center;gap:8px}
+.record-detail-modal>.modal-hd{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
+.record-detail-hd-actions{display:flex;flex:0 0 auto;align-items:center;gap:8px;white-space:nowrap}
+.record-detail-hd-actions .record-timeline-open-btn{order:1}.record-detail-hd-actions .icon-btn{order:2}
 .record-timeline-open-btn{height:32px;padding:0 11px;color:var(--blue);border-color:color-mix(in srgb,var(--blue) 36%,var(--line));background:var(--blueS);font-size:11px}
 .record-timeline-mask{z-index:11000}
 .record-timeline-modal{width:min(680px,94vw);max-height:min(760px,88vh);display:flex;flex-direction:column;overflow:hidden}

@@ -8,6 +8,15 @@ import { useAuthStore } from '@/stores/auth'
 const route = useRoute()
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const isDesktop = Boolean(window.electronAPI?.isElectron)
+const desktopDownloadUrl = '/api/desktop/download/windows'
+const desktopUpdate = ref(null)
+const showWidgetPanel = ref(false)
+const desktopUpdatePercent = computed(() => {
+  const value = Number(desktopUpdate.value?.percent) || 0
+  return Math.max(0, Math.min(100, value))
+})
+let removeDesktopUpdateListener = null
 const titleMap = { dashboard: '投递信息', board: '投递看板', records: '总表信息', resumes: '简历管理', analysis: '简历分析', admin: '管理页面' }
 const title = computed(() => titleMap[route.name] || '校招信息看板')
 
@@ -130,6 +139,21 @@ function toggleTheme() {
   localStorage.setItem('radar_theme', next)
 }
 
+function openDesktopWidget(type) {
+  showWidgetPanel.value = false
+  window.electronAPI?.showWidget?.(type)
+}
+
+function downloadDesktopApp() {
+  window.location.assign(desktopDownloadUrl)
+}
+
+function formatDownloadSize(bytes) {
+  const value = Number(bytes) || 0
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+  return `${(value / 1024 / 1024).toFixed(1)} MB`
+}
+
 // ---- Time formatting ----
 function formatTime(value) {
   if (!value) return ''
@@ -141,6 +165,7 @@ function formatTime(value) {
 function onDocumentClick(e) {
   if (!e.target.closest('.notification-wrap')) showNotifications.value = false
   if (!e.target.closest('.style-wrap')) showStylePanel.value = false
+  if (!e.target.closest('.desktop-widget-launcher')) showWidgetPanel.value = false
 }
 
 onMounted(() => {
@@ -151,12 +176,21 @@ onMounted(() => {
   loadReminders()
   loadChatUnread()
   startNotifPoll()
+  removeDesktopUpdateListener = window.electronAPI?.onUpdateStatus?.(status => {
+    desktopUpdate.value = status
+    if (status?.state === 'error') {
+      window.setTimeout(() => {
+        if (desktopUpdate.value === status) desktopUpdate.value = null
+      }, 8000)
+    }
+  }) || null
 })
 
 onUnmounted(() => {
   if (clockTimer) clearInterval(clockTimer)
   document.removeEventListener('click', onDocumentClick)
   stopNotifPoll()
+  if (removeDesktopUpdateListener) removeDesktopUpdateListener()
 })
 </script>
 
@@ -165,6 +199,31 @@ onUnmounted(() => {
     <h1 id="page-title">{{ title }}</h1>
     <div class="spacer"></div>
     <span class="muted" id="last-updated" style="font-size:12px" v-html="lastUpdatedHtml"></span>
+
+    <button
+      v-if="!isDesktop"
+      class="btn desktop-download-btn"
+      type="button"
+      title="下载 Windows 桌面端"
+      @click="downloadDesktopApp"
+    >
+      <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3v12M7 10l5 5 5-5"/>
+        <path d="M5 19h14"/>
+      </svg>
+      <span>下载桌面端</span>
+    </button>
+
+    <div v-if="isDesktop" class="notification-wrap desktop-widget-launcher">
+      <button class="icon-btn" type="button" title="桌面组件" aria-label="桌面组件" @click.stop="showWidgetPanel = !showWidgetPanel">
+        <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7v6H4V5Zm9 0h7v10h-7V5ZM4 13h7v6H4v-6Zm9 4h7v2h-7v-2Z"/></svg>
+      </button>
+      <div class="notification-panel widget-launch-panel" :class="{ show: showWidgetPanel }">
+        <div class="notification-head">桌面组件</div>
+        <button type="button" class="style-item widget-launch-item" @click="openDesktopWidget('records')"><span>投递记录<small>查看最近的投递进度</small></span><b>打开</b></button>
+        <button type="button" class="style-item widget-launch-item" @click="openDesktopWidget('schedule')"><span>近期安排<small>未来 30 天考试与面试</small></span><b>打开</b></button>
+      </div>
+    </div>
 
     <button class="icon-btn" @click="emit('open-help')" title="使用帮助" aria-label="使用帮助">?</button>
     <button class="icon-btn chat-top-btn" id="chat-top-btn" @click="emit('open-chat')" title="站内聊天" aria-label="站内聊天">
@@ -245,4 +304,30 @@ onUnmounted(() => {
       </svg>
     </button>
   </div>
+  <aside
+    v-if="isDesktop && ['downloading', 'error'].includes(desktopUpdate?.state)"
+    class="desktop-update-progress"
+    :class="{ error: desktopUpdate?.state === 'error' }"
+    aria-live="polite"
+  >
+    <template v-if="desktopUpdate?.state === 'error'">
+      <div class="desktop-update-progress-head">
+        <span>更新下载失败</span>
+      </div>
+      <small>请稍后通过托盘菜单重新检查更新</small>
+    </template>
+    <template v-else>
+    <div class="desktop-update-progress-head">
+      <span>正在下载桌面端更新</span>
+      <strong>{{ desktopUpdatePercent.toFixed(0) }}%</strong>
+    </div>
+    <div class="desktop-update-progress-track">
+      <i :style="{ width: `${desktopUpdatePercent}%` }"></i>
+    </div>
+    <small v-if="desktopUpdate.total">
+      {{ formatDownloadSize(desktopUpdate.transferred) }} / {{ formatDownloadSize(desktopUpdate.total) }}
+    </small>
+    <small v-else>正在获取安装包大小…</small>
+    </template>
+  </aside>
 </template>

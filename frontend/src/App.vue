@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import SidebarNav from '@/components/SidebarNav.vue'
@@ -16,10 +16,18 @@ import OfferCompareModal from '@/components/OfferCompareModal.vue'
 import RecommendationModal from '@/components/RecommendationModal.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 import AppDialog from '@/components/AppDialog.vue'
+import DesktopTitlebar from '@/components/DesktopTitlebar.vue'
+import DesktopLogin from '@/components/DesktopLogin.vue'
 
 
 const auth = useAuthStore()
 const app = useAppStore()
+const hasCustomTitlebar = Boolean(window.electronAPI?.customTitlebar)
+
+watch(() => auth.isLoggedIn, loggedIn => {
+  if (!hasCustomTitlebar) return
+  window.electronAPI?.windowControl?.(loggedIn ? 'main-size' : 'login-size')
+})
 
 // Error modal
 const showError = ref(false)
@@ -56,6 +64,7 @@ onMounted(async () => {
 
 <template>
   <div class="app" v-if="auth.isLoggedIn">
+    <DesktopTitlebar v-if="hasCustomTitlebar" />
     <SidebarNav />
     <main class="main">
       <Topbar @open-config="app.toggleConfig()" @open-chat="app.toggleChat()" @open-help="app.toggleHelp()" />
@@ -74,6 +83,7 @@ onMounted(async () => {
       <div class="error-modal"><h3>&#9888; {{ errorMsg }}</h3><pre>{{ errorDetail }}</pre><div class="btn-row"><button class="btn" @click="copyError">复制详情</button><button class="btn" style="background:var(--blue);color:#fff" @click="showError = false">关闭</button></div></div>
     </div>
   </div>
+  <DesktopLogin v-else-if="hasCustomTitlebar" />
   <LoginModal v-else />
   <AppDialog />
   <ToastContainer />

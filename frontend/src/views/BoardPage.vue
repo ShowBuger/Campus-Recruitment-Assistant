@@ -145,8 +145,8 @@ async function onDrop(e, targetCol) {
         <span class="dot"></span>
         <div class="card-title">投递看板</div>
         <div class="card-sub" id="board-count">{{ applicationRecords().length }} 条投递记录</div>
-        <div class="board-hint">按住卡片拖到其他进展分区即可更新进展。回退操作会弹窗确认。</div>
       </div>
+      <div class="board-hint">按住卡片拖到其他进展分区即可更新进展。回退操作会弹窗确认。</div>
 
       <div class="board-columns" id="board-columns">
         <div

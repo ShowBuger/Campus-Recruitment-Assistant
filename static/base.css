@@ -27,6 +27,11 @@ body:after{content:"";position:fixed;inset:-40%;z-index:-1;pointer-events:none;b
 .bg-orbits{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.42;color:var(--blue);mix-blend-mode:multiply}.orb-line{fill:none;stroke:currentColor;stroke-width:.7;stroke-dasharray:4 12;animation:dash 18s linear infinite}.orb-line.alt{animation-duration:28s;animation-direction:reverse;stroke:var(--cyan)}.orb-dot{fill:currentColor;filter:drop-shadow(0 0 8px rgba(37,99,235,.45));animation:floatDot 8s ease-in-out infinite}@keyframes dash{to{stroke-dashoffset:-220}}@keyframes floatDot{50%{transform:translateY(-10px);opacity:.55}}
 a{color:var(--blue);text-decoration:none;font-weight:700}a:hover{color:var(--blue2)}
 .app{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100vh}
+.desktop-main-mode body{overflow:hidden;background:var(--ink)}
+.desktop-main-mode .app{grid-template-rows:38px minmax(0,1fr);height:100vh;min-height:0;border:3px solid var(--ink);background:var(--bg)}
+.desktop-main-mode .desktop-titlebar{grid-column:1/-1;grid-row:1}
+.desktop-main-mode .sidebar{grid-column:1;grid-row:2;position:relative;top:0;height:100%;min-height:0}
+.desktop-main-mode .main{grid-column:2;grid-row:2;height:100%;overflow:auto}
 /* ---- sidebar ---- */
 .sidebar{background:var(--sidebar);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh;overflow:auto}
 .brand{display:flex;align-items:center;gap:11px;padding:6px 8px 18px}
@@ -145,7 +150,7 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
 /* ---- bars / funnel / timeline ---- */
 .bar{margin:0 0 11px}.bar-row{display:flex;justify-content:space-between;gap:10px;margin-bottom:5px;font-size:12px}.bar-row strong{color:var(--ink)}
 .track{height:9px;border-radius:999px;background:var(--line);overflow:hidden}.fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--blue),#60a5fa);transition:width .7s var(--spring);position:relative;overflow:hidden}.fill:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.48),transparent);animation:barFlow 2.2s ease-in-out infinite}.fill.g{background:linear-gradient(90deg,var(--green),#34d399)}@keyframes barFlow{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
-.board-hint{display:flex;align-items:center;gap:7px;padding:11px 18px;color:var(--sub);font-size:12px;border-bottom:1px solid var(--line)}
+.board-hint{display:flex;align-items:center;gap:7px;width:100%;padding:10px 18px;color:var(--sub);font-size:12px;border-bottom:1px solid var(--line);background:var(--bg)}
 .board-hint:before{content:"⇄";font-size:14px;color:var(--blue)}
 .board-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:328px;gap:14px;padding:16px}
 .board-col{display:flex;flex-direction:column;min-height:0;border:1px solid var(--line);border-top:3px solid var(--cbar,var(--line));border-radius:14px;background:var(--panel);overflow:hidden;transition:box-shadow .16s var(--ease),background .16s var(--ease)}
@@ -267,11 +272,16 @@ td{padding:10px;color:var(--ink);font-size:13px}tr:hover td{background:var(--blu
 .login-card p{color:var(--muted);font-size:13px;margin-bottom:22px}
 .login-card input{width:100%;height:42px;margin-bottom:12px;padding:0 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);font:14px var(--font);outline:none;transition:border-color .16s var(--ease)}
 .login-card input:focus{border-color:var(--blue)}
+.login-card .login-options{display:flex;align-items:center;justify-content:space-between;margin:-2px 2px 12px}
+.login-card .login-options label{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:12px;cursor:pointer;user-select:none}
+.login-card .login-options input{width:16px;height:16px;margin:0;padding:0;accent-color:var(--blue);cursor:pointer}
+.login-card .login-options input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .login-card .btn{width:100%;height:42px;margin-top:4px}
 .login-card .toggle{display:block;margin-top:14px;font-size:12px;color:var(--blue);background:none;border:0;cursor:pointer;font:inherit}
 .login-card .toggle:hover{color:var(--blue2)}
 .login-card .error{color:var(--red);font-size:12px;margin-bottom:10px;min-height:18px}
 .notification-wrap{position:relative}
+.widget-launch-panel{width:270px}.widget-launch-item{border:0;width:100%;text-align:left}.widget-launch-item span{flex:1}.widget-launch-item b{color:var(--blue);font-size:11px}
 .notification-btn{position:relative}
 .notification-btn.has-unread{color:var(--blue);border-color:rgba(37,99,235,.45);background:var(--blueS)}
 .notification-dot{display:none;position:absolute;right:6px;top:5px;width:8px;height:8px;border:2px solid var(--panel);border-radius:50%;background:var(--red)}

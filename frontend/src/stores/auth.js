@@ -37,6 +37,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout() {
     await post('/api/auth/logout').catch(() => {})
+    // 主动退出后不能在登录页再次自动提交已保存的密码。
+    localStorage.setItem('rb_auto_login', '0')
     clear()
   }
 

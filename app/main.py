@@ -11,13 +11,14 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import bus
-from app.routers import dashboard, status, config, resume, ai, auth, admin, chat, progress_tracker, recommendations
+from app import bus, database_backup
+from app.routers import dashboard, status, config, resume, ai, auth, admin, chat, progress_tracker, recommendations, desktop
 from app.version import APP_VERSION
 
 # Start background sync scheduler
 dashboard.start_sync_scheduler()
 progress_tracker.start_scheduler()
+database_backup.start_scheduler()
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 PROJECT_DIR = os.path.join(os.path.dirname(__file__), "..")
@@ -54,6 +55,7 @@ app.include_router(ai.router)
 app.include_router(recommendations.router)
 app.include_router(chat.router)
 app.include_router(progress_tracker.router)
+app.include_router(desktop.router)
 
 
 def _dist_index():

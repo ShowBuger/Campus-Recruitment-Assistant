@@ -4,7 +4,15 @@ import { useAuthStore } from '@/stores/auth'
 const auth = useAuthStore()
 const version = ref('')
 onMounted(async () => {
-  try { const r = await fetch('/api/version'); const d = await r.json(); version.value = d.version || '' } catch {}
+  try {
+    if (window.electronAPI?.isElectron) {
+      version.value = await window.electronAPI.getAppVersion()
+      return
+    }
+    const r = await fetch('/api/version')
+    const d = await r.json()
+    version.value = d.version || ''
+  } catch {}
 })
 </script>
 

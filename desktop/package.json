@@ -1,6 +1,6 @@
 {
   "name": "campus-recruitment",
-  "version": "1.0.0",
+  "version": "1.0.15",
   "description": "校招信息看板桌面应用 — 校园招聘岗位管理与进度追踪",
   "author": "Campus Recruitment Assistant",
   "license": "UNLICENSED",
@@ -8,13 +8,17 @@
   "scripts": {
     "dev": "electron .",
     "start": "electron .",
-    "build:win": "electron-builder --win",
+    "build:win": "electron-builder --win nsis --publish never",
+    "release:win": "electron-builder --win nsis --publish always",
     "build:linux": "electron-builder --linux",
     "build:mac": "electron-builder --mac"
   },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
   "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "com.campus.recruitment",
@@ -31,36 +35,42 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
-        },
-        {
-          "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "executableName": "CampusBoard",
+      "artifactName": "CampusBoard-${version}.exe"
     },
     "nsis": {
-      "oneClick": false,
+      "include": "installer.nsh",
+      "oneClick": true,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
+      "useZip": true,
+      "differentialPackage": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "校招信息看板",
-      "installerIcon": "assets/icon.ico",
-      "uninstallerIcon": "assets/icon.ico",
-      "installerHeaderIcon": "assets/icon.ico"
+      "runAfterFinish": true
     },
-    "portable": {
-      "artifactName": "校招信息看板-${version}-portable.exe"
+    "publish": {
+      "provider": "generic",
+      "url": "https://www.toudimianban.cloud/api/desktop/updates/windows"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "assets/icon.png",
       "category": "Office"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "icon": "assets/icon.png",
       "category": "public.app-category.productivity"
     }

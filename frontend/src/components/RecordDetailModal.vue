@@ -7,7 +7,7 @@
           <p id="total-edit-description">在一个窗口中查看和修改完整记录。</p>
         </div>
         <div class="record-detail-hd-actions">
-          <button class="btn record-timeline-open-btn" type="button" @click="openTimeline">进度时间线</button>
+          <button class="btn record-timeline-open-btn" type="button" @click="openTimeline">时间线</button>
           <button class="icon-btn" @click="$emit('close')" title="关闭">&times;</button>
         </div>
       </div>
@@ -183,8 +183,9 @@
       </form>
     </div>
 
-    <div class="modal-mask show record-timeline-mask" v-if="showTimeline" @mousedown.self="showTimeline = false">
-      <div class="modal record-timeline-modal">
+    <Teleport to="body">
+      <div class="modal-mask show record-timeline-mask" v-if="showTimeline" @mousedown.self="showTimeline = false">
+        <div class="modal record-timeline-modal">
         <div class="modal-hd">
           <div>
             <h2>{{ record?.company || '记录详情' }} · 进度时间线</h2>
@@ -219,8 +220,9 @@
         <div class="modal-ft">
           <button class="btn btn-primary" type="button" @click="showTimeline = false">关闭</button>
         </div>
+        </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 

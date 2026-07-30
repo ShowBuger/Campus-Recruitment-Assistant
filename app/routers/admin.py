@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 
-from app import auth as auth_module, database
+from app import auth as auth_module, database, database_backup
 
 router = APIRouter(prefix="/api", tags=["admin"])
 PROJECT_DIR = Path(__file__).resolve().parents[2]
@@ -71,6 +71,47 @@ class NotificationCreate(BaseModel):
 
 class NotificationRead(BaseModel):
     ids: list[int]
+
+
+@router.get("/admin/backups")
+def get_backups(_: dict = Depends(require_root)):
+    return {
+        "success": True,
+        "interval_hours": database_backup.BACKUP_INTERVAL_SECONDS // 3600,
+        "backups": database_backup.list_backups(),
+    }
+
+
+@router.post("/admin/backups")
+def create_database_backup(_: dict = Depends(require_root)):
+    backup = database_backup.create_backup()
+    return {"success": True, "message": "数据库备份已创建", "backup": backup}
+
+
+@router.post("/admin/backups/{name}/restore")
+def restore_database_backup(name: str, _: dict = Depends(require_root)):
+    try:
+        safety_backup = database_backup.restore_backup(name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="备份不存在")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {
+        "success": True,
+        "message": "数据库已恢复，请重新登录以刷新当前状态",
+        "safety_backup": safety_backup,
+    }
+
+
+@router.delete("/admin/backups/{name}")
+def delete_database_backup(name: str, _: dict = Depends(require_root)):
+    try:
+        database_backup.delete_backup(name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="备份不存在")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"success": True, "message": "备份已删除"}
 
 
 @router.get("/admin/users")
