@@ -119,6 +119,7 @@ function enableSheet(id, on) {
 }
 
 function applyStyle(name) {
+  if (!['classic', 'pixelium', 'aurora', 'terminal'].includes(name)) name = 'pixelium'
   currentStyle.value = name
   document.documentElement.dataset.style = name
   try { localStorage.setItem('radar_style', name) } catch (_) {}
@@ -284,11 +285,23 @@ onUnmounted(() => {
       <div class="notification-panel style-panel" id="style-panel" :class="{ show: showStylePanel }">
         <div class="notification-head">界面风格</div>
         <div class="style-item" :class="{ active: currentStyle === 'classic' }" data-style="classic" @click="applyStyle('classic')">
-          <div>经典风格<small>看板原始设计</small></div>
+          <i class="style-swatch swatch-classic" aria-hidden="true"></i>
+          <div>经典风格<small>清爽高效的办公看板</small></div>
           <span class="style-check">✓</span>
         </div>
         <div class="style-item" :class="{ active: currentStyle === 'pixelium' }" data-style="pixelium" @click="applyStyle('pixelium')">
+          <i class="style-swatch swatch-pixelium" aria-hidden="true"></i>
           <div>Pixelium 像素风<small>2px 像素几何</small></div>
+          <span class="style-check">✓</span>
+        </div>
+        <div class="style-item" :class="{ active: currentStyle === 'aurora' }" data-style="aurora" @click="applyStyle('aurora')">
+          <i class="style-swatch swatch-aurora" aria-hidden="true"></i>
+          <div>极光玻璃<small>柔光、渐变与通透层次</small></div>
+          <span class="style-check">✓</span>
+        </div>
+        <div class="style-item" :class="{ active: currentStyle === 'terminal' }" data-style="terminal" @click="applyStyle('terminal')">
+          <i class="style-swatch swatch-terminal" aria-hidden="true"></i>
+          <div>终端夜航<small>高对比命令行界面</small></div>
           <span class="style-check">✓</span>
         </div>
       </div>

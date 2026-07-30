@@ -15,10 +15,14 @@
   <link rel="stylesheet" href="/static/pixelium-font.css?v=20260730-6" id="css-pixelfont">
   <link rel="stylesheet" href="/static/pixelium-vue.css?v=20260730-6" id="css-pixelvue">
   <link rel="stylesheet" href="/static/pixelium-theme.css?v=20260730-6" id="css-pixelium">
+  <link rel="stylesheet" href="/static/theme-system.css?v=20260731-1">
   <script>
     (function(){
+      var styles = ['classic', 'pixelium', 'aurora', 'terminal'];
       var style = localStorage.getItem('radar_style') || 'pixelium';
+      if (styles.indexOf(style) < 0) style = 'pixelium';
       document.documentElement.dataset.style = style;
+      document.documentElement.dataset.theme = localStorage.getItem('radar_theme') === 'dark' ? 'dark' : 'light';
       // Pixelium is default — already enabled. Disable only if classic.
       if (style !== 'pixelium') {
         var el;
