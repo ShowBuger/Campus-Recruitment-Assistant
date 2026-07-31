@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
-const styles = (process.env.CAMPUS_VISUAL_STYLES || 'pixelium,aurora,anime,terminal').split(',')
+const styles = (process.env.CAMPUS_VISUAL_STYLES || 'pixelium,aurora,anime').split(',')
 const token = process.env.CAMPUS_VISUAL_TOKEN
 const target = process.env.CAMPUS_VISUAL_URL || 'http://127.0.0.1:8765'
 const outputDir = process.env.CAMPUS_VISUAL_OUTPUT || '/tmp/campus-skin-smoke'

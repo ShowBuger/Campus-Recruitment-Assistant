@@ -119,7 +119,7 @@ function enableSheet(id, on) {
 }
 
 function applyStyle(name) {
-  if (!['classic', 'pixelium', 'aurora', 'anime', 'terminal'].includes(name)) name = 'pixelium'
+  if (!['classic', 'pixelium', 'aurora', 'anime'].includes(name)) name = 'pixelium'
   currentStyle.value = name
   document.documentElement.dataset.style = name
   try { localStorage.setItem('radar_style', name) } catch (_) {}
@@ -303,11 +303,6 @@ onUnmounted(() => {
         <div class="style-item" :class="{ active: currentStyle === 'anime' }" data-style="anime" @click="applyStyle('anime')">
           <i class="style-swatch swatch-anime" aria-hidden="true"></i>
           <div>星愿手账<small>原创角色与漫画贴纸组件</small></div>
-          <span class="style-check">✓</span>
-        </div>
-        <div class="style-item" :class="{ active: currentStyle === 'terminal' }" data-style="terminal" @click="applyStyle('terminal')">
-          <i class="style-swatch swatch-terminal" aria-hidden="true"></i>
-          <div>终端夜航<small>高对比命令行界面</small></div>
           <span class="style-check">✓</span>
         </div>
       </div>

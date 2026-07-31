@@ -140,25 +140,16 @@ form{width:100%}form>label{display:block;margin-bottom:10px}form>label>span{disp
 .desktop-login-switch{margin-top:15px;border:0;background:transparent;color:var(--blue);font:900 10px var(--font);cursor:pointer}.desktop-login-switch:hover{text-decoration:underline}
 .desktop-login>footer{display:flex;justify-content:space-between;padding:7px 10px;border-top:2px solid var(--ink);background:var(--panel);color:var(--muted);font:900 8px var(--mono);letter-spacing:.08em}
 
-html[data-style="aurora"] .desktop-login{border-color:transparent;background-image:radial-gradient(circle at 15% 5%,rgba(117,89,255,.23),transparent 40%),radial-gradient(circle at 90% 80%,rgba(60,200,189,.2),transparent 44%)}
-html[data-style="aurora"] .desktop-login-titlebar{border-bottom:1px solid rgba(255,255,255,.3);background:linear-gradient(100deg,#6551d8,#3b8dad 60%,#3aa98f)}
+html[data-style="aurora"] .desktop-login{border:1px solid rgba(255,255,255,.42);background-color:rgba(239,242,255,.18);background-image:radial-gradient(circle at 15% 5%,rgba(117,89,255,.32),transparent 43%),radial-gradient(circle at 90% 80%,rgba(60,200,189,.28),transparent 46%);box-shadow:0 32px 80px rgba(39,31,105,.24),inset 0 1px rgba(255,255,255,.55);backdrop-filter:blur(28px) saturate(165%)}
+html[data-style="aurora"] .desktop-login-titlebar{border-bottom:1px solid rgba(255,255,255,.3);background:linear-gradient(100deg,rgba(101,81,216,.45),rgba(59,141,173,.28) 60%,rgba(58,169,143,.25));backdrop-filter:blur(24px) saturate(170%)}
 html[data-style="aurora"] .desktop-login-titlebar>div{text-shadow:none}
-html[data-style="aurora"] .desktop-login-avatar{border:1px solid rgba(255,255,255,.7);border-radius:22px;background:var(--panel);box-shadow:0 18px 42px rgba(74,56,161,.24);backdrop-filter:blur(18px)}
+html[data-style="aurora"] .desktop-login-avatar{border:1px solid rgba(255,255,255,.7);border-radius:22px;background:rgba(255,255,255,.18);box-shadow:0 18px 42px rgba(74,56,161,.2),inset 0 1px rgba(255,255,255,.75);backdrop-filter:blur(24px) saturate(160%)}
 html[data-style="aurora"] .desktop-login-avatar span{border:0;border-radius:12px;background:linear-gradient(135deg,#7559ff,#3cc8bd);box-shadow:0 8px 18px rgba(104,87,229,.32)}
 html[data-style="aurora"] input{border:1px solid var(--line2);border-radius:11px;box-shadow:inset 0 1px 0 rgba(255,255,255,.6)}
 html[data-style="aurora"] input:focus{box-shadow:0 0 0 3px var(--blueS)}
 html[data-style="aurora"] .desktop-login-submit{border:0;border-radius:11px;background:linear-gradient(135deg,#7559ff,#537ee9);box-shadow:0 9px 22px rgba(104,87,229,.28)}
-html[data-style="aurora"] .desktop-login>footer{border-color:var(--line);background:rgba(255,255,255,.22)}
+html[data-style="aurora"] .desktop-login>footer{border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.09);backdrop-filter:blur(18px)}
 
-html[data-style="terminal"] .desktop-login{border:1px solid var(--blue);background-image:repeating-linear-gradient(0deg,transparent 0 3px,var(--blueS) 3px 4px)}
-html[data-style="terminal"] .desktop-login-titlebar{border-bottom:1px solid var(--blue);background:#08130e;color:#aef2c9}
-html[data-style="terminal"] .desktop-login-titlebar>div{text-shadow:none}
-html[data-style="terminal"] .desktop-login-avatar{border:1px solid var(--blue);border-radius:3px;box-shadow:0 0 22px var(--blueS)}
-html[data-style="terminal"] .desktop-login-avatar span{border:1px solid var(--blue);background:var(--blueS);box-shadow:none}
-html[data-style="terminal"] input{border:1px solid var(--line2);border-radius:3px;background:var(--panel);box-shadow:none}
-html[data-style="terminal"] input:focus{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue)}
-html[data-style="terminal"] .desktop-login-submit{border:1px solid var(--blue);border-radius:3px;color:var(--bg);background:var(--blue);box-shadow:none}
-html[data-style="terminal"] .desktop-login>footer{border-color:var(--line2)}
 
 html[data-style="anime"] .desktop-login{border:3px solid var(--ink);background-color:var(--bg);background-image:radial-gradient(circle at 1px 1px,var(--redS) 1px,transparent 1.3px);background-size:18px 18px}
 html[data-style="anime"] .desktop-login-titlebar{border-bottom:2px solid var(--ink);background:linear-gradient(100deg,#354f9e 0 68%,#df6279 68%)}
