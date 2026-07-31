@@ -56,14 +56,13 @@ app.whenReady().then(async () => {
           const rect = element.getBoundingClientRect()
           return rect.right > innerWidth + 2 || rect.left < -2
         }).length
-        const assistantImage = document.querySelector('.anime-assistant img')
+        const assistant = document.querySelector('.anime-assistant')
         return {
           horizontalOverflow,
           badBounds,
           sidebarVisible: visible('.sidebar'),
           dockVisible: visible('.liquid-dock'),
-          assistantVisible: visible('.anime-assistant'),
-          assistantLoaded: !assistantImage || (assistantImage.complete && assistantImage.naturalWidth > 0),
+          assistantPresent: Boolean(assistant),
           rootClip: getComputedStyle(document.documentElement).clipPath,
         }
       })()
@@ -71,7 +70,7 @@ app.whenReady().then(async () => {
     const expected = style === 'aurora'
       ? !audit.sidebarVisible && audit.dockVisible
       : style === 'anime'
-        ? audit.sidebarVisible && audit.assistantVisible && audit.assistantLoaded
+        ? audit.sidebarVisible && !audit.assistantPresent
         : audit.sidebarVisible
     if (audit.horizontalOverflow || audit.badBounds || audit.rootClip !== 'none' || !expected) {
       throw new Error(`${style} visual audit failed: ${JSON.stringify(audit)}`)

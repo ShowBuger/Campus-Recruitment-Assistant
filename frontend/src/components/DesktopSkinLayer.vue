@@ -1,21 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import animeAssistant from '@/assets/skins/anime-assistant.png'
+import { LiquidGlass } from '@wxperia/liquid-glass-vue'
 
-const route = useRoute()
-const bubbleOpen = ref(true)
 const emit = defineEmits(['open-help'])
-
-const routeCopy = {
-  dashboard: ['投递情报已整理', '先处理临近截止和等待反馈的记录吧。'],
-  board: ['流程推进中', '拖动卡片就能更新当前投递阶段。'],
-  records: ['资料库已打开', '这里适合做筛选、比较和批量整理。'],
-  resumes: ['简历装备区', '针对目标岗位调整版本，会更容易命中关键词。'],
-  analysis: ['AI 分析就绪', '选择简历和岗位，让我帮你检查匹配度。'],
-  admin: ['管理控制台', '系统状态和用户配置都集中在这里。'],
-}
-const assistantCopy = computed(() => routeCopy[route.name] || ['今天也要加油', '每次投递都让目标更近一点。'])
 
 const dockItems = [
   { to: '/', label: '投递', icon: '⌂' },
@@ -31,21 +17,25 @@ const dockItems = [
     <div class="liquid-backdrop" aria-hidden="true">
       <i></i><i></i><i></i>
     </div>
-    <nav class="liquid-dock" aria-label="桌面快捷导航" aria-hidden="false">
-      <router-link v-for="item in dockItems" :key="item.to" :to="item.to">
-        <b>{{ item.icon }}</b><span>{{ item.label }}</span>
-      </router-link>
-      <button type="button" @click="emit('open-help')"><b>?</b><span>帮助</span></button>
-    </nav>
-
-    <aside class="anime-assistant" :class="{ collapsed: !bubbleOpen }" aria-hidden="false">
-      <button class="anime-dialog" type="button" @click="bubbleOpen = !bubbleOpen">
-        <small>CAMPUS GUIDE</small>
-        <strong>{{ assistantCopy[0] }}</strong>
-        <span>{{ assistantCopy[1] }}</span>
-      </button>
-      <img :src="animeAssistant" alt="原创校园招聘助手角色">
-      <button class="anime-help" type="button" title="打开帮助" @click="emit('open-help')">?</button>
-    </aside>
+    <LiquidGlass
+      class-name="liquid-dock-glass"
+      mode="shader"
+      effect="liquidGlass"
+      :displacement-scale="64"
+      :blur-amount="0.02"
+      :saturation="165"
+      :aberration-intensity="2.4"
+      :elasticity="0.28"
+      :corner-radius="30"
+      padding="8px"
+      :style="{ position: 'absolute', top: 'calc(100% - 55px)', left: '50%' }"
+    >
+      <nav class="liquid-dock" aria-label="桌面快捷导航">
+        <router-link v-for="item in dockItems" :key="item.to" :to="item.to">
+          <b>{{ item.icon }}</b><span>{{ item.label }}</span>
+        </router-link>
+        <button type="button" @click="emit('open-help')"><b>?</b><span>帮助</span></button>
+      </nav>
+    </LiquidGlass>
   </div>
 </template>
