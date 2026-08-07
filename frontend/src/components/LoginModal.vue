@@ -2,6 +2,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import loginHeroUrl from '@/assets/login-campus-career.png'
+import LoginStyleSwitcher from '@/components/LoginStyleSwitcher.vue'
 
 const auth = useAuthStore()
 
@@ -103,6 +104,8 @@ onMounted(() => {
           <h2>{{ isRegister ? '创建你的账号' : '欢迎回来' }}</h2>
           <p>{{ isRegister ? '使用管理员提供的一次性邀请码完成注册。' : '登录后继续管理你的校招进程。' }}</p>
         </header>
+
+        <LoginStyleSwitcher class="login-style-control" />
 
         <form class="login-form" @submit.prevent="handleAuth(false)">
           <div class="login-field">

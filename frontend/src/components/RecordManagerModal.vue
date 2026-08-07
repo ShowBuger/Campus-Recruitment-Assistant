@@ -16,9 +16,14 @@ const sharedRecords = ref([])
 const sharedCanDelete = ref(false)
 
 const isShared = computed(() => app.managerShared)
+const isApplications = computed(() => !isShared.value && app.managerScope === 'applications')
 
 const personalRecords = computed(() => store.data?.main?.records || [])
-const allRecords = computed(() => isShared.value ? sharedRecords.value : personalRecords.value)
+const applicationRecords = computed(() => store.data?.main?.recent || [])
+const allRecords = computed(() => {
+  if (isShared.value) return sharedRecords.value
+  return isApplications.value ? applicationRecords.value : personalRecords.value
+})
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
@@ -63,7 +68,7 @@ async function deleteShared(r) {
 <template>
   <div class="modal-mask show" @mousedown.self="emit('close')">
     <div class="modal" style="width:min(720px,96vw)">
-      <div class="modal-hd"><div><h2>{{ isShared ? '管理共享记录' : '查找记录' }}</h2><p>{{ isShared ? '搜索并管理共享总表中的记录。' : '搜索并打开需要查看或修改的记录。' }}</p></div><button class="icon-btn" @click="emit('close')" title="关闭">&times;</button></div>
+      <div class="modal-hd"><div><h2>{{ isShared ? '管理共享记录' : (isApplications ? '查找投递记录' : '查找记录') }}</h2><p>{{ isShared ? '搜索并管理共享总表中的记录。' : (isApplications ? '搜索投递中的公司或岗位，打开需要查看或修改的记录。' : '搜索并打开需要查看或修改的记录。') }}</p></div><button class="icon-btn" @click="emit('close')" title="关闭">&times;</button></div>
       <div class="modal-body">
         <div class="record-manager-search"><input id="record-manager-search" v-model="query" type="search" :placeholder="isShared ? '搜索公司、岗位、城市、方向或类型' : '搜索公司、岗位、城市、方向或类型'"></div>
         <div class="tbl" style="max-height:55vh">

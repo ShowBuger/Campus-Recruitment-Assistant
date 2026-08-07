@@ -55,6 +55,9 @@ def _init_tables(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
+            nickname TEXT NOT NULL DEFAULT '',
+            avatar_key TEXT NOT NULL DEFAULT 'indigo',
+            avatar_file TEXT NOT NULL DEFAULT '',
             password_hash TEXT NOT NULL,
             created_at TEXT DEFAULT (datetime('now'))
         );
@@ -75,6 +78,8 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             kimi_api_key TEXT DEFAULT '',
             kimi_model TEXT DEFAULT 'kimi-k3',
             kimi_base_url TEXT DEFAULT 'https://api.moonshot.cn/v1',
+            feishu_sync_url TEXT NOT NULL DEFAULT '',
+            dashboard_filters TEXT NOT NULL DEFAULT '[]',
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
@@ -271,10 +276,19 @@ def _init_tables(conn: sqlite3.Connection) -> None:
         "recommendation_limit": "INTEGER NOT NULL DEFAULT 12",
         "recommendation_min_score": "INTEGER NOT NULL DEFAULT 45",
         "recommendation_model": "TEXT DEFAULT ''",
+        "feishu_sync_url": "TEXT NOT NULL DEFAULT ''",
+        "dashboard_filters": "TEXT NOT NULL DEFAULT '[]'",
     }
     for column, declaration in config_migrations.items():
         if column not in config_columns:
             conn.execute(f"ALTER TABLE user_configs ADD COLUMN {column} {declaration}")
+    user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+    if "nickname" not in user_columns:
+        conn.execute("ALTER TABLE users ADD COLUMN nickname TEXT NOT NULL DEFAULT ''")
+    if "avatar_key" not in user_columns:
+        conn.execute("ALTER TABLE users ADD COLUMN avatar_key TEXT NOT NULL DEFAULT 'indigo'")
+    if "avatar_file" not in user_columns:
+        conn.execute("ALTER TABLE users ADD COLUMN avatar_file TEXT NOT NULL DEFAULT ''")
     conn.execute("UPDATE users SET is_admin = 1 WHERE username = 'root'")
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS system_config (
@@ -377,6 +391,8 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             completed_chunks INTEGER NOT NULL DEFAULT 0,
             result_count INTEGER NOT NULL DEFAULT 0,
             result_json TEXT NOT NULL DEFAULT '{}',
+            base_run_id TEXT NOT NULL DEFAULT '',
+            run_mode TEXT NOT NULL DEFAULT 'full',
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -384,6 +400,32 @@ def _init_tables(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_recommendation_runs_user
             ON recommendation_runs(user_id, created_at DESC);
     """)
+    # Older builds allowed multiple background runs for one user. Keep the
+    # newest recoverable run and close the rest before adding the invariant.
+    conn.execute(
+        """UPDATE recommendation_runs
+           SET status = 'failed', phase = 'failed',
+               message = '已被同用户的较新筛选任务替代', updated_at = datetime('now')
+           WHERE status = 'running' AND EXISTS (
+               SELECT 1 FROM recommendation_runs AS newer
+               WHERE newer.user_id = recommendation_runs.user_id
+                 AND newer.status = 'running'
+                 AND (newer.created_at > recommendation_runs.created_at
+                      OR (newer.created_at = recommendation_runs.created_at
+                          AND newer.id > recommendation_runs.id))
+           )"""
+    )
+    recommendation_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(recommendation_runs)")
+    }
+    if "base_run_id" not in recommendation_columns:
+        conn.execute("ALTER TABLE recommendation_runs ADD COLUMN base_run_id TEXT NOT NULL DEFAULT ''")
+    if "run_mode" not in recommendation_columns:
+        conn.execute("ALTER TABLE recommendation_runs ADD COLUMN run_mode TEXT NOT NULL DEFAULT 'full'")
+    conn.execute(
+        """CREATE UNIQUE INDEX IF NOT EXISTS idx_recommendation_one_running_user
+           ON recommendation_runs(user_id) WHERE status = 'running'"""
+    )
     tracker_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(email_tracker_configs)")
     }
@@ -654,6 +696,28 @@ def update_user_password(user_id: int, password_hash: str) -> bool:
         return cur.rowcount > 0
 
 
+def update_user_profile(user_id: int, nickname: str, avatar_key: str) -> bool:
+    with _write_lock:
+        db = get_db()
+        cur = db.execute(
+            "UPDATE users SET nickname = ?, avatar_key = ? WHERE id = ?",
+            (nickname, avatar_key, user_id),
+        )
+        db.commit()
+        return cur.rowcount > 0
+
+
+def update_user_avatar_file(user_id: int, avatar_file: str) -> bool:
+    with _write_lock:
+        db = get_db()
+        cur = db.execute(
+            "UPDATE users SET avatar_key = 'custom', avatar_file = ? WHERE id = ?",
+            (avatar_file, user_id),
+        )
+        db.commit()
+        return cur.rowcount > 0
+
+
 def set_user_admin(user_id: int, is_admin: bool) -> bool:
     with _write_lock:
         db = get_db()
@@ -720,6 +784,27 @@ def list_notifications(user_id: int, limit: int = 20) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def list_admin_notifications(limit: int = 100) -> list[dict]:
+    db = get_db()
+    rows = db.execute(
+        """SELECT n.id, n.title, n.content, n.created_at, n.created_by,
+                  COALESCE(u.username, '未知管理员') AS created_by_name
+           FROM notifications n
+           LEFT JOIN users u ON u.id = n.created_by
+           ORDER BY n.id DESC LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def delete_notification(notification_id: int) -> bool:
+    with _write_lock:
+        db = get_db()
+        cur = db.execute("DELETE FROM notifications WHERE id = ?", (notification_id,))
+        db.commit()
+        return cur.rowcount > 0
+
+
 def count_unread_notifications(user_id: int) -> int:
     db = get_db()
     row = db.execute(
@@ -772,6 +857,8 @@ def get_user_config(user_id: int) -> dict:
             "recommendation_limit": 12,
             "recommendation_min_score": 45,
             "recommendation_model": "",
+            "feishu_sync_url": "",
+            "dashboard_filters": "[]",
             "configured": False,
         }
     d = dict(row)
@@ -787,19 +874,48 @@ def get_user_config(user_id: int) -> dict:
     return d
 
 
-def create_recommendation_run(run: dict) -> None:
+def save_feishu_sync_url(user_id: int, url: str) -> None:
     with _write_lock:
         db = get_db()
         db.execute(
-            """INSERT INTO recommendation_runs
-               (id, user_id, preference, resume_filename, provider, model, status, phase,
-                message, scanned, total_chunks, completed_chunks)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (run["id"], run["user_id"], run.get("preference", ""), run.get("resume_filename", ""),
-             run.get("provider", ""), run.get("model", ""), run.get("status", "running"),
-             run.get("phase", "preparing"), run.get("message", ""), int(run.get("scanned", 0)),
-             int(run.get("total_chunks", 0)), int(run.get("completed_chunks", 0))),
+            """INSERT INTO user_configs (user_id, feishu_sync_url) VALUES (?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET
+               feishu_sync_url=excluded.feishu_sync_url""",
+            (user_id, url.strip()),
         )
+        db.commit()
+
+
+def save_dashboard_filters(user_id: int, filters_json: str) -> None:
+    with _write_lock:
+        db = get_db()
+        db.execute(
+            """INSERT INTO user_configs (user_id, dashboard_filters) VALUES (?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET
+               dashboard_filters=excluded.dashboard_filters""",
+            (user_id, filters_json),
+        )
+        db.commit()
+
+
+def create_recommendation_run(run: dict) -> bool:
+    with _write_lock:
+        db = get_db()
+        try:
+            db.execute(
+                """INSERT INTO recommendation_runs
+                   (id, user_id, preference, resume_filename, provider, model, status, phase,
+                    message, scanned, total_chunks, completed_chunks, base_run_id, run_mode)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (run["id"], run["user_id"], run.get("preference", ""), run.get("resume_filename", ""),
+                 run.get("provider", ""), run.get("model", ""), run.get("status", "running"),
+                 run.get("phase", "preparing"), run.get("message", ""), int(run.get("scanned", 0)),
+                 int(run.get("total_chunks", 0)), int(run.get("completed_chunks", 0)),
+                 run.get("base_run_id", ""), run.get("run_mode", "full")),
+            )
+        except sqlite3.IntegrityError:
+            db.rollback()
+            return False
         db.execute(
             """DELETE FROM recommendation_runs
                WHERE user_id = ? AND id NOT IN (
@@ -809,6 +925,15 @@ def create_recommendation_run(run: dict) -> None:
             (run["user_id"], run["user_id"]),
         )
         db.commit()
+        return True
+
+
+def list_running_recommendation_runs() -> list[dict]:
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM recommendation_runs WHERE status = 'running' ORDER BY created_at"
+    ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def update_recommendation_run(run_id: str, values: dict) -> None:
@@ -832,7 +957,8 @@ def list_recommendation_runs(user_id: int, limit: int = 10) -> list[dict]:
     db = get_db()
     rows = db.execute(
         """SELECT id, preference, resume_filename, provider, model, status, phase, message,
-                  scanned, total_chunks, completed_chunks, result_count, created_at, updated_at
+                  scanned, total_chunks, completed_chunks, result_count, base_run_id, run_mode,
+                  created_at, updated_at
            FROM recommendation_runs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?""",
         (user_id, limit),
     ).fetchall()

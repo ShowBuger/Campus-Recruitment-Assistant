@@ -1,6 +1,6 @@
 <template>
   <div class="modal-mask show" @mousedown.self="$emit('close')">
-    <div class="chat-modal-window">
+    <div class="chat-modal-window utility-modal chat-workspace">
       <div class="chat-modal-bar">
         <div><b>站内聊天</b><span>{{ activePeer ? '消息、图片与岗位分享' : '与已注册用户即时沟通' }}</span></div>
         <button class="icon-btn" @click="$emit('close')" title="关闭聊天" aria-label="关闭聊天">&times;</button>
@@ -21,13 +21,13 @@
               :class="{ active: activePeer === u.id }"
               @click="selectPeer(u)"
             >
-              <div class="chat-avatar">{{ u.username.charAt(0).toUpperCase() }}</div>
+              <div class="chat-avatar"><UserAvatar :avatar-key="u.avatar_key" :avatar-url="u.avatar_url" :label="displayName(u)"/></div>
               <div class="chat-user-main">
                 <div class="chat-user-name">
-                  {{ u.username }}
+                  {{ displayName(u) }}
                   <span v-if="u.unread_count" class="chat-count-inline">{{ u.unread_count }}</span>
                 </div>
-                <div class="chat-user-last" v-if="u.last_msg">{{ u.last_msg }}</div>
+                <div class="chat-user-last">{{ lastMessagePreview(u) }}</div>
               </div>
             </button>
           </div>
@@ -36,7 +36,7 @@
         <!-- 聊天面板 -->
         <div class="chat-panel">
           <div class="chat-head" v-if="activePeer">
-            <div class="chat-avatar" style="flex-shrink:0">{{ peerName.charAt(0).toUpperCase() }}</div>
+            <div class="chat-avatar"><UserAvatar :avatar-key="activeUser?.avatar_key" :avatar-url="activeUser?.avatar_url" :label="peerName"/></div>
             <div class="chat-head-info"><b>{{ peerName }}</b></div>
           </div>
           <div class="chat-head" v-else>
@@ -48,6 +48,7 @@
             <div v-else-if="!messages.length" class="chat-empty"><div><b>还没有消息</b><span>发送第一条消息吧</span></div></div>
             <template v-else>
               <div v-for="m in messages" :key="m.id" class="chat-row" :class="{ mine: m.sender_id === auth.user?.id }">
+                <div class="chat-avatar chat-message-avatar"><UserAvatar :avatar-key="m.sender_id === auth.user?.id ? auth.user?.avatar_key : activeUser?.avatar_key" :avatar-url="m.sender_id === auth.user?.id ? auth.user?.avatar_url : activeUser?.avatar_url" :label="m.sender_id === auth.user?.id ? (auth.user?.nickname || auth.user?.username) : peerName"/></div>
                 <!-- 文本消息 -->
                 <div v-if="m.kind === 'text'" class="chat-bubble">
                   {{ m.content }}
@@ -75,7 +76,7 @@
                     <span v-for="d in getJobDirections(m)" :key="d" class="tag">{{ d }}</span>
                   </div>
                   <div class="chat-job-foot">
-                    <a v-if="getJobPayload(m).url" :href="getJobPayload(m).url" target="_blank" rel="noreferrer">查看入口</a>
+                    <a v-if="externalHttpUrl(getJobPayload(m).url)" :href="externalHttpUrl(getJobPayload(m).url)" target="_blank" rel="noopener noreferrer">查看入口</a>
                     <span v-else class="muted">暂无入口</span>
                     <button
                       v-if="m.sender_id !== auth.user?.id"
@@ -199,7 +200,7 @@
                 class="chat-job-option"
               >
                 <div class="chat-job-option-main">
-                  <b>{{ r.company || '—' }}</b>
+                  <b>{{ r.company || '-' }}</b>
                   <strong style="display:block;margin-top:2px;font-size:13px">{{ r.job || '岗位未填写' }}</strong>
                   <span v-if="r.meta">{{ r.meta }}</span>
                 </div>
@@ -221,6 +222,8 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { useAppStore } from '@/stores/app'
+import { externalHttpUrl } from '@/utils/externalUrl'
+import UserAvatar from '@/components/UserAvatar.vue'
 
 defineEmits(['close'])
 const auth = useAuthStore()
@@ -246,8 +249,17 @@ const jobPickerLoading = ref(false)
 
 const filteredUsers = computed(() => {
   const q = searchQuery.value.toLowerCase()
-  return users.value.filter(u => !q || u.username.toLowerCase().includes(q))
+  return users.value.filter(u => !q || displayName(u).toLowerCase().includes(q))
 })
+
+function displayName(user) { return user?.nickname || user?.username || '' }
+
+function lastMessagePreview(user) {
+  if (!user?.last_kind) return '还没有消息'
+  if (user.last_kind === 'image') return '[图片]'
+  if (user.last_kind === 'job') return `[岗位] ${user.last_content || '岗位信息'}`
+  return String(user.last_content || '消息').replace(/\s+/g, ' ').trim()
+}
 
 const filteredJobRecords = computed(() => {
   const raw = jobSource.value === 'shared' ? sharedRecords.value : personalRecords.value
@@ -301,7 +313,7 @@ async function sendText() {
   try {
     await fetch('/api/chat/messages/text', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` }, body: JSON.stringify({ receiver_id: activePeer.value, text: text.value }) })
     text.value = ''
-    await loadMessages()
+    await Promise.all([loadMessages(), loadUsers()])
   } catch { toast.error('发送失败') }
 }
 
@@ -311,7 +323,7 @@ async function sendImage(e) {
   try {
     const fd = new FormData(); fd.append('file', file); fd.append('receiver_id', String(activePeer.value))
     await fetch('/api/chat/messages/image', { method: 'POST', headers: { Authorization: `Bearer ${auth.token}` }, body: fd })
-    await loadMessages()
+    await Promise.all([loadMessages(), loadUsers()])
   } catch { toast.error('图片发送失败') }
   finally { if (imgInput.value) imgInput.value.value = '' }
 }
@@ -364,7 +376,7 @@ async function sendJob(record) {
       body: JSON.stringify({ receiver_id: activePeer.value, source: jobSource.value, record_id: record.record_id })
     })
     showJobPicker.value = false
-    await loadMessages()
+    await Promise.all([loadMessages(), loadUsers()])
     toast.success('岗位已转发')
   } catch { toast.error('岗位转发失败') }
   finally { record._sending = false }
@@ -390,7 +402,8 @@ function previewImage(m) { window.open(`/api/chat/messages/${m.id}/image`, '_bla
 function startPoll() { pollTimer = setInterval(() => { loadUsers(); if (activePeer.value) loadMessages() }, 5000) }
 function stopPoll() { clearInterval(pollTimer) }
 
-const peerName = computed(() => users.value.find(u => u.id === activePeer.value)?.username || '')
+const activeUser = computed(() => users.value.find(u => u.id === activePeer.value) || null)
+const peerName = computed(() => displayName(activeUser.value))
 const peerOnline = computed(() => users.value.find(u => u.id === activePeer.value)?.is_online || false)
 function fmtTime(v) { if (!v) return ''; const d = new Date(String(v).replace(' ', 'T') + (String(v).includes('Z') ? '' : 'Z')); return isNaN(d) ? '' : d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }
 
@@ -604,6 +617,8 @@ function insertEmoji(e) { text.value += e; showEmojiPicker.value = false; docume
 :deep(.chat-user-list) { flex: 1; min-height: 0; overflow-y: auto; }
 /* 消息计数红点 */
 .chat-count-inline { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 999px; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; vertical-align: middle; }
+.chat-avatar{border-radius:50%;color:#fff}.chat-row{gap:8px}.chat-message-avatar{width:32px;height:32px;flex:0 0 32px;align-self:flex-end;font-size:12px}.chat-row.mine .chat-message-avatar{order:2}
+.chat-workspace{border:1px solid var(--line2);background:var(--panel)}.chat-modal-bar{min-height:64px;padding:15px 20px;background:var(--panel)}.chat-modal-bar b{font-size:18px}.chat-modal-bar span{display:block;margin-top:3px}.chat-contacts{background:var(--bg)}:deep(.chat-contacts-head){padding:16px}:deep(.chat-user){margin:3px 8px;padding:10px;border:1px solid transparent;border-radius:11px}:deep(.chat-user:hover){border-color:var(--line);background:var(--panel)}:deep(.chat-user.active){border-color:var(--blue);background:var(--blueS)}:deep(.chat-head){min-height:62px;padding:12px 16px;background:var(--panel)}:deep(.chat-messages){padding:18px;background:var(--bg)}:deep(.chat-compose){padding:12px 14px;border-top:1px solid var(--line);background:var(--panel)}:deep(.chat-compose textarea){border-radius:10px;background:var(--bg)}:deep(.chat-empty){color:var(--muted)}:deep(.chat-empty b){color:var(--ink);font-size:16px}
 /* 移动端适配 */
 @media (max-width: 760px) {
   .chat-modal-window { width: 96vw; height: 94vh; border-radius: 14px; }

@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', Object.freeze({
+  appId: 'campus-recruitment-assistant',
   isElectron: true,
   customTitlebar: true,
   platform: process.platform,

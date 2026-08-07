@@ -1,5 +1,6 @@
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { nextTick, onMounted, ref, watch } from 'vue'
+import { gsap } from 'gsap'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import SidebarNav from '@/components/SidebarNav.vue'
@@ -19,16 +20,23 @@ import AppDialog from '@/components/AppDialog.vue'
 import DesktopTitlebar from '@/components/DesktopTitlebar.vue'
 import DesktopLogin from '@/components/DesktopLogin.vue'
 import DesktopSkinLayer from '@/components/DesktopSkinLayer.vue'
+import AuroraVideoBackdrop from '@/components/AuroraVideoBackdrop.vue'
+import ShuimoRippleLayer from '@/components/ShuimoRippleLayer.vue'
+import { hasDesktopTitlebar } from '@/utils/runtime'
 
 
 const auth = useAuthStore()
 const app = useAppStore()
-const hasCustomTitlebar = Boolean(window.electronAPI?.customTitlebar)
+const hasCustomTitlebar = hasDesktopTitlebar()
 
 watch(() => auth.isLoggedIn, loggedIn => {
   if (!hasCustomTitlebar) return
   window.electronAPI?.windowControl?.(loggedIn ? 'main-size' : 'login-size')
 })
+
+watch(() => auth.isAdmin, isAdmin => {
+  document.documentElement.dataset.adminUser = isAdmin ? 'true' : 'false'
+}, { immediate: true })
 
 // Error modal
 const showError = ref(false)
@@ -37,7 +45,11 @@ const errorDetail = ref('')
 window.__showError = (msg, detail) => { errorMsg.value = msg || '未知错误'; errorDetail.value = detail || ''; showError.value = true }
 function copyError() { navigator.clipboard?.writeText(`${errorMsg.value}\n${errorDetail.value}`) }
 
-// Card hover parallax
+// Card hover parallax. Track bound nodes because route changes can trigger the
+// observer many times during a desktop session.
+const boundHoverCards = new WeakSet()
+const animatedElements = new WeakSet()
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 function onCardMouseMove(e) {
   const card = e.currentTarget; const rect = card.getBoundingClientRect()
   card.style.setProperty('--mx', `${((e.clientX-rect.left)/rect.width)*100}%`)
@@ -46,7 +58,32 @@ function onCardMouseMove(e) {
 function onCardMouseLeave(e) { e.currentTarget.style.removeProperty('--mx'); e.currentTarget.style.removeProperty('--my') }
 function bindCardHover() {
   document.querySelectorAll('.kpi-card,.metric').forEach(el => {
+    if (boundHoverCards.has(el)) return
+    boundHoverCards.add(el)
     el.addEventListener('mousemove', onCardMouseMove); el.addEventListener('mouseleave', onCardMouseLeave)
+  })
+}
+
+function animateNewUi() {
+  if (reduceMotion.matches) return
+  const cards = [...document.querySelectorAll('.page.active .card,.page.active .kpi,.page.active .metric')]
+    .filter(el => !animatedElements.has(el))
+  cards.forEach(el => animatedElements.add(el))
+  if (cards.length) {
+    gsap.fromTo(cards,
+      { autoAlpha: 0, y: 16, scale: 0.992 },
+      { autoAlpha: 1, y: 0, scale: 1, duration: 0.42, stagger: 0.045, ease: 'power3.out', clearProps: 'opacity,visibility,transform' }
+    )
+  }
+  document.querySelectorAll('.modal-mask.show').forEach(mask => {
+    if (animatedElements.has(mask)) return
+    animatedElements.add(mask)
+    const panel = mask.querySelector('.modal,.chat-modal-window,.error-modal')
+    gsap.fromTo(mask, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.18, ease: 'power1.out', clearProps: 'opacity,visibility' })
+    if (panel) gsap.fromTo(panel,
+      { y: 18, scale: 0.965, autoAlpha: 0 },
+      { y: 0, scale: 1, autoAlpha: 1, duration: 0.34, ease: 'back.out(1.35)', clearProps: 'opacity,visibility,transform' }
+    )
   })
 }
 
@@ -54,21 +91,29 @@ onMounted(async () => {
   try { await auth.checkSession() } catch (e) {
     if (e?.message === '登录已过期') auth.clear()
   }
-  if (auth.isLoggedIn) {
-    const seen = localStorage.getItem('radar_help_seen')
-    if (!seen) { setTimeout(() => { app.showHelp = true; localStorage.setItem('radar_help_seen', '1') }, 800) }
-  }
   setTimeout(bindCardHover, 500)
-  new MutationObserver(() => { setTimeout(bindCardHover, 100) }).observe(document.body, { childList: true, subtree: true })
+  await nextTick()
+  animateNewUi()
+  let hoverBindFrame = 0
+  new MutationObserver(() => {
+    cancelAnimationFrame(hoverBindFrame)
+    hoverBindFrame = requestAnimationFrame(() => {
+      bindCardHover()
+      animateNewUi()
+    })
+  }).observe(document.body, { childList: true, subtree: true })
 })
 </script>
 
 <template>
+  <AuroraVideoBackdrop />
+  <ShuimoRippleLayer />
   <div class="app" v-if="auth.isLoggedIn">
     <DesktopTitlebar v-if="hasCustomTitlebar" />
     <SidebarNav />
-    <DesktopSkinLayer v-if="hasCustomTitlebar" @open-help="app.toggleHelp()" />
+    <DesktopSkinLayer />
     <main class="main">
+      <div class="cyber-desktop-backdrop" aria-hidden="true"><i></i></div>
       <Topbar @open-config="app.toggleConfig()" @open-chat="app.toggleChat()" @open-help="app.toggleHelp()" />
       <router-view />
     </main>

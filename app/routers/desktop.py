@@ -15,10 +15,19 @@ LEGACY_INSTALLER_NAME = "Campus-Recruitment-Assistant-Setup.exe"
 
 def _is_installer_name(name: str) -> bool:
     return (
-        name.startswith("CampusBoard-")
+        Path(name).name == name
+        and name.startswith("CampusBoard-")
         and name.endswith(".exe")
         and len(name) > len("CampusBoard-.exe")
     )
+
+
+def _is_blockmap_name(name: str) -> bool:
+    return name.endswith(".exe.blockmap") and _is_installer_name(name.removesuffix(".blockmap"))
+
+
+def _is_update_asset_name(name: str) -> bool:
+    return _is_installer_name(name) or _is_blockmap_name(name)
 
 
 def _local_installer() -> Path | None:
@@ -71,33 +80,41 @@ def windows_update_metadata():
 
 @router.get("/updates/windows/{filename}")
 def windows_update_file(filename: str):
-    if not _is_installer_name(filename):
+    if not _is_update_asset_name(filename):
         raise HTTPException(status_code=404, detail="更新文件不存在")
-    installer = LOCAL_RELEASE_DIR / filename
-    if not installer.is_file():
+    asset = LOCAL_RELEASE_DIR / filename
+    if not asset.is_file():
         raise HTTPException(status_code=404, detail="更新文件不存在")
     return FileResponse(
-        installer,
-        media_type="application/vnd.microsoft.portable-executable",
-        filename=installer.name,
-        headers={"Cache-Control": "no-cache"},
+        asset,
+        media_type=(
+            "application/octet-stream"
+            if _is_blockmap_name(filename)
+            else "application/vnd.microsoft.portable-executable"
+        ),
+        filename=asset.name,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
 
 
 @router.head("/updates/windows/{filename}", include_in_schema=False)
 def windows_update_file_head(filename: str):
-    if not _is_installer_name(filename):
+    if not _is_update_asset_name(filename):
         raise HTTPException(status_code=404, detail="更新文件不存在")
-    installer = LOCAL_RELEASE_DIR / filename
-    if not installer.is_file():
+    asset = LOCAL_RELEASE_DIR / filename
+    if not asset.is_file():
         raise HTTPException(status_code=404, detail="更新文件不存在")
     return Response(
         headers={
-            "Content-Length": str(installer.stat().st_size),
-            "Content-Type": "application/vnd.microsoft.portable-executable",
+            "Content-Length": str(asset.stat().st_size),
+            "Content-Type": (
+                "application/octet-stream"
+                if _is_blockmap_name(filename)
+                else "application/vnd.microsoft.portable-executable"
+            ),
             "Accept-Ranges": "bytes",
-            "Content-Disposition": f'attachment; filename="{installer.name}"',
-            "Cache-Control": "no-cache",
+            "Content-Disposition": f'attachment; filename="{asset.name}"',
+            "Cache-Control": "public, max-age=31536000, immutable",
         },
     )
 

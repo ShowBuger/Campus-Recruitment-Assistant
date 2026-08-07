@@ -308,7 +308,10 @@ def evidence_text(results: list[dict[str, str]]) -> str:
 
 def _json_object(text: str) -> dict:
     cleaned = (text or "").strip()
-    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.lstrip("\ufeff")
+    fenced = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned, flags=re.IGNORECASE)
+    if fenced:
+        cleaned = fenced.group(1).strip()
     try:
         payload = json.loads(cleaned)
     except json.JSONDecodeError:
@@ -376,7 +379,12 @@ def appended_note(existing: str, result: dict, stamp: str) -> str:
     section = f"[{label} · {stamp}]\n{note}"
     if source_lines:
         section += "\n参考来源：\n" + "\n".join(source_lines)
-    if section in existing:
+    # The same enrichment can be generated with a different date or source
+    # formatting. Compare the actual note body as well to prevent repeated
+    # clicks from growing the user's notes indefinitely.
+    normalized_note = re.sub(r"\s+", "", note)
+    normalized_existing = re.sub(r"\s+", "", existing or "")
+    if section in existing or (normalized_note and normalized_note in normalized_existing):
         return existing
     merged = (existing.rstrip() + "\n\n" + section).strip() if existing.strip() else section
     return merged[:5000]

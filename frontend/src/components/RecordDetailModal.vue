@@ -169,7 +169,7 @@
             <span>AI 补全只填写空缺字段，备注会追加在原内容之后</span>
           </div>
           <div class="detail-action-buttons">
-            <button class="btn btn-ai-enrich" id="detail-enrich-btn" type="button" @click="enrichRecord" :disabled="enriching">AI 补全</button>
+            <button class="btn btn-ai-enrich" id="detail-enrich-btn" type="button" @click="enrichRecord" :disabled="enriching">{{ enriching ? '补全中…' : 'AI 补全' }}</button>
             <button class="btn btn-remove-application" id="detail-remove-btn" type="button" @click="removeApplication" v-show="isAppRecord">移出投递</button>
             <button class="btn" id="detail-share-btn" type="button" @click="shareRecord" :disabled="shareDisabled" :title="shareTitle">上传共享</button>
             <button class="btn btn-danger" type="button" @click="deleteRecord">删除记录</button>

@@ -4,20 +4,28 @@ import { onMounted, onUnmounted, ref } from 'vue'
 const maximized = ref(false)
 let removeStateListener = null
 
+function syncMaximized(value) {
+  maximized.value = Boolean(value)
+  document.documentElement.classList.toggle('desktop-window-maximized', maximized.value)
+}
+
 async function control(action) {
   const state = await window.electronAPI?.windowControl?.(action)
-  if (state) maximized.value = Boolean(state.maximized)
+  if (state) syncMaximized(state.maximized)
 }
 
 onMounted(async () => {
   const state = await window.electronAPI?.windowControl?.('state')
-  maximized.value = Boolean(state?.maximized)
+  syncMaximized(state?.maximized)
   removeStateListener = window.electronAPI?.onWindowState?.(state => {
-    maximized.value = Boolean(state?.maximized)
+    syncMaximized(state?.maximized)
   }) || null
 })
 
-onUnmounted(() => removeStateListener?.())
+onUnmounted(() => {
+  removeStateListener?.()
+  document.documentElement.classList.remove('desktop-window-maximized')
+})
 </script>
 
 <template>
@@ -68,6 +76,12 @@ onUnmounted(() => removeStateListener?.())
 .desktop-window-controls button:active{background:rgba(255,255,255,.22);box-shadow:none;text-shadow:none;transform:none}
 .desktop-window-controls .desktop-window-close:hover{background:var(--red);color:#fff}
 .desktop-window-controls svg{width:14px;height:14px;fill:currentColor;shape-rendering:crispEdges}
+html[data-style="classic"] .desktop-titlebar{border-bottom:1px solid rgba(255,255,255,.16);background:linear-gradient(110deg,#1e3a5f,#2563a6 58%,#237a91);box-shadow:0 4px 16px rgba(15,42,74,.18)}
+html[data-style="classic"] .desktop-titlebar-brand{gap:10px;text-shadow:none}
+html[data-style="classic"] .desktop-titlebar-brand b{font-weight:700;letter-spacing:.035em}
+html[data-style="classic"] .desktop-titlebar-brand small{font-weight:600;letter-spacing:.08em}
+html[data-style="classic"] .desktop-titlebar-pixel{width:9px;height:9px;border:0;border-radius:50%;background:#67e8f9;box-shadow:0 0 0 4px rgba(103,232,249,.16)}
+html[data-style="classic"] .desktop-window-controls button{width:46px}
 html[data-style="aurora"] .desktop-titlebar{border-bottom:1px solid rgba(255,255,255,.38);background:linear-gradient(105deg,rgba(88,69,205,.42),rgba(53,126,161,.28),rgba(45,158,130,.24));box-shadow:0 8px 28px rgba(54,45,130,.16),inset 0 1px rgba(255,255,255,.42);backdrop-filter:blur(30px) saturate(180%)}
 html[data-style="aurora"] .desktop-titlebar-brand{text-shadow:none}
 html[data-style="aurora"] .desktop-titlebar-pixel{border:0;border-radius:50%;background:#ffe074;box-shadow:0 0 13px #ffe074}
@@ -76,5 +90,18 @@ html[data-style="aurora"] .desktop-titlebar-actions button:hover{background:rgba
 html[data-style="anime"] .desktop-titlebar{border-bottom:2px solid #24335e;background:linear-gradient(100deg,#354f9e 0 68%,#df6279 68%);box-shadow:none}
 html[data-style="anime"] .desktop-titlebar-brand{text-shadow:2px 2px 0 #24335e}
 html[data-style="anime"] .desktop-titlebar-pixel{border-radius:50%;background:#ffd071;box-shadow:2px 2px 0 #24335e}
+html[data-style="shuimo"] .desktop-titlebar{border-bottom:1px solid rgba(244,241,232,.18);background:linear-gradient(105deg,#202824,#344b4a 60%,#53645a);box-shadow:0 5px 18px rgba(18,22,19,.2)}
+html[data-style="shuimo"] .desktop-titlebar-brand{gap:10px;text-shadow:none;font-family:"Zihun Longyin Shoushu","STKaiti","KaiTi",cursive}
+html[data-style="shuimo"] .desktop-titlebar-brand b{font-size:13px;font-weight:700;letter-spacing:.14em}
+html[data-style="shuimo"] .desktop-titlebar-brand small{color:rgba(244,241,232,.56);font-family:Georgia,serif;font-weight:500}
+html[data-style="shuimo"] .desktop-titlebar-pixel{width:12px;height:12px;border:1px solid rgba(255,255,255,.75);border-radius:1px;background:#a33a32;box-shadow:none;transform:rotate(-5deg)}
+html[data-style="shuimo"] .desktop-window-controls svg{fill:none;stroke:currentColor;stroke-width:1.5;shape-rendering:auto}
+html[data-style="shuimo"] .desktop-window-controls button:hover{background:rgba(244,241,232,.1)}
+html[data-style="cyber"] .desktop-titlebar{border-bottom:3px solid #111923;color:#111923;background:#f8e71c;box-shadow:0 5px 0 #ff2a5f,0 9px 0 rgba(0,217,245,.42)}
+html[data-style="cyber"] .desktop-titlebar-brand{color:#111923;text-shadow:2px 1px 0 rgba(255,255,255,.7),4px 2px 0 rgba(0,217,245,.5)}
+html[data-style="cyber"] .desktop-titlebar-brand small{color:#26343b}
+html[data-style="cyber"] .desktop-titlebar-pixel{border:2px solid #111923;border-radius:0;background:#ff2a5f;box-shadow:4px 0 #00d9f5;transform:skew(-12deg)}
+html[data-style="cyber"] .desktop-titlebar-actions button{border-left:2px solid #111923;color:#111923;background:transparent}
+html[data-style="cyber"] .desktop-titlebar-actions button:hover{color:#f8e71c;background:#111923;box-shadow:inset 0 -4px #00d9f5}
 @media(max-width:720px){.desktop-titlebar-brand small{display:none}}
 </style>

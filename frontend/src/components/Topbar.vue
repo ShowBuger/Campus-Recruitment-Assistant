@@ -1,14 +1,27 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/utils/api'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
+import {
+  downloadAnimeResource,
+  downloadAuroraResource,
+  downloadCyberResource,
+  downloadShuimoResource,
+  restoreAnimeResource,
+  restoreAuroraResource,
+  restoreCyberResource,
+  restoreShuimoResource,
+} from '@/utils/skinResources'
+import { isDesktopRuntime } from '@/utils/runtime'
 
 const route = useRoute()
 const appStore = useAppStore()
 const authStore = useAuthStore()
-const isDesktop = Boolean(window.electronAPI?.isElectron)
+const toast = useToastStore()
+const isDesktop = isDesktopRuntime()
 const desktopDownloadUrl = '/api/desktop/download/windows'
 const desktopUpdate = ref(null)
 const showWidgetPanel = ref(false)
@@ -23,7 +36,7 @@ const title = computed(() => titleMap[route.name] || '校招信息看板')
 const emit = defineEmits(['open-config', 'open-chat', 'open-help'])
 
 // ---- Live clock ----
-const lastUpdatedHtml = ref('—')
+const lastUpdatedHtml = ref('-')
 let clockTimer = null
 function updateLiveClock() {
   const now = new Date()
@@ -41,7 +54,6 @@ function updateLiveClock() {
 const showNotifications = ref(false)
 const notifications = ref([])
 const backendUnread = ref(0)
-const reminders = ref([])
 let notifPollTimer = null
 
 async function loadNotifications(markRead) {
@@ -60,33 +72,11 @@ async function loadNotifications(markRead) {
   } catch (_) {}
 }
 
-async function loadReminders() {
-  try {
-    const [localData, trackerData] = await Promise.all([
-      api('GET', '/api/dashboard/calendar/local-events', undefined, { silent: true }),
-      api('GET', '/api/progress-tracker/reminders', undefined, { silent: true })
-    ])
-    const events = localData?.events || localData || []
-    const today = new Date().toISOString().slice(0, 10)
-    const localReminders = (Array.isArray(events) ? events : [])
-      .filter(e => e.date >= today)
-      .map(e => ({ ...e, event_ms: new Date(e.date + 'T09:00:00').getTime(), source: 'manual' }))
-    const trackerReminders = (trackerData?.reminders || []).map(e => ({
-      ...e,
-      date: new Date(Number(e.event_ms)).toLocaleDateString('zh-CN'),
-      source: 'tracker'
-    }))
-    reminders.value = [...localReminders, ...trackerReminders]
-      .sort((a, b) => Number(a.event_ms || 0) - Number(b.event_ms || 0))
-      .slice(0, 8)
-  } catch (_) { reminders.value = [] }
-}
-
 function toggleNotifications(event) {
   event.stopPropagation()
   const opening = !showNotifications.value
   showNotifications.value = opening
-  if (opening) { loadNotifications(true); loadReminders() }
+  if (opening) loadNotifications(true)
 }
 
 async function loadChatUnread() {
@@ -100,17 +90,49 @@ async function loadChatUnread() {
 
 function startNotifPoll() {
   stopNotifPoll()
-  notifPollTimer = setInterval(() => { loadNotifications(false); loadReminders(); loadChatUnread() }, 30000)
+  notifPollTimer = setInterval(() => { loadNotifications(false); loadChatUnread() }, 30000)
 }
 function stopNotifPoll() { if (notifPollTimer) { clearInterval(notifPollTimer); notifPollTimer = null } }
 
 // ---- Style switcher ----
 const showStylePanel = ref(false)
+const styleButton = ref(null)
+const stylePanelPosition = ref({})
 const currentStyle = ref(document.documentElement.dataset.style || 'pixelium')
+const useDefaultFont = ref(document.documentElement.dataset.styleFont === 'default')
+const shuimoTrailEnabled = ref(document.documentElement.dataset.shuimoTrail !== 'off')
+const animeResourceStatus = ref('checking')
+const animeResourceProgress = ref({ percent: 0, received: 0, total: 0 })
+const shuimoResourceStatus = ref('checking')
+const shuimoResourceProgress = ref({ percent: 0, received: 0, total: 0 })
+const cyberResourceStatus = ref('checking')
+const cyberResourceProgress = ref({ percent: 0, received: 0, total: 0 })
+const auroraResourceStatus = ref('checking')
+const auroraResourceProgress = ref({ percent: 0, received: 0, total: 0 })
 
-function toggleStylePanel(event) {
+function positionStylePanel() {
+  if (!showStylePanel.value || !styleButton.value) return
+  const rect = styleButton.value.getBoundingClientRect()
+  const width = Math.min(278, window.innerWidth - 20)
+  const top = Math.min(rect.bottom + 8, window.innerHeight - 130)
+  const left = Math.max(10, Math.min(rect.right - width, window.innerWidth - width - 10))
+  stylePanelPosition.value = {
+    position: 'fixed',
+    top: `${Math.max(10, top)}px`,
+    left: `${left}px`,
+    right: 'auto',
+    width: `${width}px`,
+    maxHeight: `${Math.max(120, window.innerHeight - Math.max(10, top) - 10)}px`,
+  }
+}
+
+async function toggleStylePanel(event) {
   event.stopPropagation()
   showStylePanel.value = !showStylePanel.value
+  if (showStylePanel.value) {
+    await nextTick()
+    positionStylePanel()
+  }
 }
 
 function enableSheet(id, on) {
@@ -119,9 +141,28 @@ function enableSheet(id, on) {
 }
 
 function applyStyle(name) {
-  if (!['classic', 'pixelium', 'aurora', 'anime'].includes(name)) name = 'pixelium'
+  if (name === 'aurora' && auroraResourceStatus.value !== 'ready') return
+  if (!useDefaultFont.value && name === 'anime' && animeResourceStatus.value !== 'ready') return
+  if (!useDefaultFont.value && name === 'shuimo' && shuimoResourceStatus.value !== 'ready') return
+  if (!useDefaultFont.value && name === 'cyber' && cyberResourceStatus.value !== 'ready') return
+  if (!['classic', 'pixelium', 'aurora', 'anime', 'journal', 'shuimo', 'cyber'].includes(name)) name = 'pixelium'
+  const previousStyle = currentStyle.value
+  const leavingAurora = previousStyle === 'aurora' && name !== 'aurora'
+  if (name === 'aurora' && previousStyle !== 'aurora') {
+    localStorage.setItem('radar_non_aurora_theme', document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light')
+  }
   currentStyle.value = name
   document.documentElement.dataset.style = name
+  if (name === 'aurora') {
+    isDark.value = true
+    document.documentElement.dataset.theme = 'dark'
+    localStorage.setItem('radar_theme', 'dark')
+  } else if (leavingAurora) {
+    const restoredTheme = localStorage.getItem('radar_non_aurora_theme') === 'dark' ? 'dark' : 'light'
+    isDark.value = restoredTheme === 'dark'
+    document.documentElement.dataset.theme = restoredTheme
+    localStorage.setItem('radar_theme', restoredTheme)
+  }
   try { localStorage.setItem('radar_style', name) } catch (_) {}
   enableSheet('css-pixelium', name === 'pixelium')
   enableSheet('css-pixelfont', name === 'pixelium')
@@ -130,15 +171,142 @@ function applyStyle(name) {
   showStylePanel.value = false
 }
 
+function setDefaultFont(enabled) {
+  useDefaultFont.value = enabled
+  const mode = enabled ? 'default' : 'themed'
+  document.documentElement.dataset.styleFont = mode
+  try { localStorage.setItem('radar_style_font', mode) } catch (_) {}
+}
+
+async function checkStyleResources() {
+  const [auroraReady, animeReady, shuimoReady, cyberReady] = await Promise.all([restoreAuroraResource(), restoreAnimeResource(), restoreShuimoResource(), restoreCyberResource()])
+  auroraResourceStatus.value = auroraReady ? 'ready' : 'missing'
+  animeResourceStatus.value = animeReady ? 'ready' : 'missing'
+  shuimoResourceStatus.value = shuimoReady ? 'ready' : 'missing'
+  cyberResourceStatus.value = cyberReady ? 'ready' : 'missing'
+}
+
+async function fetchAuroraResource(activateStyle) {
+  if (auroraResourceStatus.value === 'downloading') return
+  auroraResourceStatus.value = 'downloading'
+  auroraResourceProgress.value = { percent: 0, received: 0, total: 0 }
+  try {
+    await downloadAuroraResource(progress => { auroraResourceProgress.value = progress })
+    auroraResourceStatus.value = 'ready'
+    toast.success('夜雨视频与海马体已保存到本地')
+    if (activateStyle) applyStyle('aurora')
+    return true
+  } catch (error) {
+    auroraResourceStatus.value = 'error'
+    toast.error(error.message || '雨幕流光资源下载失败')
+    return false
+  }
+}
+
+function downloadAurora() { return fetchAuroraResource(true) }
+
+async function fetchAnimeResource(activateStyle) {
+  if (animeResourceStatus.value === 'downloading') return
+  animeResourceStatus.value = 'downloading'
+  animeResourceProgress.value = { percent: 0, received: 0, total: 0 }
+  try {
+    await downloadAnimeResource(progress => { animeResourceProgress.value = progress })
+    animeResourceStatus.value = 'ready'
+    toast.success('樱愿手账字体已下载')
+    if (activateStyle) applyStyle('anime')
+    return true
+  } catch (error) {
+    animeResourceStatus.value = 'error'
+    toast.error(error.message || '樱愿手账字体下载失败')
+    return false
+  }
+}
+
+function downloadAnime() { return fetchAnimeResource(true) }
+
+async function fetchShuimoResource(activateStyle) {
+  if (shuimoResourceStatus.value === 'downloading') return
+  shuimoResourceStatus.value = 'downloading'
+  shuimoResourceProgress.value = { percent: 0, received: 0, total: 0 }
+  try {
+    await downloadShuimoResource(progress => { shuimoResourceProgress.value = progress })
+    shuimoResourceStatus.value = 'ready'
+    toast.success('龙吟手书已保存到本地')
+    if (activateStyle) applyStyle('shuimo')
+    return true
+  } catch (error) {
+    shuimoResourceStatus.value = 'error'
+    toast.error(error.message || '水墨资源下载失败')
+    return false
+  }
+}
+
+function downloadShuimo() { return fetchShuimoResource(true) }
+
+watch(() => [authStore.isLoggedIn, authStore.isAdmin], async ([loggedIn, isAdmin]) => {
+  document.documentElement.dataset.adminUser = isAdmin ? 'true' : 'false'
+  if (!loggedIn || localStorage.getItem('radar_style') !== 'shuimo') return
+  if (useDefaultFont.value) {
+    applyStyle('shuimo')
+    return
+  }
+  const ready = await restoreShuimoResource()
+  shuimoResourceStatus.value = ready ? 'ready' : 'missing'
+  if (ready) applyStyle('shuimo')
+}, { immediate: true })
+
+async function fetchCyberResource(activateStyle) {
+  if (cyberResourceStatus.value === 'downloading') return
+  cyberResourceStatus.value = 'downloading'
+  cyberResourceProgress.value = { percent: 0, received: 0, total: 0 }
+  try {
+    await downloadCyberResource(progress => { cyberResourceProgress.value = progress })
+    cyberResourceStatus.value = 'ready'
+    toast.success('霓虹终端字体已下载')
+    if (activateStyle) applyStyle('cyber')
+    return true
+  } catch (error) {
+    cyberResourceStatus.value = 'error'
+    toast.error(error.message || '科幻仿生字体下载失败')
+    return false
+  }
+}
+
+function downloadCyber() { return fetchCyberResource(true) }
+
+async function toggleDefaultFont(event) {
+  const enabled = event.target.checked
+  if (enabled) {
+    setDefaultFont(true)
+    return
+  }
+  let ready = true
+  if (currentStyle.value === 'anime' && animeResourceStatus.value !== 'ready') ready = await fetchAnimeResource(false)
+  if (currentStyle.value === 'shuimo' && shuimoResourceStatus.value !== 'ready') ready = await fetchShuimoResource(false)
+  if (currentStyle.value === 'cyber' && cyberResourceStatus.value !== 'ready') ready = await fetchCyberResource(false)
+  if (ready) setDefaultFont(false)
+  else event.target.checked = true
+}
+
+function toggleShuimoTrail(event) {
+  shuimoTrailEnabled.value = Boolean(event.target.checked)
+  const value = shuimoTrailEnabled.value ? 'on' : 'off'
+  document.documentElement.dataset.shuimoTrail = value
+  localStorage.setItem('radar_shuimo_trail', value)
+}
+
 // ---- Theme toggle ----
 const isDark = ref(document.documentElement.dataset.theme === 'dark')
 const themeIcon = computed(() => isDark.value ? 'sun' : 'moon')
+const themeLocked = computed(() => currentStyle.value === 'aurora')
 
 function toggleTheme() {
+  if (themeLocked.value) return
   const next = isDark.value ? 'light' : 'dark'
   isDark.value = !isDark.value
   document.documentElement.dataset.theme = next
   localStorage.setItem('radar_theme', next)
+  localStorage.setItem('radar_non_aurora_theme', next)
 }
 
 function openDesktopWidget(type) {
@@ -166,16 +334,18 @@ function formatTime(value) {
 // ---- Document-level click to dismiss panels ----
 function onDocumentClick(e) {
   if (!e.target.closest('.notification-wrap')) showNotifications.value = false
-  if (!e.target.closest('.style-wrap')) showStylePanel.value = false
+  if (!e.target.closest('.style-wrap,#style-panel')) showStylePanel.value = false
   if (!e.target.closest('.desktop-widget-launcher')) showWidgetPanel.value = false
 }
 
 onMounted(() => {
+  checkStyleResources()
   updateLiveClock()
   clockTimer = setInterval(updateLiveClock, 1000)
   document.addEventListener('click', onDocumentClick)
+  window.addEventListener('resize', positionStylePanel)
+  window.addEventListener('scroll', positionStylePanel, true)
   loadNotifications(false)
-  loadReminders()
   loadChatUnread()
   startNotifPoll()
   removeDesktopUpdateListener = window.electronAPI?.onUpdateStatus?.(status => {
@@ -191,6 +361,8 @@ onMounted(() => {
 onUnmounted(() => {
   if (clockTimer) clearInterval(clockTimer)
   document.removeEventListener('click', onDocumentClick)
+  window.removeEventListener('resize', positionStylePanel)
+  window.removeEventListener('scroll', positionStylePanel, true)
   stopNotifPoll()
   if (removeDesktopUpdateListener) removeDesktopUpdateListener()
 })
@@ -245,17 +417,7 @@ onUnmounted(() => {
         <span class="notification-dot"></span>
       </button>
       <div class="notification-panel" id="notification-panel" :class="{ show: showNotifications }">
-        <div class="reminder-block" id="reminder-block" v-if="reminders.length">
-          <div class="reminder-head"><span>📌 待办提醒</span><span class="reminder-sub">{{ reminders.length }} 项</span></div>
-          <div id="reminder-list">
-            <div v-for="r in reminders" :key="r.id || r.date+r.label" style="padding:4px 0;font-size:12px;line-height:1.4">
-              <span :style="{ color: r.urgent ? 'var(--red)' : 'var(--blue)', fontWeight: 800 }">{{ r.date }}</span>
-              <span style="margin-left:6px">{{ r.label }}</span>
-              <span v-if="r.source === 'tracker'" style="margin-left:5px;color:var(--muted);font-size:10px">邮箱识别</span>
-            </div>
-          </div>
-        </div>
-        <div class="notification-head">最新通知</div>
+        <div class="notification-head utility-panel-head"><div><b>通知中心</b><span>{{ notifications.length ? notifications.length + ' 条消息' : '暂无新消息' }}</span></div></div>
         <div id="notification-list">
           <template v-if="notifications.length">
             <article v-for="item in notifications" :key="item.id" class="notification-item" :class="{ unread: !item.is_read }">
@@ -277,38 +439,176 @@ onUnmounted(() => {
     </button>
 
     <div class="style-wrap">
-      <button class="icon-btn" id="style-btn" @click="toggleStylePanel" title="界面风格" aria-label="界面风格">
+      <button ref="styleButton" class="icon-btn" id="style-btn" @click="toggleStylePanel" title="界面风格" aria-label="界面风格">
         <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 3a9 9 0 1 0 0 18c1.3 0 2-.7 2-1.8 0-.8-.6-1.3-.6-2.1 0-.9.7-1.6 1.6-1.6h2a4 4 0 0 0 4-4C21 6.8 17 3 12 3Z"/>
           <path d="M7.5 10.5h.01M10.5 7h.01M15 8.5h.01M8 14.5h.01"/>
         </svg>
       </button>
-      <div class="notification-panel style-panel" id="style-panel" :class="{ show: showStylePanel }">
-        <div class="notification-head">界面风格</div>
-        <div class="style-item" :class="{ active: currentStyle === 'classic' }" data-style="classic" @click="applyStyle('classic')">
+      <Teleport to="body">
+      <div class="notification-panel style-panel floating-style-panel" id="style-panel" :class="{ show: showStylePanel }" :style="stylePanelPosition" @click.stop>
+        <div class="notification-head utility-panel-head"><div><b>界面风格</b><span>选择适合当前场景的视觉主题</span></div></div>
+        <label class="style-font-option">
+          <span class="style-font-option-copy"><b>使用默认字体</b><small>关闭后使用各风格的限定字体</small></span>
+          <span class="style-font-toggle">
+            <input type="checkbox" role="switch" aria-label="使用默认字体" :checked="useDefaultFont" :disabled="auroraResourceStatus === 'downloading' || animeResourceStatus === 'downloading' || shuimoResourceStatus === 'downloading' || cyberResourceStatus === 'downloading'" @change="toggleDefaultFont">
+            <i aria-hidden="true"></i>
+          </span>
+        </label>
+        <label v-if="authStore.isAdmin && currentStyle === 'shuimo'" class="style-font-option">
+          <span class="style-font-option-copy"><b>毛笔拖尾</b><small>短柔笔迹，可随时关闭</small></span>
+          <span class="style-font-toggle">
+            <input type="checkbox" role="switch" aria-label="启用毛笔拖尾" :checked="shuimoTrailEnabled" @change="toggleShuimoTrail">
+            <i aria-hidden="true"></i>
+          </span>
+        </label>
+        <div class="style-item" :class="{ active: currentStyle === 'classic' }" data-style-option="classic" @click="applyStyle('classic')">
           <i class="style-swatch swatch-classic" aria-hidden="true"></i>
-          <div>经典风格<small>清爽高效的办公看板</small></div>
+          <div>清简原境<small>清爽高效的办公看板</small></div>
           <span class="style-check">✓</span>
         </div>
-        <div class="style-item" :class="{ active: currentStyle === 'pixelium' }" data-style="pixelium" @click="applyStyle('pixelium')">
+        <div class="style-item" :class="{ active: currentStyle === 'pixelium' }" data-style-option="pixelium" @click="applyStyle('pixelium')">
           <i class="style-swatch swatch-pixelium" aria-hidden="true"></i>
-          <div>Pixelium 像素风<small>2px 像素几何</small></div>
+          <div>像素矩阵<small>2px 像素几何</small></div>
           <span class="style-check">✓</span>
         </div>
-        <div class="style-item" :class="{ active: currentStyle === 'aurora' }" data-style="aurora" @click="applyStyle('aurora')">
+        <div
+          class="style-item resource-style-item aurora-style-item"
+          :class="{ active: currentStyle === 'aurora', locked: auroraResourceStatus !== 'ready', downloading: auroraResourceStatus === 'downloading' }"
+          data-style-option="aurora"
+          @click="applyStyle('aurora')"
+        >
           <i class="style-swatch swatch-aurora" aria-hidden="true"></i>
-          <div>极光玻璃<small>柔光、渐变与通透层次</small></div>
+          <div class="style-item-copy">
+            雨幕流光
+            <small v-if="auroraResourceStatus === 'downloading'">
+              正在保存到本地 {{ formatDownloadSize(auroraResourceProgress.received) }}<template v-if="auroraResourceProgress.total"> / {{ formatDownloadSize(auroraResourceProgress.total) }}</template>
+            </small>
+            <small v-else-if="auroraResourceStatus === 'error'">下载失败，点击右侧重试</small>
+            <small v-else-if="auroraResourceStatus !== 'ready'">下载夜雨视频与海马体后启用</small>
+            <small v-else>雨夜霓光 · 清透玻璃质感</small>
+          </div>
+          <button
+            v-if="auroraResourceStatus !== 'ready'"
+            class="style-download-btn"
+            type="button"
+            :disabled="auroraResourceStatus === 'checking' || auroraResourceStatus === 'downloading'"
+            :title="auroraResourceStatus === 'downloading' ? '正在下载雨幕流光资源' : '下载雨幕流光资源到本地'"
+            :aria-label="auroraResourceStatus === 'downloading' ? '正在下载雨幕流光资源' : '下载雨幕流光资源到本地'"
+            @click.stop="downloadAurora"
+          >
+            <svg v-if="auroraResourceStatus !== 'downloading'" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg>
+            <span v-else>{{ Math.round(auroraResourceProgress.percent) }}%</span>
+          </button>
+          <span v-else class="style-check">✓</span>
+          <i v-if="auroraResourceStatus === 'downloading'" class="style-resource-progress" :style="{ width: auroraResourceProgress.percent + '%' }"></i>
+        </div>
+        <div
+          class="style-item resource-style-item cyber-style-item"
+          :class="{ active: currentStyle === 'cyber', locked: !useDefaultFont && cyberResourceStatus !== 'ready', downloading: cyberResourceStatus === 'downloading' }"
+          data-style-option="cyber"
+          @click="applyStyle('cyber')"
+        >
+          <i class="style-swatch swatch-cyber" aria-hidden="true"></i>
+          <div class="style-item-copy">
+            霓虹终端
+            <small v-if="cyberResourceStatus === 'downloading'">
+              正在下载 {{ formatDownloadSize(cyberResourceProgress.received) }}<template v-if="cyberResourceProgress.total"> / {{ formatDownloadSize(cyberResourceProgress.total) }}</template>
+            </small>
+            <small v-else-if="useDefaultFont">当前使用系统默认字体</small>
+            <small v-else-if="cyberResourceStatus === 'error'">下载失败，点击右侧重试</small>
+            <small v-else-if="cyberResourceStatus !== 'ready'">下载科幻仿生体后解锁主题</small>
+            <small v-else>酸性黄警戒界面、故障霓虹与夜城 HUD</small>
+          </div>
+          <button
+            v-if="!useDefaultFont && cyberResourceStatus !== 'ready'"
+            class="style-download-btn"
+            type="button"
+            :disabled="cyberResourceStatus === 'checking' || cyberResourceStatus === 'downloading'"
+            :title="cyberResourceStatus === 'downloading' ? '正在下载科幻仿生体' : '下载科幻仿生体'"
+            :aria-label="cyberResourceStatus === 'downloading' ? '正在下载科幻仿生体' : '下载科幻仿生体'"
+            @click.stop="downloadCyber"
+          >
+            <svg v-if="cyberResourceStatus !== 'downloading'" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg>
+            <span v-else>{{ Math.round(cyberResourceProgress.percent) }}%</span>
+          </button>
+          <span v-else class="style-check">✓</span>
+          <i v-if="cyberResourceStatus === 'downloading'" class="style-resource-progress" :style="{ width: cyberResourceProgress.percent + '%' }"></i>
+        </div>
+        <div
+          class="style-item resource-style-item anime-style-item"
+          :class="{ active: currentStyle === 'anime', locked: !useDefaultFont && animeResourceStatus !== 'ready', downloading: animeResourceStatus === 'downloading' }"
+          data-style-option="anime"
+          @click="applyStyle('anime')"
+        >
+          <i class="style-swatch swatch-anime" aria-hidden="true"></i>
+          <div class="style-item-copy">
+            樱愿手账
+            <small v-if="animeResourceStatus === 'downloading'">
+              正在下载 {{ formatDownloadSize(animeResourceProgress.received) }}<template v-if="animeResourceProgress.total"> / {{ formatDownloadSize(animeResourceProgress.total) }}</template>
+            </small>
+            <small v-else-if="useDefaultFont">当前使用系统默认字体</small>
+            <small v-else-if="animeResourceStatus === 'error'">下载失败，点击右侧重试</small>
+            <small v-else-if="animeResourceStatus !== 'ready'">下载布丁体后解锁手账主题</small>
+            <small v-else>布丁字体、原创角色与漫画贴纸</small>
+          </div>
+          <button
+            v-if="!useDefaultFont && animeResourceStatus !== 'ready'"
+            class="style-download-btn"
+            type="button"
+            :disabled="animeResourceStatus === 'checking' || animeResourceStatus === 'downloading'"
+            :title="animeResourceStatus === 'downloading' ? '正在下载布丁体' : '下载布丁体'"
+            :aria-label="animeResourceStatus === 'downloading' ? '正在下载布丁体' : '下载布丁体'"
+            @click.stop="downloadAnime"
+          >
+            <svg v-if="animeResourceStatus !== 'downloading'" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg>
+            <span v-else>{{ Math.round(animeResourceProgress.percent) }}%</span>
+          </button>
+          <span v-else class="style-check">✓</span>
+          <i v-if="animeResourceStatus === 'downloading'" class="style-resource-progress" :style="{ width: animeResourceProgress.percent + '%' }"></i>
+        </div>
+        <div class="style-item" :class="{ active: currentStyle === 'journal' }" data-style-option="journal" @click="applyStyle('journal')">
+          <i class="style-swatch swatch-journal" aria-hidden="true"></i>
+          <div>纸页档案<small>精装书页、索引与纸张档案</small></div>
           <span class="style-check">✓</span>
         </div>
-        <div class="style-item" :class="{ active: currentStyle === 'anime' }" data-style="anime" @click="applyStyle('anime')">
-          <i class="style-swatch swatch-anime" aria-hidden="true"></i>
-          <div>星愿手账<small>原创角色与漫画贴纸组件</small></div>
-          <span class="style-check">✓</span>
+        <div
+          class="style-item resource-style-item shuimo-style-item"
+          :class="{ active: currentStyle === 'shuimo', locked: !useDefaultFont && shuimoResourceStatus !== 'ready', downloading: shuimoResourceStatus === 'downloading' }"
+          data-style-option="shuimo"
+          @click="applyStyle('shuimo')"
+        >
+          <i class="style-swatch swatch-shuimo" aria-hidden="true"></i>
+          <div class="style-item-copy">
+            云水墨境
+            <small v-if="shuimoResourceStatus === 'downloading'">
+              正在下载 {{ formatDownloadSize(shuimoResourceProgress.received) }}<template v-if="shuimoResourceProgress.total"> / {{ formatDownloadSize(shuimoResourceProgress.total) }}</template>
+            </small>
+            <small v-else-if="useDefaultFont">当前使用系统默认字体</small>
+            <small v-else-if="shuimoResourceStatus === 'error'">下载失败，点击右侧重试</small>
+            <small v-else-if="shuimoResourceStatus !== 'ready'">下载龙吟手书后解锁水墨主题</small>
+            <small v-else>龙吟手书、宣纸远山与朱砂题签</small>
+          </div>
+          <button
+            v-if="!useDefaultFont && shuimoResourceStatus !== 'ready'"
+            class="style-download-btn"
+            type="button"
+            :disabled="shuimoResourceStatus === 'checking' || shuimoResourceStatus === 'downloading'"
+            :title="shuimoResourceStatus === 'downloading' ? '正在下载龙吟手书' : '下载龙吟手书'"
+            :aria-label="shuimoResourceStatus === 'downloading' ? '正在下载龙吟手书' : '下载龙吟手书'"
+            @click.stop="downloadShuimo"
+          >
+            <svg v-if="shuimoResourceStatus !== 'downloading'" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg>
+            <span v-else>{{ Math.round(shuimoResourceProgress.percent) }}%</span>
+          </button>
+          <span v-else class="style-check">✓</span>
+          <i v-if="shuimoResourceStatus === 'downloading'" class="style-resource-progress" :style="{ width: shuimoResourceProgress.percent + '%' }"></i>
         </div>
       </div>
+      </Teleport>
     </div>
 
-    <button class="icon-btn" @click="toggleTheme" id="theme-btn" title="主题" aria-label="主题">
+    <button class="icon-btn" @click="toggleTheme" id="theme-btn" :disabled="themeLocked" :title="themeLocked ? '极光玻璃固定使用黑夜模式' : '切换明暗主题'" :aria-label="themeLocked ? '极光玻璃固定使用黑夜模式' : '切换明暗主题'">
       <svg v-if="themeIcon === 'moon'" class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M19 15.5A8 8 0 0 1 8.5 5a8 8 0 1 0 10.5 10.5Z"/>
       </svg>
@@ -345,3 +645,7 @@ onUnmounted(() => {
     </template>
   </aside>
 </template>
+
+<style scoped>
+#style-panel{max-height:min(620px,calc(100vh - 20px));overflow-y:auto;font-family:var(--font)!important}#style-panel .style-item,#style-panel .style-item *{font-family:inherit!important}.floating-style-panel{z-index:32000!important}.style-font-option{display:flex;min-height:56px;align-items:center;justify-content:space-between;gap:12px;margin:6px 7px;padding:9px 10px;border-bottom:1px solid var(--line);cursor:pointer}.style-font-option-copy{min-width:0}.style-font-option-copy b,.style-font-option-copy small{display:block}.style-font-option-copy b{font-size:12px}.style-font-option-copy small{margin-top:3px;color:var(--sub);font-size:10px;font-weight:400}.style-font-toggle{position:relative;width:40px;height:22px;flex:0 0 40px}.style-font-toggle input{position:absolute;opacity:0;pointer-events:none}.style-font-toggle i{display:block;width:40px;height:22px;border:1px solid var(--line2);border-radius:999px;background:var(--line);transition:background .18s var(--ease),border-color .18s var(--ease)}.style-font-toggle i:after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--panel);box-shadow:0 1px 4px rgba(16,24,40,.25);transition:transform .18s var(--ease)}.style-font-toggle input:checked+i{border-color:var(--green);background:var(--green)}.style-font-toggle input:checked+i:after{transform:translateX(18px)}.style-font-toggle input:focus-visible+i{outline:2px solid var(--blue);outline-offset:2px}.style-font-toggle input:disabled+i{opacity:.62;cursor:wait}.style-item-copy{min-width:0;flex:1}.resource-style-item{position:relative;overflow:hidden}.resource-style-item.locked{cursor:default}.style-download-btn{display:grid;width:34px;height:34px;flex:0 0 34px;place-items:center;padding:0;border:1px solid var(--line2);border-radius:6px;background:var(--panel);color:var(--ink);cursor:pointer}.style-download-btn:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}.style-download-btn:disabled{cursor:wait;opacity:.72}.style-download-btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.style-download-btn span{font-size:9px;font-weight:900}.style-resource-progress{position:absolute;left:0;bottom:0;height:3px;background:var(--blue);transition:width .15s linear}
+</style>

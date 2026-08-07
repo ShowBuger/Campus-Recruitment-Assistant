@@ -1,5 +1,8 @@
 """认证接口：注册、登录、退出、获取当前用户信息。"""
-from fastapi import APIRouter, Depends, HTTPException, Request
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 
 from app import auth as auth_module, bus, database
@@ -7,6 +10,9 @@ from app import auth as auth_module, bus, database
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 USERNAME_PATTERN = r"^[a-zA-Z0-9_一-鿿]{2,20}$"
+AVATAR_KEYS = {"indigo", "sunset", "forest", "ocean", "cherry", "mono", "cosmos", "spark", "custom"}
+AVATAR_DIR = Path(__file__).resolve().parents[2] / "data" / "users"
+MAX_AVATAR_SIZE = 2 * 1024 * 1024
 
 
 class RegisterBody(BaseModel):
@@ -44,6 +50,49 @@ class LoginBody(BaseModel):
     password: str
 
 
+class ProfileBody(BaseModel):
+    nickname: str
+    avatar_key: str = "indigo"
+
+    @field_validator("nickname")
+    @classmethod
+    def check_nickname(cls, value: str) -> str:
+        value = value.strip()
+        if not value or len(value) > 20:
+            raise ValueError("昵称需为 1-20 个字符")
+        return value
+
+    @field_validator("avatar_key")
+    @classmethod
+    def check_avatar_key(cls, value: str) -> str:
+        if value not in AVATAR_KEYS:
+            raise ValueError("请选择有效的头像")
+        return value
+
+
+class PasswordBody(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def check_new_password(cls, value: str) -> str:
+        if len(value) < 4 or len(value) > 100:
+            raise ValueError("新密码需为 4-100 个字符")
+        return value
+
+
+def _public_user(user: dict) -> dict:
+    has_custom_avatar = user.get("avatar_key") == "custom" and bool(user.get("avatar_file"))
+    return {
+        "id": user["id"],
+        "username": user["username"],
+        "nickname": user.get("nickname") or user["username"],
+        "avatar_key": user.get("avatar_key") or "indigo",
+        "avatar_url": f"/api/auth/users/{user['id']}/avatar" if has_custom_avatar else "",
+    }
+
+
 def _client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for", "")
     return (forwarded.split(",", 1)[0].strip() if forwarded else
@@ -73,7 +122,7 @@ def register(body: RegisterBody, request: Request):
         "success": True,
         "message": "注册成功",
         "token": token,
-        "user": {"id": user["id"], "username": user["username"]},
+        "user": _public_user(user),
     }
 
 
@@ -91,7 +140,7 @@ def login(body: LoginBody, request: Request):
         "success": True,
         "message": "登录成功",
         "token": token,
-        "user": {"id": user["id"], "username": user["username"]},
+        "user": _public_user(user),
     }
 
 
@@ -113,8 +162,58 @@ def get_me(user: dict = Depends(auth_module.get_current_user)):
         "user": {
             "id": user["user_id"],
             "username": user["username"],
+            "nickname": (db_user or {}).get("nickname") or user["username"],
+            "avatar_key": (db_user or {}).get("avatar_key") or "indigo",
+            "avatar_url": f"/api/auth/users/{user['user_id']}/avatar" if (db_user or {}).get("avatar_key") == "custom" and (db_user or {}).get("avatar_file") else "",
             "created_at": (db_user or {}).get("created_at", ""),
             "is_admin": bool((db_user or {}).get("is_admin")),
             "is_root": user["username"] == "root",
         },
     }
+
+
+@router.patch("/profile")
+@router.post("/profile")
+def update_profile(body: ProfileBody, user: dict = Depends(auth_module.get_current_user)):
+    if not database.update_user_profile(user["user_id"], body.nickname, body.avatar_key):
+        raise HTTPException(status_code=404, detail="用户不存在")
+    db_user = database.get_user_by_id(user["user_id"])
+    return {"success": True, "message": "昵称已更新", "user": _public_user(db_user)}
+
+
+@router.post("/avatar")
+async def upload_avatar(file: UploadFile = File(...), user: dict = Depends(auth_module.get_current_user)):
+    data = await file.read(MAX_AVATAR_SIZE + 1)
+    if len(data) > MAX_AVATAR_SIZE:
+        raise HTTPException(status_code=413, detail="头像不能超过 2MB")
+    if not data.startswith(b"\xff\xd8\xff"):
+        raise HTTPException(status_code=415, detail="请上传裁剪后的 JPEG 头像")
+    relative = Path(str(user["user_id"])) / "avatar.jpg"
+    target = AVATAR_DIR / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    database.update_user_avatar_file(user["user_id"], str(relative))
+    db_user = database.get_user_by_id(user["user_id"])
+    return {"success": True, "message": "头像已更新", "user": _public_user(db_user)}
+
+
+@router.get("/users/{user_id}/avatar")
+def user_avatar(user_id: int):
+    db_user = database.get_user_by_id(user_id)
+    if not db_user or not db_user.get("avatar_file"):
+        raise HTTPException(status_code=404, detail="头像不存在")
+    target = (AVATAR_DIR / db_user["avatar_file"]).resolve()
+    if AVATAR_DIR.resolve() not in target.parents or not target.is_file():
+        raise HTTPException(status_code=404, detail="头像不存在")
+    return FileResponse(target, media_type="image/jpeg", headers={"Cache-Control": "no-cache"})
+
+
+@router.post("/password")
+def update_password(body: PasswordBody, user: dict = Depends(auth_module.get_current_user)):
+    db_user = database.get_user_by_id(user["user_id"])
+    if not db_user or not auth_module.verify_password(body.current_password, db_user["password_hash"]):
+        raise HTTPException(status_code=422, detail="当前密码不正确")
+    if auth_module.verify_password(body.new_password, db_user["password_hash"]):
+        raise HTTPException(status_code=422, detail="新密码不能与当前密码相同")
+    database.update_user_password(user["user_id"], auth_module.hash_password(body.new_password))
+    return {"success": True, "message": "密码已修改"}

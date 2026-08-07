@@ -34,6 +34,24 @@ export function inputDateChina(ts) {
   return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0')
 }
 
+/** Convert a millisecond timestamp to a China-time datetime-local value. */
+export function inputDateTimeChina(ts) {
+  if (!ts) return ''
+  const d = new Date(Number(ts) + CHINA_OFFSET_MS)
+  if (isNaN(d)) return ''
+  return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-'
+    + String(d.getUTCDate()).padStart(2, '0') + 'T' + String(d.getUTCHours()).padStart(2, '0')
+    + ':' + String(d.getUTCMinutes()).padStart(2, '0')
+}
+
+/** Parse a datetime-local value as China Standard Time and return milliseconds. */
+export function chinaDateTimeMs(value) {
+  if (!value) return null
+  const normalized = String(value).length === 16 ? String(value) + ':00' : String(value)
+  const parsed = Date.parse(normalized + '+08:00')
+  return Number.isNaN(parsed) ? null : parsed
+}
+
 /**
  * Convert a UTC+8 midnight millisecond timestamp to a Date object
  * at midnight (local timezone) for calendar grouping.

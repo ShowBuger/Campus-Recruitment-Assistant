@@ -69,6 +69,7 @@
 
               <!-- Pending mode: actions -->
               <template v-if="resultsMode === 'pending' && item.status === 'pending'">
+                <label class="tracker-time-picker"><span>更新时间</span><input :id="'tracker-time-' + item.id" type="datetime-local" :value="inputDateTimeChina(trackerEventTime(item))"><small>已填入邮件自动识别时间，可在确认前修改</small></label>
                 <div v-if="item.progress === '面试'" class="tracker-round-picker">
                   确认面试轮次
                   <select :id="'tracker-round-' + item.id">
@@ -102,6 +103,7 @@ import { useToastStore } from '@/stores/toast'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAppStore } from '@/stores/app'
 import { useDialogStore } from '@/stores/dialog'
+import { inputDateTimeChina, chinaDateTimeMs } from '@/utils/date'
 
 // ── 邮箱自动判断 IMAP 服务器与端口 ──
 const IMAP_PRESETS = {
@@ -260,6 +262,12 @@ function formatEventTime(value) {
   return Number.isNaN(date.getTime())
     ? String(value)
     : date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function trackerEventTime(item) {
+  return item.progress === '机考'
+    ? (item.deadline_ms || item.scheduled_ms || item.received_ms)
+    : (item.scheduled_ms || item.received_ms)
 }
 
 // --- data loading ---
@@ -460,6 +468,10 @@ async function actEvent(id, action) {
     const roundEl = document.getElementById('tracker-round-' + id)
     if ((action === 'confirm' || action === 'create') && roundEl && roundEl.value) {
       payload.interview_round = Number(roundEl.value)
+    }
+    const timeEl = document.getElementById('tracker-time-' + id)
+    if ((action === 'confirm' || action === 'create') && timeEl?.value) {
+      payload.event_ms = chinaDateTimeMs(timeEl.value)
     }
     const result = await post(`/api/progress-tracker/events/${id}`, payload)
 

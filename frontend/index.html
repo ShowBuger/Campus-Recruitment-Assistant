@@ -8,21 +8,37 @@
   <link rel="shortcut icon" href="/static/favicon.svg?v=brand-4">
   <meta name="theme-color" content="#386a57">
   <!-- Always-loaded base styles -->
-  <link rel="stylesheet" href="/static/base.css?v=20260730-6">
+  <link rel="stylesheet" href="/static/base.css?v=20260808-5">
   <link rel="stylesheet" href="/static/components-extra.css?v=20260730-6">
   <link rel="stylesheet" href="/static/app-layout.css?v=20260730-6">
   <!-- Pixelium theme (default style) -->
   <link rel="stylesheet" href="/static/pixelium-font.css?v=20260730-6" id="css-pixelfont">
   <link rel="stylesheet" href="/static/pixelium-vue.css?v=20260730-6" id="css-pixelvue">
   <link rel="stylesheet" href="/static/pixelium-theme.css?v=20260730-6" id="css-pixelium">
-  <link rel="stylesheet" href="/static/theme-system.css?v=20260731-4">
+    <link rel="stylesheet" href="/static/theme-system.css?v=20260806-66">
+  <link rel="stylesheet" href="/static/shuimo-pond-system.css?v=20260806-6">
   <script>
     (function(){
-      var styles = ['classic', 'pixelium', 'aurora', 'anime'];
+      var styles = ['classic', 'pixelium', 'aurora', 'anime', 'journal', 'shuimo', 'cyber'];
       var style = localStorage.getItem('radar_style') || 'pixelium';
-      if (styles.indexOf(style) < 0) style = 'pixelium';
+      var requestedStyle = style;
+      var styleFont = localStorage.getItem('radar_style_font') === 'default' ? 'default' : 'themed';
+      if (styles.indexOf(style) < 0) {
+        style = 'pixelium';
+        requestedStyle = style;
+        localStorage.setItem('radar_style', style);
+      }
+      if (style === 'aurora' || (styleFont === 'themed' && (style === 'anime' || style === 'shuimo' || style === 'cyber'))) {
+        document.documentElement.dataset.pendingStyle = style;
+        style = 'pixelium';
+      }
       document.documentElement.dataset.style = style;
-      document.documentElement.dataset.theme = localStorage.getItem('radar_theme') === 'dark' ? 'dark' : 'light';
+      document.documentElement.dataset.styleFont = styleFont;
+      document.documentElement.dataset.shuimoTrail = localStorage.getItem('radar_shuimo_trail') === 'off' ? 'off' : 'on';
+      var savedTheme = requestedStyle === 'aurora'
+        ? 'dark'
+        : (localStorage.getItem('radar_non_aurora_theme') || localStorage.getItem('radar_theme'));
+      document.documentElement.dataset.theme = savedTheme === 'dark' ? 'dark' : 'light';
       // Pixelium is default — already enabled. Disable only if classic.
       if (style !== 'pixelium') {
         var el;

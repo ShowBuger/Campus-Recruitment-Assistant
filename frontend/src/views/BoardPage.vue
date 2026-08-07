@@ -139,14 +139,9 @@ async function onDrop(e, targetCol) {
 </script>
 
 <template>
-  <div class="page active">
-    <div class="card">
-      <div class="card-hd">
-        <span class="dot"></span>
-        <div class="card-title">投递看板</div>
-        <div class="card-sub" id="board-count">{{ applicationRecords().length }} 条投递记录</div>
-      </div>
-      <div class="board-hint">按住卡片拖到其他进展分区即可更新进展。回退操作会弹窗确认。</div>
+  <div class="page active board-page">
+    <div class="card board-shell">
+      <div class="board-hint"><strong>拖动更新</strong><span>将记录拖到目标阶段。回退时会先确认，并同步更新时间。</span><em>{{ applicationRecords().length }} 条记录</em></div>
 
       <div class="board-columns" id="board-columns">
         <div
@@ -184,8 +179,8 @@ async function onDrop(e, targetCol) {
                     @dragstart="onDragStart($event, r)"
                     @dragend="onDragEnd"
                   >
-                    <td class="b-company"><TooltipCell :text="r.company || '—'" /></td>
-                    <td><TooltipCell :text="r.job || '—'" /></td>
+                    <td class="b-company"><TooltipCell :text="r.company || '-'" /></td>
+                    <td><TooltipCell :text="r.job || '-'" /></td>
                     <td class="b-dwell" :class="{ stale: boardDwellFor(col, r).days >= 14 && boardDwellFor(col, r).days >= 0 }">
                       {{ boardDwellFor(col, r).text }}
                     </td>
@@ -202,3 +197,8 @@ async function onDrop(e, targetCol) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.board-page{min-width:0}.board-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:18px}.board-page-head h2{margin:0;font-size:clamp(22px,2.5vw,30px);line-height:1.2;letter-spacing:-.035em}.board-page-head p{max-width:620px;margin-top:7px;color:var(--muted);font-size:13px}.board-overview{display:flex;align-items:baseline;gap:7px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.board-overview strong{color:var(--blue);font-size:18px}.board-overview span{color:var(--sub);font-size:10px}.board-shell{overflow:hidden;border-radius:16px}.board-hint{display:flex;align-items:baseline;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line);background:var(--bg);color:var(--muted);font-size:11px}.board-hint strong{color:var(--ink);font-size:11px}.board-columns{padding:12px;background:var(--bg)}.board-col{overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--panel);transition:border-color .18s ease,background .18s ease,transform .18s ease}.board-col.drag-over{border-color:var(--blue);background:var(--blueS);transform:translateY(-2px)}.board-col-hd{padding:11px 12px;border-bottom:1px solid var(--line);background:var(--panel)}.board-col-count{min-width:23px;height:23px;padding:0 7px;border-radius:7px;background:var(--bg);color:var(--muted);font-size:10px;line-height:23px;text-align:center}.board-row{transition:background .15s ease,opacity .15s ease}.board-row:hover{background:var(--blueS)}.board-row.dragging{opacity:.42}.board-col-empty{min-height:92px;padding:30px 16px;color:var(--sub);font-size:10px;line-height:1.6;text-align:center}.b-dwell.stale{color:var(--red);font-weight:800}@media(max-width:820px){.board-page-head{align-items:flex-start;flex-direction:column}.board-overview{width:100%;justify-content:space-between}.board-hint{align-items:flex-start;flex-direction:column;gap:4px}.board-columns{padding:8px}}@media(prefers-reduced-motion:reduce){.board-col,.board-row{transition:none}}
+.board-hint em{margin-left:auto;color:var(--sub);font-size:10px;font-style:normal;white-space:nowrap}@media(max-width:820px){.board-hint em{margin-left:0}}
+</style>

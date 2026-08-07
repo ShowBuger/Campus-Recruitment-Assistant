@@ -1,4 +1,4 @@
-"""SQLite database backup, restore, and retention-free 12-hour scheduler."""
+"""SQLite database backup, restore, and three-day retention scheduler."""
 from __future__ import annotations
 
 import sqlite3
@@ -11,6 +11,8 @@ from app import bus, database
 
 BACKUP_DIR = database.DATA_DIR / "backups"
 BACKUP_INTERVAL_SECONDS = 12 * 60 * 60
+BACKUP_RETENTION_DAYS = 3
+BACKUP_RETENTION_SECONDS = BACKUP_RETENTION_DAYS * 24 * 60 * 60
 _scheduler_started = False
 _operation_lock = threading.Lock()
 
@@ -39,13 +41,30 @@ def create_backup(prefix: str = "manual") -> dict:
             source.backup(destination)
         finally:
             destination.close()
-    return _backup_info(path)
+    info = _backup_info(path)
+    cleanup_expired_backups()
+    return info
 
 
 def _backup_info(path: Path) -> dict:
     stat = path.stat()
     created_at = datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat()
     return {"name": path.name, "size": stat.st_size, "created_at": created_at}
+
+
+def cleanup_expired_backups(now: float | None = None) -> list[str]:
+    """Delete database snapshots older than the configured retention window."""
+    if not BACKUP_DIR.exists():
+        return []
+    cutoff = (time.time() if now is None else now) - BACKUP_RETENTION_SECONDS
+    deleted: list[str] = []
+    with _operation_lock:
+        for path in BACKUP_DIR.glob("*.db"):
+            if not path.is_file() or path.stat().st_mtime >= cutoff:
+                continue
+            path.unlink()
+            deleted.append(path.name)
+    return deleted
 
 
 def list_backups() -> list[dict]:
@@ -84,6 +103,9 @@ def restore_backup(name: str) -> dict:
 def _scheduler_loop() -> None:
     while True:
         try:
+            deleted = cleanup_expired_backups()
+            if deleted:
+                bus.log(f"已清理 {len(deleted)} 个超过 {BACKUP_RETENTION_DAYS} 天的数据库备份", channel="system")
             backups = list_backups()
             latest = max(
                 (datetime.fromisoformat(item["created_at"]).timestamp() for item in backups),

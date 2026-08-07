@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import LoginStyleSwitcher from '@/components/LoginStyleSwitcher.vue'
 
 const auth = useAuthStore()
 const REMEMBER_KEY = 'rb_remember_password'
@@ -94,6 +95,8 @@ onMounted(() => {
         <p>{{ isRegister ? '使用管理员提供的一次性邀请码' : '登录后继续管理你的校招投递' }}</p>
       </div>
 
+      <LoginStyleSwitcher class="desktop-login-style" />
+
       <form @submit.prevent="submit(false)">
         <label>
           <span>用户名</span>
@@ -128,12 +131,13 @@ onMounted(() => {
 </template>
 
 <style>
-.desktop-login{display:flex;width:100vw;height:100vh;flex-direction:column;overflow:hidden;border:3px solid var(--ink);background-color:var(--bg);background-image:linear-gradient(rgba(56,106,87,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(56,106,87,.07) 1px,transparent 1px);background-size:12px 12px;color:var(--ink);font-family:var(--font)}
+.desktop-login{display:flex;width:100vw;height:100vh;flex-direction:column;overflow:hidden;border:3px solid var(--ink);border-radius:14px;background-color:var(--bg);background-image:linear-gradient(rgba(56,106,87,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(56,106,87,.07) 1px,transparent 1px);background-size:12px 12px;color:var(--ink);font-family:var(--font);box-shadow:0 12px 36px rgba(15,23,42,.28)}
 .desktop-login-titlebar{-webkit-app-region:drag;display:flex;min-height:38px;align-items:center;justify-content:space-between;border-bottom:3px solid var(--ink);background:repeating-linear-gradient(135deg,var(--blue) 0 8px,color-mix(in srgb,var(--blue) 82%,#fff) 8px 16px);color:#fff}
 .desktop-login-titlebar>div{display:flex;align-items:center;gap:8px;padding-left:11px;text-shadow:2px 2px 0 var(--ink)}.desktop-login-titlebar>div span{width:10px;height:10px;border:2px solid #fff;background:var(--amber);box-shadow:2px 2px 0 var(--ink)}.desktop-login-titlebar b{font:900 9px var(--mono);letter-spacing:.12em}
 .desktop-login-titlebar nav{-webkit-app-region:no-drag;align-self:stretch;display:flex}.desktop-login-titlebar nav button{display:grid;width:38px;height:100%;place-items:center;border:0;background:transparent;color:#fff;cursor:pointer}.desktop-login-titlebar nav button:hover{background:rgba(255,255,255,.16)}.desktop-login-titlebar nav button:last-child:hover{background:var(--red)}.desktop-login-titlebar svg{width:13px;height:13px;fill:currentColor;shape-rendering:crispEdges}
 .desktop-login-content{display:flex;min-height:0;flex:1;flex-direction:column;align-items:center;padding:24px 38px 14px}.desktop-login-avatar{display:grid;width:72px;height:72px;place-items:center;border:3px solid var(--ink);background:var(--panel);box-shadow:6px 6px 0 var(--ink)}.desktop-login-avatar span{width:30px;height:30px;border:5px solid var(--ink);background:var(--blue);box-shadow:5px 5px 0 var(--amber)}
 .desktop-login-copy{margin:18px 0 15px;text-align:center}.desktop-login-copy small{color:var(--blue);font:900 9px var(--mono);letter-spacing:.14em}.desktop-login-copy h1{margin:5px 0 4px;font-size:20px;letter-spacing:.04em}.desktop-login-copy p{margin:0;color:var(--muted);font-size:11px}
+.desktop-login-style{position:fixed;top:48px;right:12px}
 form{width:100%}form>label{display:block;margin-bottom:10px}form>label>span{display:block;margin-bottom:5px;font-size:10px;font-weight:900}input{width:100%;height:38px;padding:0 11px;border:2px solid var(--ink);border-radius:0;background:var(--panel);color:var(--ink);font:12px var(--font);outline:none;box-shadow:2px 2px 0 var(--line2)}input:focus{background:var(--blueS);box-shadow:3px 3px 0 var(--ink)}
 .desktop-login-options{display:flex;justify-content:space-between;margin:3px 0 0}.desktop-login-options label{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:10px;cursor:pointer}.desktop-login-options input{width:14px;height:14px;margin:0;padding:0;box-shadow:none;accent-color:var(--blue)}
 .desktop-login-error{min-height:25px;padding-top:7px;color:var(--red);font-size:10px;text-align:center}.desktop-login-submit{width:100%;height:39px;border:2px solid var(--ink);border-radius:0;background:var(--blue);color:#fff;box-shadow:3px 3px 0 var(--ink);font:900 12px var(--font);cursor:pointer}.desktop-login-submit:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink)}.desktop-login-submit:disabled{cursor:wait;opacity:.65}
@@ -160,4 +164,61 @@ html[data-style="anime"] .desktop-login-avatar span{border:0;background:#526dc7;
 html[data-style="anime"] input{border:2px solid var(--line2);border-radius:9px 14px 9px 14px;box-shadow:inset 0 -3px 0 var(--blueS)}
 html[data-style="anime"] .desktop-login-submit{border:2px solid var(--ink);border-radius:9px 14px 9px 14px;background:var(--blue);box-shadow:3px 4px 0 var(--ink)}
 html[data-style="anime"] .desktop-login>footer{border-color:var(--ink);background:var(--sidebar)}
+
+html[data-style="journal"] .desktop-login{border:1px solid #5a392e;border-radius:14px;background-color:#f4ead7;background-image:linear-gradient(90deg,rgba(123,49,64,.12) 0 34px,transparent 34px),repeating-linear-gradient(0deg,transparent 0 27px,rgba(117,85,53,.07) 28px);box-shadow:0 28px 70px rgba(38,23,16,.4),inset 0 0 0 1px rgba(255,255,255,.55);color:#392d28;font-family:"Noto Sans SC","Microsoft YaHei",sans-serif}
+html[data-style="journal"] .desktop-login-titlebar{border-bottom:1px solid #431721;background:linear-gradient(90deg,#4d1c27,#7b3140 72%,#9a6f44);color:#f7ead3}
+html[data-style="journal"] .desktop-login-titlebar>div{text-shadow:none}html[data-style="journal"] .desktop-login-titlebar>div span{border:1px solid #e1c08d;border-radius:2px;background:#efe0bd;box-shadow:2px 2px 0 #3d1820}
+html[data-style="journal"] .desktop-login-avatar{border:1px solid #9c805c;border-radius:4px 12px 12px 4px;background:#f9f0de;box-shadow:6px 8px 0 rgba(82,54,36,.18),inset 8px 0 rgba(123,49,64,.1)}
+html[data-style="journal"] .desktop-login-avatar span{border:0;background:#7b3140;box-shadow:none;clip-path:polygon(0 0,100% 0,100% 100%,50% 76%,0 100%)}
+html[data-style="journal"] .desktop-login-copy small{color:#7b3140;font-family:Georgia,serif}html[data-style="journal"] .desktop-login-copy h1{font-family:"Songti SC","STSong",serif;letter-spacing:.08em}
+html[data-style="journal"] input{border:0;border-bottom:1px solid #aa9270;border-radius:0;background:rgba(255,255,255,.2);box-shadow:none;color:#392d28}
+html[data-style="journal"] input:focus{background:rgba(255,255,255,.42);box-shadow:0 2px 0 #7b3140}
+html[data-style="journal"] .desktop-login-submit{border:1px solid #4b1c26;border-radius:4px;background:linear-gradient(#8b3c4b,#6e2937);box-shadow:2px 3px 0 #4b1c26}
+html[data-style="journal"] .desktop-login>footer{border-color:#aa9270;background:rgba(123,49,64,.06);font-family:Georgia,serif}
+html[data-style="journal"][data-theme="dark"] .desktop-login{border-color:#130d0b;background-color:#2f2622;background-image:linear-gradient(90deg,rgba(202,120,135,.12) 0 34px,transparent 34px),repeating-linear-gradient(0deg,transparent 0 27px,rgba(215,190,153,.045) 28px);color:#efe2cb;box-shadow:0 28px 70px rgba(0,0,0,.58),inset 0 0 0 1px rgba(255,255,255,.06)}
+html[data-style="journal"][data-theme="dark"] .desktop-login-avatar{border-color:#6c5648;background:#382d28;box-shadow:6px 8px 0 rgba(0,0,0,.28),inset 8px 0 rgba(202,120,135,.1)}
+html[data-style="journal"][data-theme="dark"] .desktop-login-copy p,html[data-style="journal"][data-theme="dark"] .desktop-login-options label{color:#c2b29f}html[data-style="journal"][data-theme="dark"] input{border-color:#6c5648;background:rgba(255,255,255,.025);color:#efe2cb}html[data-style="journal"][data-theme="dark"] input:focus{background:rgba(255,255,255,.06)}
+
+/* Paperbound archive login edition. */
+html[data-style="journal"] .desktop-login{border:1px solid #244d41;border-left:10px solid #244d41;border-radius:4px 15px 15px 4px;background-color:#f8f6ed;background-image:linear-gradient(90deg,transparent 0 35px,rgba(185,87,70,.14) 35px 36px,transparent 36px),repeating-linear-gradient(0deg,transparent 0 29px,rgba(47,103,86,.07) 29px 30px);box-shadow:12px 16px 0 rgba(24,52,43,.18),0 28px 70px rgba(24,52,43,.32);color:#202b27}
+html[data-style="journal"] .desktop-login-titlebar{border-bottom:1px solid #102820;background:linear-gradient(90deg,#173b30,#2f6756 74%,#b95746);color:#f5f1e5}
+html[data-style="journal"] .desktop-login-titlebar>div span{border-color:#d9cfad;background:#f2edda;box-shadow:inset 4px 0 #b95746,2px 2px 0 #102820}
+html[data-style="journal"] .desktop-login-avatar{border-color:#76877c;border-radius:3px 12px 12px 3px;background:#f8f6ed;box-shadow:6px 8px 0 rgba(40,58,50,.16),inset 8px 0 rgba(47,103,86,.12)}
+html[data-style="journal"] .desktop-login-avatar span{background:#2f6756}
+html[data-style="journal"] .desktop-login-copy small{color:#2f6756}html[data-style="journal"] input{border-color:#76877c;background:rgba(255,255,255,.24);color:#202b27}html[data-style="journal"] input:focus{background:rgba(255,255,255,.58);box-shadow:0 2px 0 #2f6756}
+html[data-style="journal"] .desktop-login-submit{border-color:#214c3f;background:#2f6756;box-shadow:2px 3px 0 #214c3f}
+html[data-style="journal"] .desktop-login>footer{border-color:#c2c8bc;background:rgba(47,103,86,.07)}
+html[data-style="journal"][data-theme="dark"] .desktop-login{border-color:#0d211b;background-color:#252e2a;background-image:linear-gradient(90deg,transparent 0 35px,rgba(220,124,105,.13) 35px 36px,transparent 36px),repeating-linear-gradient(0deg,transparent 0 29px,rgba(114,179,157,.06) 29px 30px);color:#f1eee3;box-shadow:12px 16px 0 rgba(0,0,0,.28),0 28px 70px rgba(0,0,0,.58)}
+html[data-style="journal"][data-theme="dark"] .desktop-login-avatar{border-color:#728178;background:#2d3732;box-shadow:6px 8px 0 rgba(0,0,0,.28),inset 8px 0 rgba(114,179,157,.12)}html[data-style="journal"][data-theme="dark"] input{border-color:#728178;background:rgba(255,255,255,.025);color:#f1eee3}
+
+html[data-style="shuimo"] .desktop-login{border:1px solid #263b37;background-color:#f4f1e8;background-image:linear-gradient(rgba(244,241,232,.54),rgba(244,241,232,.82)),url('/static/themes/shuimo/mountain-panorama.webp');background-position:center,bottom center;background-size:auto,cover;color:#232521;font-family:"Zihun Longyin Shoushu","STKaiti","KaiTi",cursive;box-shadow:0 28px 70px rgba(24,29,25,.32)}
+html[data-style="shuimo"] .desktop-login-titlebar{border-bottom:1px solid rgba(244,241,232,.18);background:linear-gradient(105deg,#202824,#344b4a 65%,#53645a)}
+html[data-style="shuimo"] .desktop-login-titlebar>div{text-shadow:none}html[data-style="shuimo"] .desktop-login-titlebar>div span{border:1px solid rgba(255,255,255,.7);border-radius:1px;background:#a33a32;box-shadow:none;transform:rotate(-5deg)}
+html[data-style="shuimo"] .desktop-login-content{padding-top:20px}
+html[data-style="shuimo"] .desktop-login-avatar{border:0;border-radius:50%;background:radial-gradient(circle at 64% 35%,transparent 0 27%,#232521 29% 48%,rgba(35,37,33,.26) 50% 65%,transparent 67%);box-shadow:none;transform:rotate(-15deg)}
+html[data-style="shuimo"] .desktop-login-avatar span{display:none}
+html[data-style="shuimo"] .desktop-login-copy{margin-top:8px}html[data-style="shuimo"] .desktop-login-copy small{color:#a33a32;font-family:Georgia,serif}html[data-style="shuimo"] .desktop-login-copy h1{font-size:24px;letter-spacing:.15em}
+html[data-style="shuimo"] .desktop-login-copy h1{font-family:"Zihun Longyin Shoushu","STKaiti","KaiTi",cursive;font-weight:400}
+html[data-style="shuimo"] input{border:0;border-bottom:1px solid rgba(43,54,47,.5);border-radius:0;background:rgba(248,245,236,.55);box-shadow:none;color:#232521}
+html[data-style="shuimo"] input:focus{background:#f8f5ec;box-shadow:0 3px 0 rgba(52,75,74,.12)}
+html[data-style="shuimo"] .desktop-login-submit{border:1px solid #263b3a;border-radius:2px 10px;background:linear-gradient(105deg,#263b3a,#4f6258);box-shadow:3px 4px 0 rgba(35,37,33,.18)}
+html[data-style="shuimo"] .desktop-login-switch{color:#344b4a}
+html[data-style="shuimo"] .desktop-login>footer{border-color:rgba(43,54,47,.25);background:rgba(248,245,236,.7);color:#62675f;font-family:Georgia,serif}
+html[data-style="shuimo"][data-theme="dark"] .desktop-login{border-color:#0d110f;background-color:#171b19;background-image:linear-gradient(rgba(23,27,25,.85),rgba(23,27,25,.9)),url('/static/themes/shuimo/mountain-panorama.webp');background-blend-mode:multiply,luminosity;color:#e7e2d6}
+html[data-style="shuimo"][data-theme="dark"] .desktop-login-copy p,html[data-style="shuimo"][data-theme="dark"] .desktop-login-options label{color:#b4b5aa}html[data-style="shuimo"][data-theme="dark"] input{border-color:rgba(216,210,192,.3);background:rgba(255,255,255,.025);color:#e7e2d6}
+
+html[data-style="cyber"] .desktop-login{border:3px solid #111923;border-radius:8px;color:#111923;background-color:#cfd3c4;background-image:linear-gradient(118deg,rgba(248,231,28,.48) 0 32%,transparent 32.2%),linear-gradient(rgba(17,25,35,.11) 1px,transparent 1px),linear-gradient(90deg,rgba(17,25,35,.11) 1px,transparent 1px);background-size:100% 100%,28px 28px,28px 28px;box-shadow:inset 0 0 0 2px #00d9f5}
+html[data-style="cyber"] .desktop-login-titlebar{border-bottom:3px solid #111923;color:#111923;background:#f8e71c;box-shadow:inset 0 -5px #ff2a5f}
+html[data-style="cyber"] .desktop-login-titlebar>div{text-shadow:2px 1px 0 #fff,4px 2px 0 rgba(0,217,245,.62)}
+html[data-style="cyber"] .desktop-login-titlebar>div span{border:2px solid #111923;border-radius:0;background:#ff2a5f;box-shadow:4px 0 #00d9f5;transform:skew(-10deg)}
+html[data-style="cyber"] .desktop-login-titlebar nav button{border-left:2px solid #111923;color:#111923}html[data-style="cyber"] .desktop-login-titlebar nav button:hover{color:#f8e71c;background:#111923}html[data-style="cyber"] .desktop-login-titlebar nav button:last-child:hover{color:#fff;background:#ff2a5f}
+html[data-style="cyber"] .desktop-login-content{position:relative}
+html[data-style="cyber"] .desktop-login-content:before{content:"";position:absolute;left:0;right:0;top:18px;height:8px;background:repeating-linear-gradient(135deg,#111923 0 7px,#f8e71c 7px 14px);opacity:.85}
+html[data-style="cyber"] .desktop-login-avatar{border:3px solid #111923;border-radius:0;background:#eef0d9;box-shadow:8px 8px 0 #ff2a5f,-5px -5px 0 #00d9f5;clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,10px 100%,0 calc(100% - 10px))}
+html[data-style="cyber"] .desktop-login-avatar span{border:5px solid #111923;background:#00d9f5;box-shadow:6px 6px 0 #f8e71c,-4px -4px 0 #ff2a5f}
+html[data-style="cyber"] .desktop-login-copy small{color:#ff2a5f;text-shadow:2px 1px 0 #00d9f5}html[data-style="cyber"] .desktop-login-copy h1{text-shadow:3px 2px 0 rgba(255,255,255,.65),6px 3px 0 rgba(0,217,245,.42)}
+html[data-style="cyber"] .desktop-login-submit{border:3px solid #111923;border-radius:0;color:#111923;background:#f8e71c;box-shadow:6px 6px 0 #ff2a5f;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,7px 100%,0 calc(100% - 7px))}
+html[data-style="cyber"] .desktop-login-submit:hover{color:#111923;background:#00d9f5;box-shadow:8px 8px 0 #ff2a5f,-3px -3px 0 #f8e71c;transform:translate(-3px,-3px)}
+html[data-style="cyber"] .desktop-login-switch{color:#ff2a5f;text-shadow:1px 1px 0 rgba(0,217,245,.45)}
+html[data-style="cyber"] .desktop-login>footer{border-color:#111923;color:#8ed5da;background:#172c35;box-shadow:inset 10px 0 #ff2a5f}
 </style>

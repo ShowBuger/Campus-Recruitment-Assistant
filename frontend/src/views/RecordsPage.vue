@@ -4,6 +4,7 @@ import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import ProgressBadge from '@/components/ProgressBadge.vue'
 import { fmtDateChina, fmtDateFullChina } from '@/utils/date'
+import { externalHttpUrl } from '@/utils/externalUrl'
 import TooltipCell from '@/components/TooltipCell.vue'
 import { get, post } from '@/utils/api'
 import { useAppStore } from '@/stores/app'
@@ -31,7 +32,7 @@ const givemeocBarWidth = ref('36%')
 const givemeocDetail = ref('正在查找 2027届 秋招岗位…')
 const givemeocError = ref(false)
 const givemeocIndeterminate = ref(false)
-function isRoot() { return auth.user?.username === 'root' }
+const canFeishuSync = computed(() => Boolean(auth.user?.is_root))
 function isAdmin() { return auth.isAdmin }
 
 const displayRecords = computed(() => {
@@ -92,9 +93,9 @@ function isApplied(r) {
 }
 
 function dirText(dir) {
-  if (!dir) return '—'
-  if (Array.isArray(dir)) return dir.filter(Boolean).join('、') || '—'
-  return String(dir).trim() || '—'
+  if (!dir) return '-'
+  if (Array.isArray(dir)) return dir.filter(Boolean).join('、') || '-'
+  return String(dir).trim() || '-'
 }
 
 function fmtDate(ts) {
@@ -136,7 +137,7 @@ function openDetail(r) {
 
 /* ---- Personal tab actions ---- */
 function newRecord() { app.openRecord() }
-function manageRecords() { app.showManager = true }
+function manageRecords() { app.openManager('records') }
 
 function downloadTemplate() {
   downloadBlob('/api/dashboard/records/template', '总表导入模板.xlsx')
@@ -197,11 +198,22 @@ async function handleImport(event) {
 }
 
 async function feishuSync() {
+  let savedUrl = ''
+  try {
+    const config = await get('/api/dashboard/records/feishu-sync')
+    savedUrl = String(config?.url || '').trim()
+  } catch (e) {
+    await dialog.alert('无法读取飞书同步配置：' + e.message, { title: '读取配置失败', tone: 'danger' })
+    return
+  }
   const url = await dialog.prompt(
-    '粘贴需要同步的飞书电子表格链接。',
+    savedUrl
+      ? '已填入上次同步链接，直接确认即可同步；修改后会覆盖原链接。'
+      : '粘贴需要同步的飞书电子表格链接，成功校验后会自动保存。',
     {
       title: '同步飞书表格',
       inputLabel: '飞书表格链接',
+      initialValue: savedUrl,
       placeholder: 'https://example.feishu.cn/sheets/...',
       confirmText: '开始同步',
       required: true,
@@ -234,7 +246,7 @@ async function givemeocSync() {
     clearInterval(pollTimer)
     givemeocIndeterminate.value = false; givemeocError.value = !ok
     givemeocLabel.value = ok ? '同步完成' : '同步失败'
-    givemeocPercent.value = ok ? '100%' : '—'
+    givemeocPercent.value = ok ? '100%' : '-'
     givemeocBarWidth.value = ok ? '100%' : '0'
     givemeocDetail.value = msg || '同步完成'
     givemeocSyncing.value = false
@@ -322,13 +334,8 @@ async function qiuzhiSync() {
 </script>
 
 <template>
-  <section class="page active" id="page-total">
-    <div class="card data-table-card">
-      <div class="card-hd">
-        <span class="dot"></span>
-        <div class="card-title">总表信息</div>
-        <div class="card-sub">{{ recordCountText }}</div>
-      </div>
+  <section class="page active records-page" id="page-total">
+    <div class="card data-table-card records-shell">
       <div class="total-tools">
         <div class="total-view-switch" role="tablist" aria-label="总表范围">
           <button
@@ -363,6 +370,7 @@ async function qiuzhiSync() {
           <option value="priority-asc">优先级：低到高</option>
         </select>
         <button v-if="!showShared" class="btn hide-applied-btn" :class="{ active: hideApplied }" @click="hideApplied = !hideApplied">{{ hideApplied ? '已隐藏' : '隐藏已投递' }}</button>
+        <span class="records-inline-count">{{ recordCountText }}</span>
       </div>
       <div class="tbl" style="max-height:calc(100vh - 160px)">
         <table class="data-table master-table">
@@ -395,18 +403,18 @@ async function qiuzhiSync() {
             <tr v-else-if="!displayRecords.length"><td colspan="9" class="center">没有匹配的记录</td></tr>
             <tr v-for="r in displayRecords" :key="r.record_id">
               <td class="company">
-                <button v-if="!showShared" class="company-link" @click="openDetail(r)">{{ r.company || '—' }}</button>
-                <span v-else>{{ r.company || '—' }}</span>
+                <button v-if="!showShared" class="company-link" @click="openDetail(r)">{{ r.company || '-' }}</button>
+                <span v-else>{{ r.company || '-' }}</span>
               </td>
-              <td class="job"><TooltipCell :text="r.job || '—'" /></td>
+              <td class="job"><TooltipCell :text="r.job || '-'" /></td>
               <td><TooltipCell :text="dirText(r.dir)" /></td>
-              <td><TooltipCell :text="r.type || '—'" /></td>
+              <td><TooltipCell :text="r.type || '-'" /></td>
               <td><span class="table-date" :title="fmtDateFull(r.deadline)">{{ fmtDate(r.deadline) }}</span></td>
-              <td><span class="badge bdg-b">{{ r.batch || '—' }}</span></td>
-              <td v-if="showShared">{{ r.contributor || '—' }}</td>
+              <td><span class="badge bdg-b">{{ r.batch || '-' }}</span></td>
+              <td v-if="showShared">{{ r.contributor || '-' }}</td>
               <td v-else><ProgressBadge :progress="(r.progress||[])[0]||'未投递'" /></td>
               <td>
-                <a v-if="r.url" :href="r.url" target="_blank" rel="noreferrer">查看</a><span v-else class="table-date">—</span>
+                <a v-if="externalHttpUrl(r.url)" :href="externalHttpUrl(r.url)" target="_blank" rel="noopener noreferrer">查看</a><span v-else class="table-date">-</span>
               </td>
               <td class="total-action">
                 <button
@@ -433,7 +441,7 @@ async function qiuzhiSync() {
         <button class="btn" @click="exportExcel">导出 Excel</button>
         <input id="total-import-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden @change="handleImport">
         <button class="btn" @click="triggerImport" :disabled="importLoading">{{ importLoading ? '导入中...' : '导入 Excel' }}</button>
-        <button v-if="isRoot()" class="btn" @click="feishuSync" :disabled="feishuSyncing">{{ feishuSyncing ? '同步中...' : '飞书同步' }}</button>
+        <button v-if="canFeishuSync" class="btn" @click="feishuSync" :disabled="feishuSyncing">{{ feishuSyncing ? '同步中...' : '飞书同步' }}</button>
       </div>
       <div class="table-actions" v-else>
         <div
@@ -448,3 +456,8 @@ async function qiuzhiSync() {
     </div>
   </section>
 </template>
+
+<style scoped>
+.records-page{min-width:0}.records-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:18px}.records-page-head h2{margin:0;font-size:clamp(22px,2.5vw,30px);line-height:1.2;letter-spacing:-.035em}.records-page-head p{max-width:620px;margin-top:7px;color:var(--muted);font-size:13px}.records-count{display:flex;align-items:baseline;gap:7px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.records-count strong{color:var(--blue);font-size:18px}.records-count span{color:var(--sub);font-size:10px}.records-shell{overflow:hidden;border-radius:16px}.total-tools{display:grid;grid-template-columns:auto minmax(220px,1fr) auto auto auto;align-items:center;gap:9px;padding:13px 14px;border-bottom:1px solid var(--line);background:var(--panel)}.total-view-switch{padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}.total-view-switch button{height:31px;padding:0 13px;border:0;border-radius:7px;background:transparent;color:var(--muted);font:800 10px var(--font);cursor:pointer}.total-view-switch button.active{background:var(--panel);color:var(--ink);box-shadow:0 1px 5px color-mix(in srgb,var(--ink) 10%,transparent)}.total-search input,.total-tools>select{height:39px;border:1px solid var(--line2);border-radius:10px;outline:none;background:var(--bg);color:var(--ink);font:11px var(--font)}.total-search input{width:100%;padding:0 12px}.total-tools>select{padding:0 30px 0 10px}.total-search input:focus,.total-tools>select:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueS)}.records-shell .tbl{background:var(--panel)}.records-shell .table-actions{min-height:58px;padding:10px 14px;border-top:1px solid var(--line);background:var(--bg)}.master-table tbody tr{transition:background .15s ease}.master-table tbody tr:hover{background:var(--blueS)}.master-table .total-action .btn{min-width:72px}.hide-applied-btn.active{border-color:var(--blue);background:var(--blueS);color:var(--blue)}@media(max-width:1100px){.total-tools{grid-template-columns:auto minmax(200px,1fr) auto}.total-tools>.btn,.total-tools>select{grid-row:2}}@media(max-width:720px){.records-page-head{align-items:flex-start;flex-direction:column}.records-count{width:100%;justify-content:space-between}.total-tools{grid-template-columns:1fr}.total-tools>*{width:100%}.total-tools>.btn,.total-tools>select{grid-row:auto}.total-view-switch{display:grid;grid-template-columns:1fr 1fr}.records-shell{border-radius:12px}}@media(prefers-reduced-motion:reduce){.master-table tbody tr{transition:none}}
+.total-search input{padding-left:40px}.records-inline-count{justify-self:end;color:var(--sub);font-size:10px;white-space:nowrap}@media(max-width:1100px){.records-inline-count{grid-row:2;justify-self:end}}@media(max-width:720px){.records-inline-count{grid-row:auto;justify-self:start}}
+</style>

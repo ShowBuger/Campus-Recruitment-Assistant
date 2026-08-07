@@ -1,0 +1,548 @@
+/* Shuimo pond system
+   Shared material language for the lotus KPI, dense work surfaces and dialogs. */
+:root[data-style="shuimo"]{
+  --pond-paper:#edf1e8;
+  --pond-paper-strong:#f5f5ee;
+  --pond-leaf:#b9cbb9;
+  --pond-leaf-soft:#d5dfd1;
+  --pond-ink:#172019;
+  --pond-deep:#294b43;
+  --pond-mid:#587363;
+  --pond-mist:rgba(237,241,232,.86);
+  --pond-line:rgba(35,69,58,.3);
+  --pond-line-strong:rgba(27,60,51,.62);
+  --pond-cinnabar:#a63830;
+  --pond-koi:#c8732e;
+  --pond-shadow:0 14px 34px rgba(27,53,45,.12),inset 0 1px rgba(255,255,255,.62);
+  --pond-radius:18px 7px 20px 8px;
+  --pond-radius-alt:8px 20px 7px 18px;
+  --bg:#e1e7dd;--panel:var(--pond-paper);--ink:var(--pond-ink);--muted:#58665d;--sub:#77847b;
+  --line:var(--pond-line);--line2:var(--pond-line-strong);--blue:var(--pond-deep);--blue2:#193a33;
+  --green:var(--pond-mid);--amber:var(--pond-koi);--red:var(--pond-cinnabar);--cyan:#557c78;
+  --blueS:rgba(41,75,67,.09);--greenS:rgba(88,115,99,.11);--amberS:rgba(200,115,46,.11);--redS:rgba(166,56,48,.1);
+  --shadow:var(--pond-shadow);--shadow2:0 22px 54px rgba(19,46,38,.2),inset 0 1px rgba(255,255,255,.72);
+  color-scheme:light;
+}
+
+/* Frame and navigation use the deep-water tone surrounding the pale leaves. */
+[data-style="shuimo"] .desktop-titlebar{
+  border-bottom:1px solid rgba(225,234,224,.22)!important;
+  color:#f1f3ec!important;
+  background:linear-gradient(104deg,#152d28,#294b43 64%,#3f6758)!important;
+  box-shadow:0 8px 24px rgba(18,45,37,.18)!important;
+}
+[data-style="shuimo"] .desktop-titlebar-brand,
+[data-style="shuimo"] .desktop-titlebar-actions button{color:#f1f3ec!important}
+[data-style="shuimo"] .desktop-titlebar-pixel{background:var(--pond-koi)!important}
+[data-style="shuimo"] .sidebar{
+  border-right:1px solid rgba(225,234,224,.2)!important;
+  color:#edf1e8!important;
+  background:
+    linear-gradient(180deg,rgba(15,43,36,.96),rgba(32,70,59,.94)),
+    repeating-linear-gradient(90deg,transparent 0 22px,rgba(255,255,255,.025) 23px)!important;
+  box-shadow:10px 0 30px rgba(15,40,33,.16)!important;
+}
+[data-style="shuimo"] .sidebar :is(.brand,.brand-copy,.sidebar-section-label,.sidebar-footer){color:#edf1e8!important}
+[data-style="shuimo"] .sidebar :is(a,button){color:rgba(237,241,232,.76)!important}
+[data-style="shuimo"] .sidebar a:hover{color:#fff!important;background:rgba(213,223,209,.1)!important}
+[data-style="shuimo"] .sidebar a.active{
+  border:1px solid rgba(228,236,224,.22)!important;border-left:4px solid var(--pond-koi)!important;
+  border-radius:2px 16px 16px 2px!important;color:#fff!important;
+  background:linear-gradient(90deg,rgba(200,115,46,.25),rgba(213,223,209,.11))!important;
+}
+[data-style="shuimo"] .sidebar-collapse{border-color:rgba(237,241,232,.44)!important;color:#edf1e8!important}
+.desktop-main-mode[data-style="shuimo"] .liquid-dock{
+  border:1px solid rgba(34,72,61,.34)!important;border-radius:24px 9px 24px 9px!important;
+  background:rgba(228,235,224,.88)!important;box-shadow:var(--pond-shadow)!important;
+}
+.desktop-main-mode[data-style="shuimo"] .liquid-dock a{
+  border:0!important;border-radius:16px 6px 16px 6px!important;color:var(--pond-deep)!important;background:transparent!important;
+}
+.desktop-main-mode[data-style="shuimo"] .liquid-dock a.router-link-active{
+  color:#f4f5ef!important;background:linear-gradient(145deg,#355e53,#1d4138)!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.2)!important;
+}
+
+/* Topbar is a broad floating leaf, not a detached black archive strip. */
+[data-style="shuimo"] .topbar{
+  min-height:92px;padding:22px 26px 20px 34px!important;
+  border:1px solid rgba(37,77,65,.3)!important;border-radius:30px 10px 28px 12px!important;
+  color:var(--pond-ink)!important;
+  background:
+    radial-gradient(ellipse at 10% 12%,rgba(255,255,255,.7),transparent 34%),
+    linear-gradient(118deg,rgba(213,223,209,.95),rgba(238,242,232,.9) 58%,rgba(185,203,185,.72))!important;
+  box-shadow:var(--pond-shadow)!important;overflow:hidden!important;
+}
+[data-style="shuimo"] .topbar:before{
+  display:block!important;top:15px!important;bottom:15px!important;left:14px!important;width:5px!important;
+  border:0!important;border-radius:70% 30% 55% 45%!important;background:linear-gradient(var(--pond-deep),var(--pond-mid))!important;
+  box-shadow:3px 7px 0 -2px var(--pond-koi)!important;
+}
+[data-style="shuimo"] .topbar h1{color:var(--pond-ink)!important}
+[data-style="shuimo"] .topbar :is(.subtitle,.eyebrow,small){color:#66766b!important}
+[data-style="shuimo"] .topbar :is(.icon-btn,.tool-btn){
+  border:1px solid rgba(39,78,67,.34)!important;border-radius:14px 5px 14px 5px!important;
+  color:var(--pond-deep)!important;background:rgba(245,247,240,.54)!important;
+}
+[data-style="shuimo"] .topbar :is(.icon-btn,.tool-btn):hover{background:rgba(185,203,185,.45)!important}
+
+/* Shared surfaces. KPI keeps its authored lotus sprites; other panels use pond paper. */
+[data-style="shuimo"] :is(
+  .card,.analysis-setup,.analysis-history-panel,.analysis-result-panel,.resume-library,.resume-preview-panel,
+  .board-shell,.board-col,.tbl,.data-table-card,.calendar-scroll,.countdown-panel,.total-tools,.table-actions,
+  .board-columns,.admin-panel,.admin-nav-pane,.admin-content-pane,.tracker-settings,.provider-panel,
+  .notification-panel,.chat-panel,.chat-contacts,.chat-messages,.backup-panel,.recommendation-panel
+){
+  clip-path:none!important;filter:none!important;border:1px solid var(--pond-line)!important;
+  border-radius:var(--pond-radius)!important;color:var(--pond-ink)!important;
+  background:
+    radial-gradient(ellipse at 8% 2%,rgba(255,255,255,.68),transparent 34%),
+    linear-gradient(124deg,rgba(237,241,232,.95),rgba(213,223,209,.88) 72%,rgba(185,203,185,.56))!important;
+  box-shadow:var(--pond-shadow)!important;
+}
+[data-style="shuimo"] :is(.card,.board-col,.admin-panel,.analysis-history-entry,.countdown-item):nth-of-type(even){
+  border-radius:var(--pond-radius-alt)!important;
+}
+[data-style="shuimo"] :is(
+  .card,.analysis-setup,.analysis-history-panel,.analysis-result-panel,.resume-library,.resume-preview-panel,
+  .board-col,.modal,.chat-panel
+):before,
+[data-style="shuimo"] :is(
+  .card,.analysis-setup,.analysis-history-panel,.analysis-result-panel,.resume-library,.resume-preview-panel,
+  .board-col,.modal,.chat-panel
+):after{display:none!important}
+[data-style="shuimo"] :is(.card-hd,.analysis-result-head,.analysis-section-head,.chat-head,.chat-contacts-head){
+  border-bottom:1px solid rgba(37,76,64,.24)!important;color:var(--pond-ink)!important;
+  background:linear-gradient(90deg,rgba(185,203,185,.3),rgba(237,241,232,.18),transparent)!important;
+}
+[data-style="shuimo"] :is(.card-title,.analysis-history-title,.analysis-section-head h3){color:var(--pond-deep)!important}
+[data-style="shuimo"] :is(.card-sub,.muted,.analysis-privacy,.analysis-provider){color:#68776d!important}
+
+/* Buttons, switches and fields share the same leaf-cut geometry. */
+[data-style="shuimo"] :is(
+  .btn,.icon-btn,.total-view-switch button,.admin-nav-item,.progress-filter-chip,.chat-tool-btn,
+  .chat-top-btn,.calendar-fab,.desktop-download-btn,.style-item,.theme-option
+){
+  min-width:0;border:1px solid rgba(39,78,67,.4)!important;border-radius:14px 5px 14px 5px!important;
+  color:var(--pond-deep)!important;background:rgba(240,244,235,.7)!important;
+  background-image:none!important;box-shadow:inset 0 1px rgba(255,255,255,.68)!important;filter:none!important;
+}
+[data-style="shuimo"] :is(.btn,.icon-btn,.total-view-switch button,.admin-nav-item,.progress-filter-chip):hover{
+  border-color:rgba(35,75,63,.65)!important;background:rgba(185,203,185,.55)!important;transform:translateY(-1px)!important;
+}
+[data-style="shuimo"] :is(
+  .btn-primary,.btn.active,.total-view-switch button.active,.admin-nav-item.active,.progress-filter-chip.active,
+  .chat-job-source-switch button.active
+){
+  border-color:#244c40!important;color:#f4f6ef!important;
+  background:linear-gradient(135deg,#3f6a5b,#21483d)!important;
+}
+[data-style="shuimo"] :is(.btn-danger,.danger,.btn-remove-application){
+  border-color:var(--pond-cinnabar)!important;color:#fff!important;background:var(--pond-cinnabar)!important;
+}
+[data-style="shuimo"] :is(.btn,.icon-btn,button):active{transform:translateY(1px) scale(.99)!important}
+[data-style="shuimo"] :is(input:not([type="checkbox"]):not([type="radio"]),select,textarea,.chat-search,.chat-job-search){
+  border:1px solid rgba(41,79,67,.3)!important;border-radius:14px 5px 14px 5px!important;
+  color:var(--pond-ink)!important;background:rgba(247,248,242,.72)!important;
+  box-shadow:inset 4px 4px 12px rgba(60,91,72,.045),inset 0 -1px rgba(43,76,64,.18)!important;
+}
+[data-style="shuimo"] :is(input,select,textarea):focus{
+  outline:0!important;border-color:var(--pond-deep)!important;
+  box-shadow:0 0 0 3px rgba(65,105,90,.12),inset 0 -1px var(--pond-deep)!important;
+}
+[data-style="shuimo"] ::placeholder{color:#7d8a81!important;opacity:1}
+[data-style="shuimo"] input[type="checkbox"]{accent-color:var(--pond-deep)}
+[data-style="shuimo"] :focus-visible{outline:2px solid var(--pond-koi)!important;outline-offset:2px}
+
+/* Ledger tables remain dense, but inherit pond color and rounded outer banks. */
+[data-style="shuimo"] :is(.tbl,.data-table-card,.board-tbl){
+  overflow:auto;border:1px solid var(--pond-line-strong)!important;border-radius:20px 7px 20px 7px!important;
+  background:rgba(238,242,232,.9)!important;
+}
+[data-style="shuimo"] table{border-collapse:separate!important;border-spacing:0}
+[data-style="shuimo"] th{
+  border:0!important;border-bottom:1px solid rgba(225,235,224,.22)!important;
+  color:#f1f4ed!important;background:linear-gradient(104deg,#23473d,#426657)!important;font-weight:400!important;
+}
+[data-style="shuimo"] th:first-child{border-radius:17px 0 0 0}
+[data-style="shuimo"] th:last-child{border-radius:0 6px 0 0}
+[data-style="shuimo"] td{
+  border:0!important;border-bottom:1px solid rgba(50,84,70,.15)!important;
+  color:var(--pond-ink)!important;background:rgba(245,247,240,.52)!important;
+}
+[data-style="shuimo"] tbody tr:nth-child(even) td{background:rgba(213,223,209,.28)!important}
+[data-style="shuimo"] tbody tr:hover td{background:rgba(185,203,185,.43)!important}
+[data-style="shuimo"] :is(th,td).sticky,
+[data-style="shuimo"] :is(th,td)[class*="fixed"]{background-color:var(--pond-paper-strong)!important}
+
+/* Status language uses ink, leaf, koi and cinnabar only. */
+[data-style="shuimo"] :is(.badge,.tag,.status-badge,.progress-badge,.board-col-count,.chat-count-inline){
+  border:1px solid rgba(40,77,65,.42)!important;border-radius:11px 4px 11px 4px!important;
+  color:var(--pond-deep)!important;background:rgba(213,223,209,.58)!important;box-shadow:none!important;
+}
+[data-style="shuimo"] .progress-badge:before{background:var(--pond-deep)!important}
+[data-style="shuimo"] :is([data-progress="笔试"],[data-progress="面试"]) .progress-badge{border-style:double!important;border-width:3px!important}
+[data-style="shuimo"] :is([data-progress="Offer"],[data-progress="已录用"]) .progress-badge{
+  border-color:var(--pond-koi)!important;color:#fff!important;background:var(--pond-koi)!important;
+}
+[data-style="shuimo"] :is([data-progress="结束"],[data-progress="拒绝"],[data-progress="放弃"]) .progress-badge{
+  border-color:rgba(88,102,93,.26)!important;color:#748078!important;background:rgba(116,128,120,.08)!important;
+}
+
+/* Calendar is a shallow pond grid with leaf-note events. */
+[data-style="shuimo"] .dashboard-calendar{overflow:visible}
+[data-style="shuimo"] .calendar-toolbar{
+  padding:10px 12px;border-bottom:1px solid rgba(42,80,67,.2);background:rgba(213,223,209,.26);
+}
+[data-style="shuimo"] .calendar-weekday{
+  border-color:rgba(46,83,70,.18)!important;color:var(--pond-deep)!important;background:rgba(185,203,185,.34)!important;
+}
+[data-style="shuimo"] .calendar-day{
+  border-color:rgba(46,83,70,.16)!important;color:var(--pond-ink)!important;
+  background:rgba(245,247,240,.45)!important;
+}
+[data-style="shuimo"] .calendar-day:nth-child(3n+2){background:rgba(213,223,209,.2)!important}
+[data-style="shuimo"] .calendar-day.today{background:rgba(200,115,46,.08)!important}
+[data-style="shuimo"] .calendar-day.today .calendar-date{color:#fff!important;background:var(--pond-koi)!important}
+[data-style="shuimo"] .calendar-event{
+  border:0!important;border-left:3px solid var(--pond-mid)!important;border-radius:9px 3px 9px 3px!important;
+  color:var(--pond-ink)!important;background:rgba(185,203,185,.48)!important;
+}
+[data-style="shuimo"] .countdown-panel{
+  border:0!important;border-left:1px solid rgba(43,78,66,.25)!important;border-radius:0 7px 18px 0!important;
+  background:rgba(222,230,217,.48)!important;box-shadow:none!important;
+}
+[data-style="shuimo"] .countdown-item{
+  border:0!important;border-bottom:1px solid rgba(49,83,71,.17)!important;border-radius:0!important;background:transparent!important;
+}
+[data-style="shuimo"] .countdown-days{color:var(--pond-deep)!important}
+[data-style="shuimo"] .countdown-days.urgent{color:var(--pond-cinnabar)!important}
+
+/* Board columns are separate leaves around one shared pond, not rigid archive pages. */
+[data-style="shuimo"] .board-shell{padding:14px!important}
+[data-style="shuimo"] .board-columns{gap:14px!important;padding:6px!important;border:0!important;background:transparent!important;box-shadow:none!important}
+[data-style="shuimo"] .board-col{
+  border:1px solid rgba(43,79,66,.3)!important;border-radius:22px 8px 24px 10px!important;
+  background:linear-gradient(145deg,rgba(237,241,232,.94),rgba(185,203,185,.5))!important;
+}
+[data-style="shuimo"] .board-col:nth-child(even){border-radius:9px 23px 8px 22px!important}
+[data-style="shuimo"] .board-col-hd{border-bottom:1px solid rgba(43,79,66,.25)!important;background:rgba(185,203,185,.28)!important}
+[data-style="shuimo"] .board-row{
+  border:1px solid rgba(45,80,68,.2)!important;border-radius:13px 5px 13px 5px!important;
+  background:rgba(247,248,242,.62)!important;box-shadow:0 5px 14px rgba(35,68,57,.07)!important;
+}
+[data-style="shuimo"] .board-col.drag-over{border-color:var(--pond-koi)!important;background:rgba(200,115,46,.09)!important}
+
+/* Resume and analysis retain productive split layouts with a common binding seam. */
+[data-style="shuimo"] :is(.resume-workspace,.resume-layout,.analysis-workspace){
+  border:1px solid rgba(38,75,63,.32)!important;border-radius:24px 9px 24px 9px!important;
+  background:rgba(229,235,225,.75)!important;box-shadow:var(--pond-shadow)!important;
+}
+[data-style="shuimo"] :is(.resume-workspace,.resume-layout):after{
+  width:1px;background:repeating-linear-gradient(var(--pond-mid) 0 4px,transparent 4px 9px)!important;opacity:.48;
+}
+[data-style="shuimo"] :is(.resume-library,.analysis-setup){border-radius:21px 6px 21px 6px!important}
+[data-style="shuimo"] :is(.resume-preview-panel,.analysis-result-panel){
+  border:0!important;border-left:1px solid rgba(42,79,66,.23)!important;
+  border-radius:0 8px 21px 0!important;background:rgba(244,247,239,.62)!important;
+}
+[data-style="shuimo"] :is(.analysis-history-entry,.resume-item,.resume-file){
+  border:1px solid rgba(43,79,66,.22)!important;border-radius:13px 5px 13px 5px!important;
+  background:rgba(245,247,240,.58)!important;
+}
+[data-style="shuimo"] :is(.analysis-history-entry.active,.resume-item.active,.resume-file.active){
+  border-color:var(--pond-koi)!important;background:rgba(200,115,46,.08)!important;
+}
+[data-style="shuimo"] :is(.analysis-result-empty,.analysis-history-empty,.board-col-empty,.chat-empty){
+  color:#66766b!important;background:radial-gradient(ellipse at center,rgba(185,203,185,.18),transparent 66%)!important;
+}
+[data-style="shuimo"] :is(.analysis-result-skeleton,.skeleton,.bar){
+  background:linear-gradient(90deg,rgba(185,203,185,.28),rgba(245,247,240,.72),rgba(185,203,185,.28))!important;
+  background-size:220% 100%!important;
+}
+
+/* Admin, chat and settings use the same pond paper instead of neutral white blocks. */
+[data-style="shuimo"] .admin-layout{gap:16px}
+[data-style="shuimo"] .admin-nav-pane{background:linear-gradient(165deg,rgba(41,75,67,.94),rgba(25,58,49,.92))!important}
+[data-style="shuimo"] .admin-nav-pane :is(h2,p,.admin-nav-item){color:#eef2e9!important}
+[data-style="shuimo"] .admin-nav-pane .admin-nav-item{border-color:rgba(238,242,233,.2)!important;background:rgba(255,255,255,.035)!important}
+[data-style="shuimo"] .admin-nav-pane .admin-nav-item.active{border-color:rgba(238,242,233,.36)!important;background:rgba(200,115,46,.24)!important}
+[data-style="shuimo"] :is(.admin-user-card,.backup-row,.provider-row,.notification-item){
+  border:1px solid rgba(43,79,66,.2)!important;border-radius:14px 5px 14px 5px!important;background:rgba(245,247,240,.58)!important;
+}
+[data-style="shuimo"] .chat-modal-window{
+  border:1px solid rgba(38,75,63,.5)!important;border-radius:24px 9px 24px 9px!important;
+  color:var(--pond-ink)!important;background:var(--pond-paper)!important;box-shadow:0 28px 72px rgba(16,44,35,.3)!important;
+}
+[data-style="shuimo"] .chat-modal-bar{color:#f2f5ed!important;background:linear-gradient(105deg,#1e4439,#3d6657)!important}
+[data-style="shuimo"] .chat-contacts{border-radius:18px 0 0 8px!important;background:rgba(213,223,209,.52)!important}
+[data-style="shuimo"] .chat-row:hover,[data-style="shuimo"] .chat-row.active{background:rgba(185,203,185,.48)!important}
+[data-style="shuimo"] .chat-bubble{
+  border:1px solid rgba(43,79,66,.27)!important;border-radius:14px 5px 14px 5px!important;
+  color:var(--pond-ink)!important;background:rgba(246,248,242,.86)!important;
+}
+[data-style="shuimo"] :is(.chat-bubble.mine,.message-bubble.mine){
+  border-color:var(--pond-deep)!important;color:#f4f6ef!important;background:var(--pond-deep)!important;
+}
+[data-style="shuimo"] .chat-compose{border-top:1px solid rgba(43,79,66,.22)!important;background:rgba(213,223,209,.34)!important}
+
+/* Every dialog is an opaque floating leaf over diffuse ink water. */
+[data-style="shuimo"] :is(.modal-mask,.app-dialog-mask,.avatar-picker-mask,.overlay,.modal-backdrop){
+  background:radial-gradient(circle at 50% 46%,rgba(35,66,55,.42),rgba(12,31,26,.72))!important;
+  backdrop-filter:blur(3px)!important;
+}
+[data-style="shuimo"] :is(
+  .modal,.app-dialog-card,.avatar-picker-modal,.record-detail-modal,.record-manager-modal,.recommendation-modal,
+  .offer-compare-modal,.application-stats-modal,.user-profile-modal,.chat-job-dialog
+){
+  border:1px solid rgba(39,77,65,.55)!important;border-radius:24px 8px 24px 8px!important;
+  color:var(--pond-ink)!important;
+  background:
+    radial-gradient(ellipse at 8% 0,rgba(255,255,255,.75),transparent 38%),
+    linear-gradient(135deg,#f0f3ea,#d5dfd1)!important;
+  box-shadow:0 30px 80px rgba(13,39,31,.34),inset 0 1px rgba(255,255,255,.78)!important;
+}
+[data-style="shuimo"] :is(.modal-hd,.app-dialog-accent,.record-detail-head){
+  border-bottom:1px solid rgba(39,77,65,.25)!important;background:rgba(185,203,185,.24)!important;
+}
+[data-style="shuimo"] :is(.modal-ft,.app-dialog-actions){border-top:1px solid rgba(39,77,65,.2)!important;background:rgba(213,223,209,.3)!important}
+[data-style="shuimo"] .notification-panel,
+[data-style="shuimo"] #notification-panel,
+[data-style="shuimo"] #style-panel{
+  border:1px solid rgba(40,78,66,.48)!important;border-radius:20px 7px 20px 7px!important;
+  color:var(--pond-ink)!important;background:rgba(237,241,232,.97)!important;
+  box-shadow:0 22px 58px rgba(16,44,35,.28)!important;backdrop-filter:none!important;
+}
+
+/* Toasts and scrollbars finish the same material system. */
+[data-style="shuimo"] .toast{
+  border:1px solid rgba(39,77,65,.42)!important;border-radius:14px 5px 14px 5px!important;
+  color:var(--pond-ink)!important;background:rgba(239,243,234,.96)!important;box-shadow:var(--pond-shadow)!important;
+}
+[data-style="shuimo"] .toast.error{border-color:var(--pond-cinnabar)!important}
+[data-style="shuimo"] ::-webkit-scrollbar{width:10px;height:10px}
+[data-style="shuimo"] ::-webkit-scrollbar-track{background:rgba(213,223,209,.34)}
+[data-style="shuimo"] ::-webkit-scrollbar-thumb{border:2px solid transparent;border-radius:8px;background:var(--pond-mid) padding-box}
+
+/* Motion communicates floating-water feedback only. */
+@keyframes shuimoPondEnter{from{opacity:0;transform:translateY(7px) scale(.995)}to{opacity:1;transform:none}}
+[data-style="shuimo"] .page.active{animation:shuimoPondEnter .24s cubic-bezier(.2,.8,.2,1) both}
+@media(prefers-reduced-motion:reduce){
+  [data-style="shuimo"] .page.active{animation:none!important}
+  [data-style="shuimo"] :is(.btn,.icon-btn,.card,.board-row,.analysis-history-entry){transition:none!important}
+}
+
+/* Responsive surfaces keep density without clipping the organic edges. */
+@media(max-width:1180px){
+  [data-style="shuimo"] .board-columns{gap:10px!important}
+  [data-style="shuimo"] .countdown-panel{border-top:1px solid rgba(43,78,66,.24)!important;border-left:0!important;border-radius:0 0 18px 8px!important}
+}
+@media(max-width:820px){
+  [data-style="shuimo"] .topbar{min-height:82px;padding:18px 14px 17px 28px!important;border-radius:20px 7px 20px 7px!important}
+  [data-style="shuimo"] :is(.card,.analysis-setup,.analysis-history-panel,.analysis-result-panel,.resume-library,.resume-preview-panel,.board-shell,.tbl){border-radius:16px 6px 16px 6px!important}
+  [data-style="shuimo"] :is(.resume-workspace,.resume-layout,.analysis-workspace){border-radius:17px 6px 17px 6px!important}
+  [data-style="shuimo"] :is(.resume-workspace,.resume-layout):after{display:none}
+  [data-style="shuimo"] .chat-modal-window{border-radius:18px 6px 18px 6px!important}
+}
+
+/* Secondary workflows follow the same surface grammar. */
+[data-style="shuimo"] :is(
+  .progress-filter-menu,.progress-filter-option,.settings-page,.settings-tabs,.help-grid,.help-intro,.help-note,
+  .recommendation-card,.recommendation-history,.recommendation-history-item,.recommendation-result,
+  .stats-rate-card,.stats-chart,.record-timeline-card,.record-timeline-item,.detail-section,
+  .profile-section,.tracker-event,.tracker-task,.tracker-ai-notice,.tracker-sync-note,
+  .notice-history-item,.source-sync-progress,.invite-generator,.emoji-picker,.chat-job-picker
+){
+  border:1px solid rgba(43,79,66,.22)!important;border-radius:15px 5px 15px 5px!important;
+  color:var(--pond-ink)!important;background:rgba(242,245,237,.68)!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.62)!important;
+}
+[data-style="shuimo"] :is(
+  .progress-filter-menu-hd,.settings-section-title,.recommendation-history-hd,.recommendation-summary,
+  .stats-chart-grid,.record-timeline-head,.profile-section-head,.source-sync-progress-head,.emoji-picker-hd
+){
+  border-bottom-color:rgba(43,79,66,.22)!important;color:var(--pond-deep)!important;background:rgba(185,203,185,.25)!important;
+}
+[data-style="shuimo"] :is(.progress-filter-option:hover,.recommendation-history-item:hover,.tracker-event:hover,.notice-history-item:hover){
+  background:rgba(185,203,185,.4)!important;
+}
+[data-style="shuimo"] .progress-filter-option.active,
+[data-style="shuimo"] .settings-tabs button.active{
+  color:var(--pond-deep)!important;background:rgba(200,115,46,.11)!important;
+  box-shadow:inset 3px 0 var(--pond-koi)!important;
+}
+[data-style="shuimo"] :is(.progress-filter-dialog-actions,.settings-page-actions,.recommendation-actions){
+  border-top-color:rgba(43,79,66,.2)!important;background:rgba(213,223,209,.3)!important;
+}
+[data-style="shuimo"] :is(.toggle-track,.source-sync-progress-track,.recommendation-progress-track,.stats-rate-ring,.track){
+  border-color:rgba(42,78,66,.28)!important;background:rgba(185,203,185,.34)!important;
+}
+[data-style="shuimo"] :is(.toggle-track.active,.fill,.source-sync-progress-track>i,.recommendation-progress-track>i){
+  background:var(--pond-deep)!important;
+}
+[data-style="shuimo"] .toggle-thumb{background:#f5f6f0!important;box-shadow:0 2px 7px rgba(29,62,51,.2)!important}
+[data-style="shuimo"] :is(.recommendation-grade,.offer-best){color:#fff!important;background:var(--pond-koi)!important}
+[data-style="shuimo"] :is(.recommendation-reason,.recommendation-history-meta,.record-timeline-meta,.umeta,.udate){color:#68776d!important}
+
+/* Resume drop zones and analysis states read as wet-paper blanks. */
+[data-style="shuimo"] :is(.resume-empty-sheet,.resume-preview-empty,.resume-list-state,.analysis-ready,.analysis-result-loading,.analysis-result-error){
+  border:1px dashed rgba(43,79,66,.34)!important;border-radius:19px 7px 19px 7px!important;
+  color:#64736a!important;
+  background:radial-gradient(ellipse at 50% 48%,rgba(185,203,185,.24),rgba(241,245,236,.6) 58%,transparent 74%)!important;
+}
+[data-style="shuimo"] .resume-file{
+  border:1px solid rgba(43,79,66,.2)!important;border-radius:14px 5px 14px 5px!important;
+  background:rgba(247,248,242,.62)!important;
+}
+[data-style="shuimo"] .resume-file:hover{border-color:rgba(43,79,66,.48)!important;background:rgba(185,203,185,.32)!important}
+[data-style="shuimo"] :is(.resume-upload-spinner,.analysis-spinner){
+  border-color:rgba(43,79,66,.2)!important;border-top-color:var(--pond-koi)!important;
+}
+[data-style="shuimo"] .analysis-jd-note{border-left-color:var(--pond-koi)!important;background:rgba(200,115,46,.07)!important}
+[data-style="shuimo"] .analysis-result-content :is(h2,h3,h4){color:var(--pond-deep)!important;border-bottom-color:rgba(43,79,66,.22)!important}
+[data-style="shuimo"] .analysis-result-content blockquote{border-left-color:var(--pond-mid)!important;background:rgba(185,203,185,.22)!important}
+
+/* Record details, statistics and profile areas avoid isolated white mini-cards. */
+[data-style="shuimo"] :is(.record-progress-timeline,.stats-rate-grid,.recommendation-columns,.profile-password-grid){
+  gap:12px!important;
+}
+[data-style="shuimo"] .record-timeline-item:before{border-color:var(--pond-paper-strong)!important;background:var(--pond-mid)!important}
+[data-style="shuimo"] .record-timeline-item.active:before{background:var(--pond-koi)!important}
+[data-style="shuimo"] .stats-rate-ring{color:var(--pond-deep)!important}
+[data-style="shuimo"] .stats-chart .bar{background:linear-gradient(180deg,var(--pond-mid),var(--pond-deep))!important}
+[data-style="shuimo"] .profile-avatar-large{border:3px solid rgba(43,79,66,.35)!important;box-shadow:0 8px 20px rgba(35,67,56,.13)!important}
+[data-style="shuimo"] .avatar-library{
+  border:1px solid rgba(43,79,66,.2)!important;border-radius:16px 6px 16px 6px!important;background:rgba(213,223,209,.28)!important;
+}
+[data-style="shuimo"] .avatar-library button.selected{outline-color:var(--pond-koi)!important;background:rgba(200,115,46,.1)!important}
+
+/* Login surfaces inherit the same pond atmosphere when the skin is already selected. */
+[data-style="shuimo"] .login-home{color:var(--pond-ink)!important;background:transparent!important}
+[data-style="shuimo"] .login-panel{
+  border:1px solid rgba(39,77,65,.42)!important;border-radius:30px 10px 30px 10px!important;
+  background:linear-gradient(138deg,rgba(243,246,238,.96),rgba(204,217,201,.9))!important;
+  box-shadow:0 28px 70px rgba(16,44,35,.26)!important;
+}
+[data-style="shuimo"] .login-visual{
+  color:#eef3e9!important;background:
+    linear-gradient(145deg,rgba(18,55,45,.74),rgba(49,91,76,.58)),
+    url('/static/themes/shuimo/monochrome-scroll-bg.png') center/cover!important;
+}
+[data-style="shuimo"] .login-visual-shade{background:linear-gradient(180deg,transparent,rgba(15,43,35,.58))!important}
+[data-style="shuimo"] .login-heading,[data-style="shuimo"] .login-brand{color:var(--pond-deep)!important}
+[data-style="shuimo"] .login-submit{
+  border-color:#244c40!important;border-radius:16px 6px 16px 6px!important;color:#fff!important;
+  background:linear-gradient(135deg,#3f6a5b,#21483d)!important;box-shadow:0 10px 24px rgba(31,70,58,.18)!important;
+}
+[data-style="shuimo"] .login-error{border-color:rgba(166,56,48,.34)!important;color:var(--pond-cinnabar)!important;background:rgba(166,56,48,.07)!important}
+
+/* Utility popovers and component dialogs must clear the desktop ink composition. */
+:root.desktop-main-mode[data-style="shuimo"] .main:has(.widget-launch-panel.show),
+:root.desktop-main-mode[data-style="shuimo"] .main:has(#notification-panel.show){
+  z-index:2147481000!important;
+}
+:root.desktop-main-mode[data-style="shuimo"] :is(.widget-launch-panel.show,#notification-panel.show){
+  z-index:2147482000!important;
+  isolation:isolate;
+  transform:translateZ(0);
+}
+:root.desktop-main-mode[data-style="shuimo"] :is(.modal-mask.show,.app-dialog-mask,.avatar-picker-mask,.error-overlay){
+  z-index:2147482500!important;
+  isolation:isolate;
+  transform:translateZ(0);
+}
+:root.desktop-main-mode[data-style="shuimo"] :is(.record-timeline-mask,.recommendation-history-mask){
+  z-index:2147482600!important;
+}
+
+/* Larger hand-lettered KPI hierarchy over the existing lotus assets. */
+[data-style="shuimo"] .kpi .kpi-label{
+  max-width:58%;
+  font-family:var(--art-font)!important;
+  font-size:clamp(15px,1.05vw,19px)!important;
+  line-height:1.15!important;
+  letter-spacing:.1em!important;
+  color:#172019!important;
+}
+[data-style="shuimo"] .kpi .kpi-value{
+  max-width:58%;
+  margin-top:8px!important;
+  font-family:var(--art-font)!important;
+  font-size:clamp(54px,4.2vw,70px)!important;
+  line-height:.88!important;
+  letter-spacing:0!important;
+  color:#111813!important;
+}
+[data-style="shuimo"] .kpi .kpi-sub{
+  max-width:62%;
+  margin-top:12px!important;
+  font-family:var(--art-font)!important;
+  font-size:clamp(12px,.85vw,15px)!important;
+  line-height:1.25!important;
+  letter-spacing:.04em!important;
+  color:#334a3d!important;
+}
+@media(max-width:820px){
+  [data-style="shuimo"] .kpi .kpi-label{font-size:14px!important}
+  [data-style="shuimo"] .kpi .kpi-value{font-size:52px!important}
+  [data-style="shuimo"] .kpi .kpi-sub{font-size:12px!important}
+}
+
+/* Teleported utility panels must stay above the desktop ink composition. */
+:root.desktop-main-mode[data-style="shuimo"] body > #style-panel.floating-style-panel{
+  position:fixed!important;
+  z-index:2147483000!important;
+  isolation:isolate;
+  transform:translateZ(0);
+  contain:layout style;
+}
+
+/* Desktop layout: reclaim the removed left inscription space while preserving the right dock safe lane. */
+@media(min-width:761px){
+  .desktop-main-mode[data-style="shuimo"] .main{
+    max-width:none!important;
+    padding:28px 104px 90px 44px!important;
+  }
+  .desktop-main-mode[data-style="shuimo"] .page{
+    width:100%!important;
+    max-width:none!important;
+    margin-inline:0!important;
+  }
+}
+
+/* Final KPI composition: this stylesheet loads after theme-system.css. */
+[data-style="shuimo"] .kpis{
+  position:relative;
+  isolation:isolate;
+}
+[data-style="shuimo"] .kpi:nth-child(n)::before,
+[data-style="shuimo"] .kpi:nth-child(n)::after{
+  content:none!important;
+  display:none!important;
+  background:none!important;
+}
+[data-style="shuimo"] .kpi .kpi-sub{
+  display:none!important;
+}
+[data-style="shuimo"] .kpi .kpi-koi{
+  z-index:1!important;
+}
+[data-style="shuimo"] .kpi :is(.kpi-label,.kpi-value){
+  position:relative;
+  z-index:2!important;
+}
+
+@media(min-width:761px) and (max-width:1180px){
+  .desktop-main-mode[data-style="shuimo"] .main{
+    padding:20px 86px 64px 24px!important;
+  }
+}
+
+/* Compact responsive dialogs and controls. */
+@media(max-width:680px){
+  [data-style="shuimo"] :is(.modal,.app-dialog-card,.avatar-picker-modal,.chat-modal-window){
+    border-radius:18px 6px 18px 6px!important;
+  }
+  [data-style="shuimo"] .board-col{border-radius:17px 6px 17px 6px!important}
+  [data-style="shuimo"] .login-panel{border-radius:20px 7px 20px 7px!important}
+}

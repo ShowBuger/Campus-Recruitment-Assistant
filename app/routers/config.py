@@ -1,6 +1,7 @@
 """Per-user AI provider configuration."""
 import json
-from typing import Optional
+from datetime import date
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -57,6 +58,21 @@ class RecommendationConfig(BaseModel):
     recommendation_model: str = Field(default="", max_length=100)
 
 
+class DashboardFilterCondition(BaseModel):
+    column: Literal[
+        "company", "job", "city", "batch", "apply_date", "exam_date",
+        "interview1", "interview2", "interview3", "warm", "result", "deadline", "progress",
+    ]
+    operator: Literal["equals", "contains", "not_contains", "not_equals", "range"]
+    value: str = Field(default="", max_length=100)
+    date_from: date | None = Field(default=None, alias="from")
+    to: date | None = None
+
+
+class DashboardFilterConfig(BaseModel):
+    conditions: list[DashboardFilterCondition] = Field(default_factory=list, max_length=20)
+
+
 def _masked(value: Optional[str], left: int = 6, right: int = 4) -> str:
     value = (value or "").strip()
     if not value:
@@ -110,6 +126,27 @@ def get_recommendation_config(user: dict = Depends(auth_module.get_current_user)
         "ai_provider": cfg.get("ai_provider") or "deepseek",
         "ai_model": cfg.get(f"{cfg.get('ai_provider') or 'deepseek'}_model") or "",
     }
+
+
+@router.get("/dashboard-filters")
+def get_dashboard_filters(user: dict = Depends(auth_module.get_current_user)):
+    cfg = database.get_user_config(user["user_id"])
+    try:
+        conditions = json.loads(str(cfg.get("dashboard_filters") or "[]"))
+        validated = DashboardFilterConfig(conditions=conditions)
+    except (ValueError, TypeError, json.JSONDecodeError):
+        validated = DashboardFilterConfig()
+    return validated.model_dump(by_alias=True, mode="json")
+
+
+@router.post("/dashboard-filters")
+def save_dashboard_filters(
+    config: DashboardFilterConfig,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    conditions = config.model_dump(by_alias=True, mode="json")["conditions"]
+    database.save_dashboard_filters(user["user_id"], json.dumps(conditions, ensure_ascii=False))
+    return {"success": True, "conditions": conditions}
 
 
 @router.post("/recommendation")

@@ -10,6 +10,7 @@ from urllib.parse import quote
 import bleach
 import markdown
 import requests
+from threading import RLock, Thread
 from docx import Document
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
@@ -19,6 +20,8 @@ from app import ai_provider_utils, auth as auth_module, company_enrichment, data
 
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
+_ANALYSIS_TASKS: dict[str, dict] = {}
+_ANALYSIS_TASKS_LOCK = RLock()
 PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "interview_analysis.md"
 PROJECT_DIR = Path(__file__).resolve().parents[2]
 ENRICHMENT_SKILL_PATH = PROJECT_DIR / "skills" / "company-job-enrichment" / "SKILL.md"
@@ -258,6 +261,11 @@ def _response_error(response: requests.Response) -> str:
 
 
 def _openai_output_text(payload: dict) -> str:
+    # Some Responses-compatible relays expose the SDK convenience field rather
+    # than the full ``output`` array. Accept both representations.
+    direct = payload.get("output_text") if isinstance(payload, dict) else None
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
     parts = []
     for item in payload.get("output") or []:
         if not isinstance(item, dict) or item.get("type") != "message":
@@ -271,6 +279,27 @@ def _openai_output_text(payload: dict) -> str:
     return text
 
 
+def _chat_output_text(payload: dict, provider_label: str) -> str:
+    """Read both standard and multimodal OpenAI-compatible chat responses."""
+    try:
+        content = payload["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ValueError(f"{provider_label} 响应中没有消息内容") from exc
+    if isinstance(content, str):
+        text = content.strip()
+    elif isinstance(content, list):
+        text = "\n".join(
+            str(part.get("text") or "")
+            for part in content
+            if isinstance(part, dict) and part.get("type") in {None, "text", "output_text"}
+        ).strip()
+    else:
+        text = ""
+    if not text:
+        raise ValueError(f"{provider_label} 响应中没有文本内容")
+    return text
+
+
 def _call_ai_provider(
     provider: str,
     api_key: str,
@@ -280,6 +309,7 @@ def _call_ai_provider(
     base_url: str = "",
     api_mode: str = "responses",
     max_output_tokens: int | None = 12_000,
+    timeout_seconds: int = 180,
 ) -> str:
     safe_base = ai_provider_utils.validate_public_base_url(base_url, provider)
     if provider == "openai":
@@ -295,12 +325,12 @@ def _call_ai_provider(
                     ],
                     "stream": False,
                 },
-                timeout=180,
+                timeout=timeout_seconds,
                 allow_redirects=False,
             )
             if not response.ok:
                 raise HTTPException(status_code=502, detail=f"OpenAI 兼容接口请求失败：{_response_error(response)}")
-            return str(response.json()["choices"][0]["message"]["content"]).strip()
+            return _chat_output_text(response.json(), "OpenAI 兼容接口")
         response_payload = {
             "model": model,
             "instructions": system_prompt,
@@ -312,7 +342,7 @@ def _call_ai_provider(
             ai_provider_utils.endpoint_url(safe_base, "responses"),
             headers=ai_provider_utils.auth_headers(provider, api_key),
             json=response_payload,
-            timeout=180,
+            timeout=timeout_seconds,
             allow_redirects=False,
         )
         if not response.ok:
@@ -331,7 +361,7 @@ def _call_ai_provider(
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": user_content}],
             },
-            timeout=180,
+            timeout=timeout_seconds,
             allow_redirects=False,
         )
         if not response.ok:
@@ -346,24 +376,32 @@ def _call_ai_provider(
             raise ValueError("Claude 响应中没有文本内容")
         return text
 
+    label = PROVIDER_NAMES.get(provider, provider)
+    request_payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ],
+        "stream": False,
+    }
+    # DeepSeek V4 enables thinking by default. Recommendation ranking needs
+    # structured JSON, and thinking can consume the output budget before the
+    # final message content is produced.
+    if provider == "deepseek":
+        request_payload["thinking"] = {"type": "disabled"}
+    if max_output_tokens is not None:
+        request_payload["max_tokens"] = max_output_tokens
     response = requests.post(
         ai_provider_utils.endpoint_url(safe_base, "chat/completions"),
         headers=ai_provider_utils.auth_headers(provider, api_key),
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content},
-            ],
-            "stream": False,
-        },
-        timeout=180,
+        json=request_payload,
+        timeout=timeout_seconds,
         allow_redirects=False,
     )
     if not response.ok:
-        label = "Kimi" if provider == "kimi" else "DeepSeek"
         raise HTTPException(status_code=502, detail=f"{label} API 请求失败：{_response_error(response)}")
-    return str(response.json()["choices"][0]["message"]["content"]).strip()
+    return _chat_output_text(response.json(), label)
 
 
 @router.post("/records/{record_id}/enrich")
@@ -419,6 +457,9 @@ def enrich_record(
         current_type = (fields.get("公司/行业类型") or [""])[0]
         current_directions = fields.get("嵌入式方向") or []
         current_note = str(fields.get("备注") or "")
+        current_city = str(fields.get("城市") or "").strip()
+        current_jd = str(fields.get("岗位JD") or "").strip()
+        current_url = str(fields.get("投递链接") or "").strip()
         knowledge_fallback = not evidence
         skill_prompt = ENRICHMENT_SKILL_PATH.read_text(encoding="utf-8")
         evidence_content = company_enrichment.evidence_text(evidence) if evidence else (
@@ -440,6 +481,15 @@ def enrich_record(
 
 【已有方向】
 {'、'.join(current_directions) if current_directions else '空'}
+
+【城市】
+{current_city or '空'}
+
+【岗位 JD】
+{current_jd[:6000] or '空'}
+
+【投递链接】
+{current_url or '空'}
 
 【联网搜索证据】
 {evidence_content}
@@ -572,6 +622,7 @@ def analyze_resume(
         content = _call_ai_provider(
             provider, api_key, model, system_prompt, user_content,
             base_url=base_url, api_mode=api_mode, max_output_tokens=8_000,
+            timeout_seconds=300,
         )
     except HTTPException:
         raise
@@ -606,3 +657,59 @@ def analyze_resume(
         "analysis_mode": request.analysis_mode,
         "analysis_mode_label": mode["label"],
     }
+
+
+def _run_analysis_task(task_id: str, request: AnalysisRequest, user: dict) -> None:
+    try:
+        result = analyze_resume(request, user)
+        with _ANALYSIS_TASKS_LOCK:
+            task = _ANALYSIS_TASKS.get(task_id)
+            if task:
+                task.update(status="finished", message="分析完成", result=result)
+    except HTTPException as exc:
+        message = str(exc.detail)
+        with _ANALYSIS_TASKS_LOCK:
+            task = _ANALYSIS_TASKS.get(task_id)
+            if task:
+                task.update(status="failed", message=message)
+    except Exception as exc:
+        with _ANALYSIS_TASKS_LOCK:
+            task = _ANALYSIS_TASKS.get(task_id)
+            if task:
+                task.update(status="failed", message=str(exc) or "分析失败")
+
+
+@router.post("/analyze/tasks")
+def start_analysis_task(
+    request: AnalysisRequest,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    user_id = int(user["user_id"])
+    with _ANALYSIS_TASKS_LOCK:
+        for old_id in [
+            key for key, task in _ANALYSIS_TASKS.items()
+            if task["user_id"] == user_id and task["status"] != "running"
+        ]:
+            _ANALYSIS_TASKS.pop(old_id, None)
+        active = next((
+            task for task in _ANALYSIS_TASKS.values()
+            if task["user_id"] == user_id and task["status"] == "running"
+        ), None)
+        if active:
+            return {"task_id": active["id"], "status": "running", "reused": True}
+        task_id = uuid4().hex
+        _ANALYSIS_TASKS[task_id] = {
+            "id": task_id, "user_id": user_id, "status": "running",
+            "message": "正在读取简历与岗位信息…", "result": None,
+        }
+    Thread(target=_run_analysis_task, args=(task_id, request, dict(user)), daemon=True).start()
+    return {"task_id": task_id, "status": "running", "reused": False}
+
+
+@router.get("/analyze/tasks/{task_id}")
+def get_analysis_task(task_id: str, user: dict = Depends(auth_module.get_current_user)):
+    with _ANALYSIS_TASKS_LOCK:
+        task = _ANALYSIS_TASKS.get(task_id)
+        if not task or task["user_id"] != int(user["user_id"]):
+            raise HTTPException(status_code=404, detail="未找到该分析任务")
+        return {key: value for key, value in task.items() if key != "user_id"}

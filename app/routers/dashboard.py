@@ -100,11 +100,11 @@ class CalendarEventCreate(BaseModel):
 
 class LocalEventCreate(BaseModel):
     date: date
-    label: str
+    label: str = Field(max_length=200)
 
 
 class FeishuSyncRequest(BaseModel):
-    url: str = Field(min_length=10, max_length=2000)
+    url: str = Field(default="", max_length=2000)
 
 
 # ── Helpers ─────────────────────────────────────────────
@@ -308,6 +308,16 @@ async def import_total_records(
     }
 
 
+@router.get("/records/feishu-sync")
+def get_feishu_sync_config(
+    user: dict = Depends(auth_module.get_current_user),
+):
+    if not user.get("is_root"):
+        raise HTTPException(status_code=403, detail="仅 root 用户可以同步飞书表格")
+    cfg = database.get_user_config(user["user_id"])
+    return {"url": str(cfg.get("feishu_sync_url") or "")}
+
+
 @router.post("/records/feishu-sync")
 def sync_feishu_records(
     body: FeishuSyncRequest,
@@ -316,7 +326,15 @@ def sync_feishu_records(
     if not user.get("is_root"):
         raise HTTPException(status_code=403, detail="仅 root 用户可以同步飞书表格")
     try:
-        source_rows = feishu_sync.read_table(body.url)
+        cfg = database.get_user_config(user["user_id"])
+        requested_url = body.url.strip() or str(cfg.get("feishu_sync_url") or "").strip()
+        if not requested_url:
+            raise feishu_sync.FeishuSyncError("请先填写飞书表格链接")
+        sync_url = feishu_sync.validate_url(requested_url)
+        # Save a validated link before reading. If authorization has expired,
+        # the user can re-authorize and retry without entering it again.
+        database.save_feishu_sync_url(user["user_id"], sync_url)
+        source_rows = feishu_sync.read_table(sync_url)
         existing = local_records.list_records(user["user_id"])
         additions, skipped, invalid = feishu_sync.prepare_sync(source_rows, existing)
         if additions:
@@ -336,6 +354,7 @@ def sync_feishu_records(
         "invalid_count": invalid,
         "skipped": skipped[:50],
         "message": f"同步完成：新增 {len(additions)} 条，跳过重复 {len(skipped)} 条",
+        "url": sync_url,
         "dashboard": data,
     }
 
@@ -1399,17 +1418,7 @@ def delete_calendar_event(
         record = local_records.get_record(user["user_id"], body.record_id)
         if not record:
             raise HTTPException(status_code=404, detail="未找到对应的本地记录")
-        # 清除对应时间字段
         updates = {field_name: None}
-        # 如果删除的是投递时间，同步将进展回退为"未投递"
-        cleared_progress = EVENT_TYPE_PROGRESS_MAP.get(body.event_type)
-        if cleared_progress:
-            current_progress = (record["fields"].get("进展") or [])
-            if cleared_progress in current_progress:
-                new_progress = [p for p in current_progress if p != cleared_progress]
-                if not new_progress:
-                    new_progress = ["未投递"]
-                updates["进展"] = new_progress
         if not local_records.update_record(user["user_id"], body.record_id, updates):
             raise HTTPException(status_code=404, detail="未找到对应的本地记录")
         data = local_records.get_dashboard_data(user["user_id"])

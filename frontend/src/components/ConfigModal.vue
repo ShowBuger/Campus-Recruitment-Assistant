@@ -1,6 +1,6 @@
 <template>
   <div class="modal-mask show" @mousedown.self="$emit('close')">
-    <div class="modal settings-modal">
+    <div class="modal settings-modal utility-modal settings-workspace">
       <div class="modal-hd">
         <div>
           <h2>系统设置</h2>
@@ -88,7 +88,7 @@
                 <label for="cfg-openai-model-picker">模型名称</label>
                 <div class="model-input-row">
                   <select id="cfg-openai-model-picker" v-model="config.openai_model" @change="selectModel('openai')">
-                    <option value="">— 请选择或读取模型 —</option>
+                    <option value="">请选择或读取模型</option>
                     <option v-for="m in openaiModelOptions" :key="m" :value="m">{{ m }}</option>
                   </select>
                   <button class="btn" type="button" @click="loadProviderModels('openai')">读取模型</button>
@@ -138,7 +138,7 @@
                 <label for="cfg-anthropic-model-picker">模型名称</label>
                 <div class="model-input-row">
                   <select id="cfg-anthropic-model-picker" v-model="config.anthropic_model" @change="selectModel('anthropic')">
-                    <option value="">— 请选择或读取模型 —</option>
+                    <option value="">请选择或读取模型</option>
                     <option v-for="m in anthropicModelOptions" :key="m" :value="m">{{ m }}</option>
                   </select>
                   <button class="btn" type="button" @click="loadProviderModels('anthropic')">读取模型</button>
@@ -402,3 +402,7 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.settings-workspace{display:flex;max-height:min(820px,92dvh);flex-direction:column;overflow:hidden}.settings-workspace>.modal-hd{flex:0 0 auto;padding:20px 22px}.settings-workspace>.modal-hd h2{font-size:20px}.settings-tabs{flex:0 0 auto;padding:10px 22px 0}.settings-tabs .btn{border-radius:10px 10px 0 0;box-shadow:none}.settings-workspace>.modal-body{min-height:0;padding:16px 22px;overflow:auto;background:var(--bg)}.settings-page{padding:16px;background:var(--panel)}.settings-page>.form-group:first-child{max-width:330px}.provider-panel{margin-top:14px}.provider-name{padding-bottom:10px;border-bottom:1px solid var(--line)}.settings-footer{flex:0 0 auto;padding:13px 22px;background:var(--panel)}.settings-page-actions .btn{min-width:98px}@media(max-width:620px){.settings-workspace{max-height:96dvh}.settings-workspace>.modal-hd,.settings-workspace>.modal-body,.settings-footer{padding-left:14px;padding-right:14px}.settings-page-actions{width:100%;display:none;grid-template-columns:1fr 1fr}.settings-page-actions.active{display:grid}.settings-page-actions .btn{min-width:0}}
+</style>

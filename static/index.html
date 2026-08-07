@@ -1185,7 +1185,7 @@ async function importTotalExcel(event){
 }
 
 /* ---------- Root 飞书同步 ---------- */
-function openFeishuSyncModal(){if(!(_currentUser&&_currentUser.is_root))return;$('feishu-sync-url').value=localStorage.getItem('root_feishu_sync_url')||'';$('feishu-sync-result').classList.remove('show');$('feishu-sync-result').innerHTML='';$('feishu-sync-modal').classList.add('show');setTimeout(function(){$('feishu-sync-url').focus()},30)}
+async function openFeishuSyncModal(){if(!(_currentUser&&_currentUser.is_root))return;$('feishu-sync-url').value='';$('feishu-sync-result').classList.remove('show');$('feishu-sync-result').innerHTML='';$('feishu-sync-modal').classList.add('show');try{var cfg=await api('GET','/api/dashboard/records/feishu-sync',undefined,{silent:true});$('feishu-sync-url').value=cfg.url||''}catch(err){toast('读取飞书同步配置失败：'+err.message,'error')}setTimeout(function(){$('feishu-sync-url').focus()},30)}
 function closeFeishuSyncModal(){$('feishu-sync-modal').classList.remove('show')}
 async function syncFromGivemeOC(){
   if(!(_currentUser&&(_currentUser.is_admin||_currentUser.is_root)))return;
@@ -1222,7 +1222,7 @@ async function syncFeishuRecords(){
   if(!/^https:\/\//i.test(url)){toast('请填写完整的飞书表格 HTTPS 链接','error');input.focus();return}
   btn.disabled=true;btn.classList.add('loading');resultEl.classList.remove('show');toast('正在读取飞书表格并匹配重复记录…');
   try{
-    var data=await api('POST','/api/dashboard/records/feishu-sync',{url:url});localStorage.setItem('root_feishu_sync_url',url);renderDashboard(data.dashboard||{});
+    var data=await api('POST','/api/dashboard/records/feishu-sync',{url:url});renderDashboard(data.dashboard||{});
     var skipped=arr(data.skipped).slice(0,5),details=skipped.length?'<div style="margin-top:7px;color:var(--muted)">重复示例：'+skipped.map(function(item){return esc((item.company||'—')+' · '+(item.job||'岗位未填写')+' · '+(item.batch||'—'))}).join('<br>')+'</div>':'';
     resultEl.innerHTML='<b>'+esc(data.message||'同步完成')+'</b><span>有效岗位 '+Number(data.source_count||0)+' 条；空白或缺少公司/岗位 '+Number(data.invalid_count||0)+' 条未导入。</span>'+details;resultEl.classList.add('show');toast(data.message||'飞书同步完成','success',6000)
   }catch(err){resultEl.innerHTML='<b>同步失败</b><span>'+esc(err.message)+'</span>';resultEl.classList.add('show');toast('飞书同步失败：'+err.message,'error',7000)}finally{btn.disabled=false;btn.classList.remove('loading')}

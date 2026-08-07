@@ -2,7 +2,7 @@ const { app, BrowserWindow, Tray, Menu, Notification, shell, nativeImage, dialog
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
-const os = require('os')
+const { externalUrlFromNavigation, isAppUrl: matchesAppUrl, normalizeHttpUrl } = require('./url-routing')
 
 const APP_URL = process.env.CAMPUS_APP_URL || 'https://www.toudimianban.cloud'
 const APP_ORIGIN = new URL(APP_URL).origin
@@ -13,7 +13,6 @@ let mainWindow = null
 let tray = null
 let isQuitting = false
 let manualUpdateCheck = false
-let updateProgressTimer = null
 let updateProgressTransferred = 0
 const widgetWindows = new Map()
 let widgetState = null
@@ -29,11 +28,7 @@ if (!gotLock) {
 }
 
 function isAppUrl(rawUrl) {
-  try {
-    return new URL(rawUrl).origin === APP_ORIGIN
-  } catch {
-    return false
-  }
+  return matchesAppUrl(rawUrl, APP_ORIGIN)
 }
 
 function showMainWindow() {
@@ -51,7 +46,8 @@ function createMainWindow() {
     minHeight: 500,
     title: APP_TITLE,
     icon: path.join(__dirname, 'assets', 'icon.png'),
-    backgroundColor: '#f5f6fa',
+    backgroundColor: '#00000000',
+    transparent: true,
     show: false,
     frame: false,
     autoHideMenuBar: true,
@@ -76,15 +72,22 @@ function createMainWindow() {
   mainWindow.on('unmaximize', sendWindowState)
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    const externalUrl = externalUrlFromNavigation(url, APP_ORIGIN)
+    if (externalUrl) {
+      void shell.openExternal(externalUrl)
+      return { action: 'deny' }
+    }
     if (isAppUrl(url)) return { action: 'allow' }
-    shell.openExternal(url)
     return { action: 'deny' }
   })
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!isAppUrl(url)) {
+    const externalUrl = externalUrlFromNavigation(url, APP_ORIGIN)
+    if (externalUrl) {
       event.preventDefault()
-      shell.openExternal(url)
+      void shell.openExternal(externalUrl)
+    } else if (!isAppUrl(url)) {
+      event.preventDefault()
     }
   })
 
@@ -136,9 +139,7 @@ function checkForUpdates(manual = false) {
   })
 }
 
-function stopUpdateProgressFallback() {
-  if (updateProgressTimer) clearInterval(updateProgressTimer)
-  updateProgressTimer = null
+function resetUpdateProgress() {
   updateProgressTransferred = 0
 }
 
@@ -158,40 +159,16 @@ function sendUpdateProgress({ version, transferred, total, bytesPerSecond = 0 })
   if (tray) tray.setToolTip(`${APP_TITLE} · 正在下载更新 ${percent.toFixed(0)}%`)
 }
 
-function startUpdateProgressFallback(info, installer) {
-  stopUpdateProgressFallback()
-  const total = Number(installer?.size) || 0
-  const installerName = path.basename(String(installer?.url || ''))
-  if (!total || !installerName) return
-
-  const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local')
-  const pendingDir = path.join(localAppData, 'campus-recruitment-updater', 'pending')
-  const reportCachedBytes = () => {
-    try {
-      const candidates = fs.readdirSync(pendingDir)
-        .filter(name => name === installerName || name.endsWith(`temp-${installerName}`))
-        .map(name => fs.statSync(path.join(pendingDir, name)).size)
-      if (candidates.length) {
-        sendUpdateProgress({
-          version: info.version,
-          transferred: Math.min(total, Math.max(...candidates)),
-          total,
-        })
-      }
-    } catch {}
-  }
-
-  reportCachedBytes()
-  updateProgressTimer = setInterval(reportCachedBytes, 500)
-}
-
 function configureAutoUpdater() {
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.allowPrerelease = false
-  autoUpdater.disableDifferentialDownload = true
+  // Prefer NSIS blockmap differential downloads. electron-updater falls back
+  // to the complete installer automatically when delta data is unavailable.
+  autoUpdater.disableDifferentialDownload = false
 
   autoUpdater.on('update-available', info => {
+    resetUpdateProgress()
     const installer = Array.isArray(info.files)
       ? info.files.find(file => String(file.url || '').toLowerCase().endsWith('.exe'))
       : null
@@ -204,7 +181,6 @@ function configureAutoUpdater() {
         total: Number(installer?.size) || 0,
       })
     }
-    startUpdateProgressFallback(info, installer)
   })
 
   autoUpdater.on('download-progress', progress => {
@@ -216,7 +192,7 @@ function configureAutoUpdater() {
   })
 
   autoUpdater.on('update-not-available', () => {
-    stopUpdateProgressFallback()
+    resetUpdateProgress()
     if (manualUpdateCheck) {
       dialog.showMessageBox({
         type: 'info',
@@ -228,7 +204,7 @@ function configureAutoUpdater() {
   })
 
   autoUpdater.on('update-downloaded', info => {
-    stopUpdateProgressFallback()
+    resetUpdateProgress()
     manualUpdateCheck = false
     if (mainWindow) mainWindow.setProgressBar(-1)
     if (tray) tray.setToolTip(`${APP_TITLE} v${app.getVersion()}`)
@@ -255,7 +231,7 @@ function configureAutoUpdater() {
   })
 
   autoUpdater.on('error', error => {
-    stopUpdateProgressFallback()
+    resetUpdateProgress()
     if (mainWindow) mainWindow.setProgressBar(-1)
     if (tray) tray.setToolTip(`${APP_TITLE} v${app.getVersion()}`)
     if (mainWindow) {
@@ -335,7 +311,8 @@ function createWidgetWindow(type, shouldShow = true) {
     minWidth: 320, minHeight: 300,
     title: def.title, frame: false, show: false, skipTaskbar: true,
     alwaysOnTop: Boolean(settings.pinned), resizable: !settings.locked, movable: !settings.locked,
-    backgroundColor: "#f4f6f8",
+    backgroundColor: "#00000000",
+    transparent: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true, nodeIntegration: false, sandbox: true,
@@ -345,11 +322,14 @@ function createWidgetWindow(type, shouldShow = true) {
   win.loadURL(APP_URL + "/?desktopWidget=" + encodeURIComponent(type))
   win.on("page-title-updated", event => event.preventDefault())
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (!isAppUrl(url)) shell.openExternal(url)
+    const externalUrl = externalUrlFromNavigation(url, APP_ORIGIN)
+    if (externalUrl) void shell.openExternal(externalUrl)
     return { action: "deny" }
   })
   win.webContents.on("will-navigate", (event, url) => {
-    if (!isAppUrl(url)) { event.preventDefault(); shell.openExternal(url) }
+    const externalUrl = externalUrlFromNavigation(url, APP_ORIGIN)
+    if (externalUrl) { event.preventDefault(); void shell.openExternal(externalUrl) }
+    else if (!isAppUrl(url)) event.preventDefault()
   })
   win.once("ready-to-show", () => { if (shouldShow || settings.visible) win.show() })
   const rememberBounds = () => {
@@ -426,17 +406,20 @@ function createTray() {
 
 ipcMain.handle('desktop:get-version', () => app.getVersion())
 ipcMain.handle('desktop:set-skin', (_event, requestedSkin) => {
-  const skin = ['classic', 'pixelium', 'aurora', 'anime'].includes(requestedSkin)
+  const skin = ['classic', 'pixelium', 'aurora', 'anime', 'journal', 'shuimo', 'cyber'].includes(requestedSkin)
     ? requestedSkin
     : 'pixelium'
   if (!mainWindow || mainWindow.isDestroyed()) return skin
   try {
+    // Native Mica/vibrancy paints the complete rectangular BrowserWindow and
+    // therefore remains visible outside the CSS-rounded application surface.
+    // Aurora renders its glass entirely inside the clipped web layer instead.
     if (process.platform === 'win32' && typeof mainWindow.setBackgroundMaterial === 'function') {
-      mainWindow.setBackgroundMaterial(skin === 'aurora' ? 'mica' : 'none')
+      mainWindow.setBackgroundMaterial('none')
     } else if (process.platform === 'darwin' && typeof mainWindow.setVibrancy === 'function') {
-      mainWindow.setVibrancy(skin === 'aurora' ? 'under-window' : null, { animationDuration: 180 })
+      mainWindow.setVibrancy(null, { animationDuration: 180 })
     }
-    mainWindow.setBackgroundColor(skin === 'aurora' ? '#00000000' : '#f5f6fa')
+    mainWindow.setBackgroundColor('#00000000')
   } catch (error) {
     console.warn('Unable to apply native skin material:', error.message)
   }
@@ -470,9 +453,9 @@ ipcMain.handle('desktop:widget-action', (_event, type, action) => applyWidgetAct
 ipcMain.handle('desktop:show-main', () => { showMainWindow(); return true })
 ipcMain.handle('desktop:check-for-updates', () => checkForUpdates(true))
 ipcMain.handle('desktop:open-external', (_event, url) => {
-  const parsed = new URL(url)
-  if (!['https:', 'http:'].includes(parsed.protocol)) throw new Error('不支持的链接协议')
-  return shell.openExternal(parsed.toString())
+  const normalizedUrl = normalizeHttpUrl(url)
+  if (!normalizedUrl) throw new Error('不支持或无效的外部链接')
+  return shell.openExternal(normalizedUrl)
 })
 ipcMain.on('desktop:notify', (_event, title, body) => {
   if (Notification.isSupported()) {

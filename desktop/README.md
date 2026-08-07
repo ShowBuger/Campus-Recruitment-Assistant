@@ -23,6 +23,7 @@ npm run build:win
 输出在 `dist-electron/`：
 
 - `CampusBoard-<版本号>.exe` — Windows x64 安装程序
+- `CampusBoard-<版本号>.exe.blockmap` — 增量更新块映射
 - `latest.yml` — 桌面端自动更新元数据
 
 安装器采用当前用户单击安装模式，安装到 Windows 标准应用目录，不要求管理员权限，
@@ -32,7 +33,10 @@ npm run build:win
 
 1. 修改 `desktop/package.json` 的 `version`。
 2. 执行 `npm run build:win`。
-3. 使用发布脚本将安装包和 `latest.yml` 原子切换到服务器，避免下载到尚未复制完整的文件。
+3. 使用发布脚本先上传安装包与 blockmap，最后原子切换 `latest.yml`，避免客户端读取到尚未复制完整的版本。
+
+每个版本号对应的安装包和 blockmap 都是不可变文件；发布脚本会拒绝覆盖已存在的同版本产物，
+需要重新发布时必须先提升版本号。
 
 ```bash
 npm run build:win
@@ -40,7 +44,8 @@ npm run build:win
 ```
 
 网页的“下载桌面端”和客户端自动更新均使用站内更新服务。已安装客户端启动 10 秒后检查更新，
-之后每 6 小时检查一次。更新下载完毕后可立即重启升级，或在退出时自动安装。
+之后每 6 小时检查一次。Windows 客户端会优先使用 blockmap 增量下载，差分不可用时自动回退完整安装包。
+更新下载完毕后可立即重启升级，或在退出时自动安装。
 
 如需消除 Windows SmartScreen 的“未知发布者”提示，在仓库 Secrets 中配置：
 

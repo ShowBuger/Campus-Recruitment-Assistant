@@ -27,6 +27,9 @@ PROJECT_DIR = os.path.join(os.path.dirname(__file__), "..")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     bus.log(f"校招信息看板已启动 · PID {os.getpid()}", channel="system", level="success")
+    recovered = recommendations.recover_recommendation_runs()
+    if recovered:
+        bus.log(f"已恢复 {recovered} 个智能筛选任务", channel="system", level="info")
     try:
         yield
     finally:

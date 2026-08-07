@@ -15,6 +15,8 @@ const genLoading = ref(false)
 const noticeTitle = ref('')
 const noticeContent = ref('')
 const notifLoading = ref(false)
+const notifications = ref([])
+const notificationsLoading = ref(false)
 const pwMap = ref({})
 const syncEnabled = ref(false)
 const syncTime = ref('04:00')
@@ -167,13 +169,37 @@ async function sendNotif() {
     await apiReq('POST', '/api/admin/notifications', { title, content, request_id: requestId })
     noticeTitle.value = ''
     noticeContent.value = ''
+    await loadNotifications()
     toast.success('通知已发布')
   } catch (e) { toast.error('发布失败：' + e.message) }
   finally { notifLoading.value = false }
 }
 
+async function loadNotifications() {
+  notificationsLoading.value = true
+  try {
+    const data = await apiReq('GET', '/api/admin/notifications')
+    notifications.value = data.notifications || []
+  } catch (e) { toast.error('通知列表加载失败：' + e.message) }
+  finally { notificationsLoading.value = false }
+}
+
+async function deleteNotification(item) {
+  const confirmed = await dialog.confirm(
+    '确定删除通知“' + item.title + '”吗？\n所有用户的通知列表中都会移除这条内容。',
+    { title: '删除通知', tone: 'danger', confirmText: '永久删除' },
+  )
+  if (!confirmed) return
+  try {
+    await apiReq('DELETE', '/api/admin/notifications/' + item.id)
+    notifications.value = notifications.value.filter(notification => notification.id !== item.id)
+    toast.success('通知已删除')
+  } catch (e) { toast.error('删除失败：' + e.message) }
+}
+
 function switchPanel(panel) {
   activePanel.value = panel
+  if (panel === 'notice') loadNotifications()
   if (panel === 'logs') startLogStream()
   if (panel === 'backups') loadBackups()
 }
@@ -322,6 +348,7 @@ onMounted(() => {
     else { activePanel.value = 'invite' }
     loadAdminUsers()
     loadSyncSchedule()
+    loadNotifications()
     startLogStream()
   }
 })
@@ -427,6 +454,17 @@ onUnmounted(() => {
             <div class="form-group"><textarea id="notice-content" v-model="noticeContent" maxlength="5000" rows="4" placeholder="通知内容"></textarea></div>
             <button class="btn btn-primary" id="notice-submit" :disabled="notifLoading" @click="sendNotif">{{ notifLoading ? '发送中…' : '发布通知' }}</button>
           </div></div>
+          <div class="card notice-history-card">
+            <div class="card-hd"><span class="dot"></span><div class="card-title">已发布通知</div><div class="card-sub">{{ notifications.length }} 条</div></div>
+            <div class="notice-history-list">
+              <div v-if="notificationsLoading" class="center muted notice-history-state">正在加载通知</div>
+              <div v-else-if="!notifications.length" class="center muted notice-history-state">暂无已发布通知</div>
+              <article v-for="item in notifications" v-else :key="item.id" class="notice-history-item">
+                <div class="notice-history-copy"><div><b>{{ item.title }}</b><time>{{ formatSystemTime(item.created_at) }}</time></div><p>{{ item.content }}</p><small>发布人：{{ item.created_by_name }}</small></div>
+                <button class="btn btn-danger" type="button" @click="deleteNotification(item)">删除</button>
+              </article>
+            </div>
+          </div>
         </div>
         <!-- logs -->
         <div class="admin-panel" :class="{ active: activePanel === 'logs' }" id="admin-panel-logs">
@@ -447,7 +485,7 @@ onUnmounted(() => {
             <div class="card-hd">
               <span class="dot g"></span>
               <div class="card-title">数据库备份</div>
-              <div class="card-sub">每 12 小时自动备份</div>
+              <div class="card-sub">每 12 小时自动备份 · 仅保留最近 3 天</div>
             </div>
             <div class="card-body backup-panel">
               <div class="backup-toolbar">
@@ -474,6 +512,31 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* User management is structural UI, not a Pixelium skin feature. Keep the
+   same grid and native-size controls in every theme. */
+.admin-layout{display:grid;grid-template-columns:180px minmax(0,1fr);gap:16px;align-items:start;max-height:calc(100vh - 140px)}
+.admin-nav-pane{display:flex;flex-direction:column;gap:4px}
+.admin-nav-item{display:block;width:100%;padding:11px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);font:13px var(--font);text-align:left;cursor:pointer}
+.admin-nav-item.active{border-color:var(--blue);background:var(--blue);color:#fff;font-weight:800}
+.admin-content-pane{min-width:0;max-height:calc(100vh - 140px);overflow-y:auto;padding-right:4px}
+.admin-panel{display:none}.admin-panel.active{display:block}.admin-panel .card{margin-bottom:0}
+#admin-panel-users .card{overflow:hidden}
+#admin-user-list{display:grid;gap:0;padding:0}
+.admin-user-card{display:grid;grid-template-columns:minmax(150px,1fr) 92px 128px minmax(280px,1.35fr);align-items:center;gap:12px;min-width:0;margin:0;padding:13px 16px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}
+.admin-user-card:last-child{border-bottom:0}
+.admin-user-card:hover{background:var(--blueS)}
+.admin-user-card .uname{display:grid;gap:4px;min-width:0;font-size:14px;font-style:normal;letter-spacing:.01em}
+.admin-user-card .uname b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.admin-user-card .uname i{color:var(--muted);font:400 10px var(--mono,monospace)}
+.admin-user-card .uname small{overflow:hidden;color:var(--sub);font:600 10px/1.25 var(--font);text-overflow:ellipsis;white-space:nowrap}
+.admin-user-card .umeta{justify-self:start;padding:3px 7px;border:1px solid var(--line);border-radius:999px;background:var(--bg);font-size:10px}
+.admin-user-card .urole{display:inline-flex;align-items:center;gap:7px;min-width:0;margin:0;cursor:pointer;font-size:11px;white-space:nowrap}
+.admin-user-card .urole input{display:inline-block;flex:0 0 16px;width:16px;height:16px;margin:0;padding:0;accent-color:var(--blue);border-radius:3px;box-shadow:none}
+.admin-user-card .urole:has(input:disabled){cursor:default}
+.admin-user-card .udate{display:none}
+.admin-user-card .ubtns{grid-column:auto;display:grid;grid-template-columns:minmax(120px,1fr) auto auto;align-items:center;gap:7px;min-width:0}
+.admin-user-card .ubtns input{width:100%;min-width:0;height:34px;margin:0;padding:0 9px;border:1px solid var(--line2);border-radius:8px;background:var(--bg);color:var(--ink);font:12px var(--font);box-shadow:none}
+.admin-user-card .ubtns .btn{min-width:54px;min-height:34px;height:34px;padding:4px 9px;font-size:10px;white-space:nowrap}
 .sync-source-option{display:flex;align-items:center;gap:9px;min-width:210px;padding:11px 13px;border:1px solid var(--line);background:var(--panel);cursor:pointer}
 .sync-source-option input{width:17px;height:17px;accent-color:var(--blue)}
 .sync-source-option span{display:grid;gap:2px}.sync-source-option b{font-size:12px}.sync-source-option small{color:var(--muted);font-size:10px}
@@ -484,5 +547,9 @@ onUnmounted(() => {
 .backup-panel{display:grid;gap:12px}.backup-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:12px;border-bottom:1px solid var(--line)}
 .backup-toolbar p{margin-top:3px;color:var(--muted);font-size:11px}.backup-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid var(--line);background:var(--bg)}
 .backup-row>div:first-child{display:grid;gap:3px;min-width:0}.backup-row b{overflow:hidden;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.backup-row span{color:var(--muted);font-size:10px}.backup-row>div:last-child{display:flex;gap:7px}
-@media(max-width:620px){.backup-toolbar,.backup-row{align-items:stretch;flex-direction:column}.backup-row>div:last-child{display:grid;grid-template-columns:1fr 1fr}}
+.notice-history-card{margin-top:14px!important;overflow:hidden}.notice-history-list{display:grid;max-height:420px;overflow:auto}.notice-history-state{padding:34px 16px}.notice-history-item{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:18px;padding:14px 16px;border-bottom:1px solid var(--line)}.notice-history-item:last-child{border-bottom:0}.notice-history-copy{min-width:0}.notice-history-copy>div{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.notice-history-copy b{font-size:13px}.notice-history-copy time,.notice-history-copy small{color:var(--sub);font-size:10px}.notice-history-copy p{margin:5px 0;color:var(--muted);font-size:11px;line-height:1.55;white-space:pre-wrap;word-break:break-word}.notice-history-item>.btn{min-width:58px}
+@media(max-width:1120px){.admin-user-card{grid-template-columns:minmax(130px,1fr) 84px 112px}.admin-user-card .ubtns{grid-column:1/-1;grid-template-columns:minmax(160px,1fr) auto auto}}
+@media(max-width:760px){.admin-layout{grid-template-columns:1fr;max-height:none}.admin-nav-pane{flex-direction:row;flex-wrap:wrap}.admin-nav-item{width:auto;padding:8px 14px;font-size:12px}.admin-content-pane{max-height:none;overflow:visible}}
+@media(max-width:700px){#admin-user-list{gap:10px;padding:10px}.admin-user-card{grid-template-columns:minmax(0,1fr) auto;gap:9px 10px;padding:13px;border:1px solid var(--line);border-radius:12px}.admin-user-card:last-child{border-bottom:1px solid var(--line)}.admin-user-card .umeta{justify-self:end}.admin-user-card .urole,.admin-user-card .ubtns{grid-column:1/-1}.admin-user-card .ubtns{grid-template-columns:minmax(0,1fr) auto auto}}
+@media(max-width:620px){.backup-toolbar,.backup-row{align-items:stretch;flex-direction:column}.backup-row>div:last-child{display:grid;grid-template-columns:1fr 1fr}.admin-user-card .ubtns{grid-template-columns:1fr 1fr}.admin-user-card .ubtns input{grid-column:1/-1}.admin-user-card .ubtns .btn{width:100%}.notice-history-item{grid-template-columns:1fr}.notice-history-copy>div{align-items:flex-start;flex-direction:column;gap:3px}.notice-history-item>.btn{width:100%}}
 </style>

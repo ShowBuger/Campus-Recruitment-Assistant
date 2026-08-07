@@ -1,5 +1,6 @@
 """Generic IMAP recruitment progress tracker."""
 import email
+import difflib
 import html
 import hashlib
 import imaplib
@@ -83,6 +84,17 @@ PROGRESS_RANK = {"未投递": 0, "已投递": 1, "机考": 2, "面试": 3, "OC":
 TERMINAL_PROGRESS = {"已挂", "放弃"}
 CHINA_TZ = timezone(timedelta(hours=8))
 
+_COMPANY_SUFFIXES = (
+    "集团股份有限公司", "股份有限公司", "有限责任公司", "集团有限公司",
+    "控股有限公司", "科技有限公司", "网络有限公司", "信息技术有限公司",
+    "有限公司", "集团", "公司", "招聘",
+)
+_COMPANY_LOCATION_PREFIXES = (
+    "中国", "北京", "上海", "天津", "重庆", "深圳", "广州", "杭州",
+    "南京", "成都", "武汉", "西安", "苏州", "长沙", "合肥", "厦门", "青岛",
+)
+_AMBIGUOUS_COMPANY_KEYS = {"公司", "集团", "科技", "网络", "信息", "银行", "中国"}
+
 _FULL_DATE_TIME_RE = re.compile(
     r"(?P<year>20\d{2})\s*(?:年|[-/.])\s*"
     r"(?P<month>\d{1,2})\s*(?:月|[-/.])\s*"
@@ -150,6 +162,7 @@ class TrackerConfig(BaseModel):
 class EventAction(BaseModel):
     action: str
     interview_round: int | None = None
+    event_ms: int | None = Field(default=None, ge=946684800000, le=4102444800000)
 
     @field_validator("action")
     @classmethod
@@ -351,12 +364,59 @@ def _domain_from_sender(sender: str) -> str:
     return "" if domain in common else domain
 
 
+def _compact_name(value: str) -> str:
+    return re.sub(r"[^0-9a-z\u4e00-\u9fff]+", "", str(value or "").casefold())
+
+
+def _company_name_variants(value: str) -> set[str]:
+    """Return comparable legal-name and short-name forms."""
+    compact = _compact_name(value)
+    if not compact:
+        return set()
+    variants = {compact}
+    pending = [compact]
+    while pending:
+        current = pending.pop()
+        candidates = []
+        for suffix in _COMPANY_SUFFIXES:
+            suffix_key = _compact_name(suffix)
+            if current.endswith(suffix_key) and len(current) > len(suffix_key) + 1:
+                candidates.append(current[:-len(suffix_key)])
+        for prefix in _COMPANY_LOCATION_PREFIXES:
+            prefix_key = _compact_name(prefix)
+            if current.startswith(prefix_key) and len(current) > len(prefix_key) + 1:
+                candidates.append(current[len(prefix_key):])
+        for candidate in candidates:
+            if candidate not in variants:
+                variants.add(candidate)
+                pending.append(candidate)
+    return {item for item in variants if item not in _AMBIGUOUS_COMPANY_KEYS}
+
+
+def _name_similarity(left: str, right: str, *, company: bool = False) -> float:
+    left_keys = _company_name_variants(left) if company else {_compact_name(left)}
+    right_keys = _company_name_variants(right) if company else {_compact_name(right)}
+    best = 0.0
+    for left_key in left_keys:
+        for right_key in right_keys:
+            if not left_key or not right_key:
+                continue
+            if min(len(left_key), len(right_key)) >= 2 and (
+                left_key in right_key or right_key in left_key
+            ):
+                return 1.0
+            if min(len(left_key), len(right_key)) >= 4:
+                best = max(best, difflib.SequenceMatcher(None, left_key, right_key).ratio())
+    return best
+
+
 def _match_company(text: str, records: list[dict], sender: str = "") -> tuple[int, dict | None, str, str]:
     """Match saved records against email text and sender domain.
 
     Returns (score, record | None, company_name, job_name).
     """
     domain_key = _domain_from_sender(sender)
+    compact_text = _compact_name(text)
     matches: list[tuple[int, dict, str, str]] = []
     for record in records:
         fields = record["fields"]
@@ -364,12 +424,12 @@ def _match_company(text: str, records: list[dict], sender: str = "") -> tuple[in
         saved_job = str(fields.get("秋招岗位") or "").strip()
         score = 0
         # Text-based company match
-        if saved_company and saved_company.lower() in text:
+        company_keys = _company_name_variants(saved_company)
+        if any(len(key) >= 2 and key in compact_text for key in company_keys):
             score += 2
         # Domain-based company match
         if score == 0 and domain_key and saved_company:
-            company_lower = saved_company.lower()
-            if domain_key in company_lower or company_lower in domain_key:
+            if _name_similarity(domain_key, saved_company, company=True) >= 0.72:
                 score += 1
         # Job match (only when company already matched)
         if score > 0 and saved_job and saved_job.lower() in text:
@@ -495,21 +555,15 @@ def _json_object(text: str) -> dict:
 
 
 def _match_ai_record(company: str, job: str, records: list[dict]) -> tuple[str | None, str, str]:
-    def compact(value: str) -> str:
-        return re.sub(r"[^0-9a-z\u4e00-\u9fff]+", "", value.casefold())
-    company_key, job_key = compact(company), compact(job)
     candidates = []
     for record in records:
         fields = record["fields"]
         saved_company = str(fields.get("公司名称") or "").strip()
         saved_job = str(fields.get("秋招岗位") or "").strip()
-        saved_key = compact(saved_company)
-        if company_key and saved_key and (
-            company_key in saved_key or saved_key in company_key
-        ):
-            score = 2 + int(bool(job_key and (
-                job_key in compact(saved_job) or compact(saved_job) in job_key
-            )))
+        company_score = _name_similarity(company, saved_company, company=True)
+        job_score = _name_similarity(job, saved_job)
+        if company_score >= 0.72:
+            score = 2 + int(job_score >= 0.82)
             candidates.append((score, record["record_id"], saved_company, saved_job))
     if not candidates:
         return None, company.strip(), job.strip()
@@ -618,16 +672,10 @@ def _ai_recognize_batch(
             fields = matched["fields"]
             saved_company = str(fields.get("公司名称") or "").strip()
             saved_job = str(fields.get("秋招岗位") or "").strip()
-            if company:
-                def compact(value: str) -> str:
-                    return re.sub(r"[^0-9a-z\u4e00-\u9fff]+", "", value.casefold())
-                company_key, saved_key = compact(company), compact(saved_company)
-                if not company_key or not saved_key or (
-                    company_key not in saved_key and saved_key not in company_key
-                ):
-                    matched = None
-            if matched:
-                record_id, company, job = proposed_id, saved_company, saved_job
+            # The classifier performs semantic entity resolution (brand names,
+            # legal entities and aliases). The server only accepts an ID from
+            # this user's supplied record set, then restores canonical labels.
+            record_id, company, job = proposed_id, saved_company, saved_job
         if not matched:
             record_id, company, job = _match_ai_record(company, job, records)
         scheduled = item.get("scheduled_ms")
@@ -749,6 +797,8 @@ def _current_progress(record: dict) -> str:
 
 def _record_event_time(event: dict) -> int:
     """Choose the actionable time written to the personal tracker."""
+    if event.get("_confirmed_event_ms"):
+        return int(event["_confirmed_event_ms"])
     if event.get("progress") == "机考" and event.get("deadline_ms"):
         return int(event["deadline_ms"])
     return int(
@@ -1431,6 +1481,8 @@ def act_event(event_id: int, body: EventAction, user: dict = Depends(auth_module
         "resolution": "",
     }
     resulting_record_id = event.get("record_id")
+    if body.event_ms is not None and body.action in {"confirm", "create"}:
+        event["_confirmed_event_ms"] = body.event_ms
     if body.action == "confirm":
         try:
             outcome = _apply_event(user["user_id"], event, body.interview_round)
@@ -1439,41 +1491,65 @@ def act_event(event_id: int, body: EventAction, user: dict = Depends(auth_module
     elif body.action == "create":
         if event.get("record_id"):
             raise HTTPException(status_code=409, detail="该更新已经匹配到个人总表岗位")
-        fields = {
-            "公司名称": event.get("company") or "待补充公司",
-            "秋招岗位": event.get("job") or "待补充岗位",
-            "城市": "待补充",
-            "批次": "秋招",
-            "进展": [event["progress"]],
-        }
-        date_field = DATE_FIELDS.get(event["progress"])
-        if date_field:
-            if event["progress"] == "面试":
-                date_field = {1: "一面", 2: "二面", 3: "三面"}.get(
-                    body.interview_round or event.get("interview_round"),
-                    date_field,
-                )
-            fields[date_field] = _record_event_time(event)
-        created = local_records.create_record(user["user_id"], fields)
-        resulting_record_id = created["record_id"]
-        outcome = {
-            "previous_progress": "未投递",
-            "resulting_progress": event["progress"],
-            "resolution": "已根据招聘邮件新增投递记录",
-        }
-        state.set_cache(user["user_id"], local_records.get_dashboard_data(user["user_id"]))
+        matched_id, _, _ = _match_ai_record(
+            str(event.get("company") or ""),
+            str(event.get("job") or ""),
+            local_records.list_records(user["user_id"]),
+        )
+        if matched_id:
+            event["record_id"] = matched_id
+            resulting_record_id = matched_id
+            try:
+                outcome = _apply_event(user["user_id"], event, body.interview_round)
+                outcome["resolution"] = "已匹配现有投递记录；" + outcome["resolution"]
+            except (ValueError, LookupError) as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+        else:
+            fields = {
+                "公司名称": event.get("company") or "待补充公司",
+                "秋招岗位": event.get("job") or "待补充岗位",
+                "城市": "待补充",
+                "批次": "秋招",
+                "进展": [event["progress"]],
+            }
+            date_field = DATE_FIELDS.get(event["progress"])
+            if date_field:
+                if event["progress"] == "面试":
+                    date_field = {1: "一面", 2: "二面", 3: "三面"}.get(
+                        body.interview_round or event.get("interview_round"),
+                        date_field,
+                    )
+                fields[date_field] = _record_event_time(event)
+            created = local_records.create_record(user["user_id"], fields)
+            resulting_record_id = created["record_id"]
+            outcome = {
+                "previous_progress": "未投递",
+                "resulting_progress": event["progress"],
+                "resolution": "已根据招聘邮件新增投递记录",
+            }
+            state.set_cache(user["user_id"], local_records.get_dashboard_data(user["user_id"]))
     else:
         outcome["resolution"] = "用户已忽略该识别结果"
     event_status = "ignored" if body.action == "ignore" else "applied"
+    scheduled_override = None
+    deadline_override = None
+    if body.event_ms is not None and body.action in {"confirm", "create"}:
+        if event.get("progress") == "机考" and event.get("deadline_ms"):
+            deadline_override = body.event_ms
+        else:
+            scheduled_override = body.event_ms
     with database._write_lock:
         db.execute(
             """UPDATE email_tracker_events
                SET status = ?, record_id = ?, interview_round = COALESCE(?, interview_round),
+                   scheduled_ms = COALESCE(?, scheduled_ms),
+                   deadline_ms = COALESCE(?, deadline_ms),
                    previous_progress = ?, resulting_progress = ?, resolution = ?,
                    processed_at = datetime('now')
                WHERE id = ? AND user_id = ?""",
             (
                 event_status, resulting_record_id, body.interview_round,
+                scheduled_override, deadline_override,
                 outcome["previous_progress"], outcome["resulting_progress"],
                 outcome["resolution"], event_id, user["user_id"],
             ),
@@ -1481,7 +1557,7 @@ def act_event(event_id: int, body: EventAction, user: dict = Depends(auth_module
         db.commit()
     messages = {
         "confirm": outcome["resolution"] or "进度已更新",
-        "create": "已新增投递记录并保留邮件事件",
+        "create": outcome["resolution"] or "邮件进度已处理",
         "ignore": "已忽略，识别结果已保留在历史中",
     }
     return {

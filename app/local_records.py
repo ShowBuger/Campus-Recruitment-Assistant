@@ -45,6 +45,40 @@ FIELD_COLUMNS = {
 }
 JSON_FIELDS = {"嵌入式方向", "进展"}
 
+_PROGRESS_RANK = {"未投递": 0, "已投递": 1, "机考": 2, "面试": 3,
+                  "OC": 4, "已挂": 4, "放弃": 4}
+_DATE_PROGRESS = {
+    "投递时间": "已投递",
+    "机考时间": "机考",
+    "一面": "面试",
+    "二面": "面试",
+    "三面": "面试",
+    "保温": "面试",
+}
+
+
+def _sync_progress_with_dates(fields: dict, current_fields: dict | None = None) -> dict:
+    """Keep non-terminal progress aligned with explicitly edited stage dates."""
+    result = dict(fields)
+    current_fields = current_fields or {}
+    progress = result.get("进展", current_fields.get("进展")) or []
+    if not isinstance(progress, list):
+        progress = [progress] if progress else []
+    current = progress[0] if progress else "未投递"
+    current_rank = _PROGRESS_RANK.get(current, 0)
+
+    required = None
+    for date_field, target in _DATE_PROGRESS.items():
+        value = result.get(date_field, current_fields.get(date_field))
+        if value and (required is None or _PROGRESS_RANK[target] > _PROGRESS_RANK[required]):
+            required = target
+    if required and _PROGRESS_RANK[required] > current_rank:
+        result["进展"] = [required]
+    elif any(field in result and result[field] is None for field in _DATE_PROGRESS):
+        if current not in {"OC", "已挂", "放弃"}:
+            result["进展"] = [required or "未投递"]
+    return result
+
 
 def _url_value(value) -> str:
     if isinstance(value, dict):
@@ -123,6 +157,7 @@ def get_record(user_id: int, record_id: str) -> dict | None:
 
 def create_record(user_id: int, fields: dict) -> dict:
     record_id = "rec" + uuid.uuid4().hex
+    fields = _sync_progress_with_dates(fields)
     values = {FIELD_COLUMNS[key]: _db_value(key, value) for key, value in fields.items() if key in FIELD_COLUMNS}
     values["progress_updated_at"] = _now_ms()
     columns = ["id", "user_id", *values.keys()]
@@ -143,6 +178,7 @@ def create_records(user_id: int, records: list[dict]) -> list[str]:
     prepared: list[tuple[list[str], list]] = []
     record_ids: list[str] = []
     for fields in records:
+        fields = _sync_progress_with_dates(fields)
         record_id = "rec" + uuid.uuid4().hex
         values = {
             FIELD_COLUMNS[key]: _db_value(key, value)
@@ -585,12 +621,13 @@ def delete_expired_shared_records(now: datetime | None = None) -> int:
 
 
 def update_record(user_id: int, record_id: str, fields: dict) -> bool:
+    current = get_record(user_id, record_id)
+    fields = _sync_progress_with_dates(fields, current["fields"] if current else None)
     values = {FIELD_COLUMNS[key]: _db_value(key, value) for key, value in fields.items() if key in FIELD_COLUMNS}
     if not values:
         return bool(get_record(user_id, record_id))
     # 进展发生变化时，刷新"进入当前进展的时间"
     if "进展" in fields:
-        current = get_record(user_id, record_id)
         old_progress = (current["fields"].get("进展") or []) if current else []
         new_progress = fields.get("进展") or []
         if not isinstance(new_progress, list):

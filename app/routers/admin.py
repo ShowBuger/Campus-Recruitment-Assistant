@@ -78,6 +78,7 @@ def get_backups(_: dict = Depends(require_root)):
     return {
         "success": True,
         "interval_hours": database_backup.BACKUP_INTERVAL_SECONDS // 3600,
+        "retention_days": database_backup.BACKUP_RETENTION_DAYS,
         "backups": database_backup.list_backups(),
     }
 
@@ -211,6 +212,18 @@ def publish_notification(
         body.request_id,
     )
     return {"success": True, "message": "通知已发布", "notification": notification}
+
+
+@router.get("/admin/notifications")
+def get_admin_notifications(_: dict = Depends(require_admin)):
+    return {"success": True, "notifications": database.list_admin_notifications()}
+
+
+@router.delete("/admin/notifications/{notification_id}")
+def remove_notification(notification_id: int, _: dict = Depends(require_admin)):
+    if not database.delete_notification(notification_id):
+        raise HTTPException(status_code=404, detail="通知不存在")
+    return {"success": True, "message": "通知已删除"}
 
 
 @router.get("/notifications")

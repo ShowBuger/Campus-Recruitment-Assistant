@@ -13,6 +13,7 @@ export const useAppStore = defineStore('app', () => {
   const detailId = ref('')
   const recordShared = ref(false)
   const managerShared = ref(false)
+  const managerScope = ref('records')
 
   function toggleConfig() { showConfig.value = !showConfig.value }
   function toggleChat() { showChat.value = !showChat.value }
@@ -25,8 +26,12 @@ export const useAppStore = defineStore('app', () => {
   function closeStats() { showStats.value = false }
   function openOffer() { showOffer.value = true }
   function closeOffer() { showOffer.value = false }
-  function openManager(shared) { managerShared.value = !!shared; showManager.value = true }
-  function closeManager() { showManager.value = false; managerShared.value = false }
+  function openManager(scope = 'records') {
+    managerShared.value = scope === true || scope === 'shared'
+    managerScope.value = scope === 'applications' ? 'applications' : 'records'
+    showManager.value = true
+  }
+  function closeManager() { showManager.value = false; managerShared.value = false; managerScope.value = 'records' }
   function openRecommendation() { showRecommendation.value = true }
   function closeRecommendation() { showRecommendation.value = false }
 
@@ -39,7 +44,7 @@ export const useAppStore = defineStore('app', () => {
   function setTrackerPending(events) { trackerPending.value = events || [] }
   function clearTrackerPending() { trackerPending.value = [] }
 
-  return { showConfig, showChat, showRecord, showHelp, showStats, showOffer, showManager, showRecommendation, detailId, recordShared, managerShared,
+  return { showConfig, showChat, showRecord, showHelp, showStats, showOffer, showManager, showRecommendation, detailId, recordShared, managerShared, managerScope,
     toggleConfig, toggleChat, toggleHelp, openRecord, closeRecord, openDetail, closeDetail,
     openStats, closeStats, openOffer, closeOffer, openManager, closeManager, openRecommendation, closeRecommendation,
     trackerPending, setTrackerPending, clearTrackerPending, chatUnread, setChatUnread }

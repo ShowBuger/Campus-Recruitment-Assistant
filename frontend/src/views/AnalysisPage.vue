@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -22,6 +22,8 @@ const resultMeta = ref('尚未生成分析')
 const history = ref([])
 const activeHistory = ref('')
 const loadingHistory = ref(true)
+const analysisTaskKey = 'resume_analysis_task_id'
+let pageMounted = true
 
 // AI provider info
 const PROVIDER_LABELS = { deepseek: 'DeepSeek', openai: 'OpenAI GPT', anthropic: 'Claude', kimi: 'Kimi' }
@@ -38,7 +40,53 @@ onMounted(async () => {
   await loadResumes()
   await loadHistory()
   await loadAIProvider()
+  const taskId = localStorage.getItem(analysisTaskKey)
+  if (taskId) reconnectAnalysis(taskId)
 })
+
+onUnmounted(() => { pageMounted = false })
+
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+async function pollAnalysisTask(taskId) {
+  while (pageMounted) {
+    const r = await fetch(`/api/ai/analyze/tasks/${encodeURIComponent(taskId)}`, {
+      headers: { Authorization: `Bearer ${auth.token}` }
+    })
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || '读取分析进度失败')
+    const task = await r.json()
+    resultMeta.value = task.message || '正在分析'
+    if (task.status === 'finished') return task.result
+    if (task.status === 'failed') throw new Error(task.message || '分析失败')
+    await wait(1200)
+  }
+  return null
+}
+
+function showAnalysisResult(data) {
+  if (!data) return
+  resultHtml.value = data.analysis_html || data.analysis || '<p>无结果</p>'
+  resultMeta.value = [data.analysis_mode_label || '', data.company || '', data.job || '', data.provider_name || data.provider || '', data.model || ''].filter(Boolean).join(' · ') || '分析完成'
+}
+
+async function reconnectAnalysis(taskId) {
+  loading.value = true; resultHtml.value = ''; resultError.value = ''; resultMeta.value = '正在恢复分析进度'
+  try {
+    const data = await pollAnalysisTask(taskId)
+    showAnalysisResult(data)
+    if (data) {
+      toast.success('简历分析完成并已保存')
+      await loadHistory()
+    }
+  } catch (e) {
+    resultError.value = e.message || '分析失败，请稍后重试'
+    resultMeta.value = '分析失败'
+    toast.error(resultError.value)
+  } finally {
+    localStorage.removeItem(analysisTaskKey)
+    loading.value = false
+  }
+}
 
 async function loadAIProvider() {
   try {
@@ -76,7 +124,7 @@ async function runAnalysis() {
   loading.value = true; resultHtml.value = ''; resultError.value = ''; resultMeta.value = '正在分析'
   activeHistory.value = ''
   try {
-    const r = await fetch('/api/ai/analyze', {
+    const r = await fetch('/api/ai/analyze/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
       body: JSON.stringify({
@@ -87,9 +135,12 @@ async function runAnalysis() {
       })
     })
     if (!r.ok) throw new Error((await r.json()).detail || '分析失败')
-    const data = await r.json()
-    resultHtml.value = data.analysis_html || data.analysis || '<p>无结果</p>'
-    resultMeta.value = [data.analysis_mode_label || '', data.company || '', data.job || '', data.provider_name || data.provider || '', data.model || ''].filter(Boolean).join(' · ') || '分析完成'
+    const started = await r.json()
+    localStorage.setItem(analysisTaskKey, started.task_id)
+    const data = await pollAnalysisTask(started.task_id)
+    if (!data) return
+    showAnalysisResult(data)
+    localStorage.removeItem(analysisTaskKey)
     toast.success('简历分析完成并已保存')
     await loadHistory()
   } catch (e) {

@@ -13,6 +13,15 @@ def saved_record(progress):
 
 
 class ProgressTrackerStateMachineTests(unittest.TestCase):
+    def test_user_confirmed_time_overrides_detected_event_time(self):
+        event = {
+            "progress": "机考",
+            "scheduled_ms": 1720000000000,
+            "deadline_ms": 1720100000000,
+            "_confirmed_event_ms": 1720200000000,
+        }
+        self.assertEqual(progress_tracker._record_event_time(event), 1720200000000)
+
     def test_exam_record_uses_deadline_instead_of_start_time(self):
         event = {
             "record_id": "rec-1",
@@ -165,6 +174,39 @@ class ProgressTrackerStateMachineTests(unittest.TestCase):
 
         self.assertEqual(update.call_args.args[2]["进展"], ["已挂"])
         self.assertEqual(outcome["resulting_progress"], "已挂")
+
+
+class ProgressTrackerCompanyMatchingTests(unittest.TestCase):
+    def setUp(self):
+        self.records = [{
+            "record_id": "rec-company",
+            "fields": {
+                "公司名称": "北京星河科技有限公司",
+                "秋招岗位": "嵌入式软件工程师",
+            },
+        }]
+
+    def test_short_company_name_in_email_matches_legal_entity(self):
+        score, record, company, _ = progress_tracker._match_company(
+            "星河科技面试邀请 嵌入式软件工程师", self.records,
+        )
+        self.assertGreaterEqual(score, 2)
+        self.assertEqual(record["record_id"], "rec-company")
+        self.assertEqual(company, "北京星河科技有限公司")
+
+    def test_ai_company_group_name_matches_saved_legal_entity(self):
+        record_id, company, job = progress_tracker._match_ai_record(
+            "北京星河科技集团", "嵌入式软件工程师", self.records,
+        )
+        self.assertEqual(record_id, "rec-company")
+        self.assertEqual(company, "北京星河科技有限公司")
+        self.assertEqual(job, "嵌入式软件工程师")
+
+    def test_unrelated_company_does_not_match(self):
+        record_id, _, _ = progress_tracker._match_ai_record(
+            "远海银行", "嵌入式软件工程师", self.records,
+        )
+        self.assertIsNone(record_id)
 
 
 if __name__ == "__main__":

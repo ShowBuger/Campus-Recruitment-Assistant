@@ -10,7 +10,9 @@ from app import database
 def list_chat_users(current_user_id: int) -> list[dict]:
     db = database.get_db()
     rows = db.execute(
-        """SELECT u.id, u.username, u.last_seen_at,
+        """SELECT u.id, u.username, COALESCE(NULLIF(u.nickname, ''), u.username) AS nickname,
+                  COALESCE(NULLIF(u.avatar_key, ''), 'indigo') AS avatar_key, u.last_seen_at,
+                  CASE WHEN u.avatar_key = 'custom' AND u.avatar_file <> '' THEN '/api/auth/users/' || u.id || '/avatar' ELSE '' END AS avatar_url,
                   CASE WHEN u.last_seen_at >= datetime('now', '-2 minutes')
                        THEN 1 ELSE 0 END AS is_online,
                   COALESCE((

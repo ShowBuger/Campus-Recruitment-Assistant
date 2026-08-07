@@ -1,4 +1,4 @@
 interface:
   display_name: "招聘邮件进度识别"
-  short_description: "准确识别招聘邮件阶段、匹配目标岗位并校准自动更新置信度等级"
-  default_prompt: "Use $recruitment-email-classifier to classify recruitment emails into actionable progress updates."
+  short_description: "分析招聘邮件阶段，并语义匹配公司实体与已有岗位记录"
+  default_prompt: "使用 $recruitment-email-classifier 分析招聘邮件，并将公司简称或法律主体语义匹配到已有岗位。"

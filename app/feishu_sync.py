@@ -73,13 +73,40 @@ def _run_cli(*args: str, timeout: int = 90) -> dict:
     output = (result.stdout or "").strip()
     error_output = (result.stderr or "").strip()
     if result.returncode:
-        message = error_output or output or "飞书 CLI 调用失败"
-        raise FeishuSyncError(message[:800])
+        raise FeishuSyncError(_cli_error_message(output, error_output))
     parsed = _parse_cli_json(output)
     if isinstance(parsed, dict) and parsed.get("ok") is False:
-        error = parsed.get("error") or {}
-        raise FeishuSyncError(str(error.get("message") or error.get("hint") or error)[:800])
+        raise FeishuSyncError(_payload_error_message(parsed))
     return parsed
+
+
+def _payload_error_message(payload: dict) -> str:
+    error = payload.get("error") or {}
+    if not isinstance(error, dict):
+        return str(error or "飞书 CLI 调用失败")[:800]
+    subtype = str(error.get("subtype") or "")
+    message = str(error.get("message") or "")
+    if subtype in {"token_missing", "token_expired"} or "need_user_authorization" in message:
+        return (
+            "飞书账号授权已失效，请重新授权表格只读权限"
+            "（sheets:spreadsheet:read）后重试"
+        )
+    if str(error.get("type") or "") == "authentication":
+        return "飞书账号认证失败，请重新授权后重试"
+    return str(message or error.get("hint") or error or "飞书 CLI 调用失败")[:800]
+
+
+def _cli_error_message(output: str, error_output: str = "") -> str:
+    for candidate in (output, error_output):
+        if not candidate:
+            continue
+        try:
+            payload = _parse_cli_json(candidate)
+        except FeishuSyncError:
+            continue
+        if payload.get("ok") is False or payload.get("error"):
+            return _payload_error_message(payload)
+    return (error_output or output or "飞书 CLI 调用失败")[:800]
 
 
 def _parse_cli_json(output: str) -> dict:
@@ -127,7 +154,7 @@ def _find_value(payload, *keys: str):
     return None
 
 
-def _validate_url(value: str) -> str:
+def validate_url(value: str) -> str:
     url = value.strip()
     parsed = urlparse(url)
     hostname = (parsed.hostname or "").lower()
@@ -293,7 +320,7 @@ def _read_sheets(url: str) -> list[dict]:
 
 
 def read_table(url: str) -> list[dict]:
-    validated = _validate_url(url)
+    validated = validate_url(url)
     return _read_sheets(validated) if "/sheets/" in urlparse(validated).path else _read_base(validated)
 
 
