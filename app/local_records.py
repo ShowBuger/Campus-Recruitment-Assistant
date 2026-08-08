@@ -711,8 +711,10 @@ def get_dashboard_data(user_id: int) -> dict:
     progress = Counter()
     directions = Counter()
     company_types = Counter()
-    exam_count = 0
-    interview_count = 0
+    applied_companies: set[str] = set()
+    exam_companies: set[str] = set()
+    interview_companies: set[str] = set()
+    offer_companies: set[str] = set()
 
     for record in records:
         fields = record["fields"]
@@ -722,14 +724,18 @@ def get_dashboard_data(user_id: int) -> dict:
 
         prog = fields.get("进展") or []
         if _is_applied(fields):
+            company_key = str(fields.get("公司名称") or "").strip().casefold()
+            applied_companies.add(company_key)
             # All dashboard statistics use applied records as their population.
             progress.update(prog)
             directions.update(fields.get("嵌入式方向") or [])
             company_types.update(fields.get("公司/行业类型") or [])
             if fields.get("机考时间"):
-                exam_count += 1
+                exam_companies.add(company_key)
             if fields.get("一面") or fields.get("二面") or fields.get("三面"):
-                interview_count += 1
+                interview_companies.add(company_key)
+            if any(item in {"OC", "Offer"} for item in prog):
+                offer_companies.add(company_key)
             recent.append(record)
 
         if fields.get("投递截止时间"):
@@ -749,10 +755,10 @@ def get_dashboard_data(user_id: int) -> dict:
     # Serialize (only once per record)
     return {
         "main": {
-            "total_companies": len(recent),
-            "exam_count": exam_count,
-            "interview_count": interview_count,
-            "offer_count": progress.get("OC", 0) + progress.get("Offer", 0),
+            "total_companies": len(applied_companies),
+            "exam_count": len(exam_companies),
+            "interview_count": len(interview_companies),
+            "offer_count": len(offer_companies),
             "directions": directions.most_common(15),
             "ctypes": company_types.most_common(15),
             "deadlines": [{"company": r["fields"].get("公司名称", ""), "job": r["fields"].get("秋招岗位", ""), "deadline": r["fields"].get("投递截止时间"), "progress": r["fields"].get("进展", [])} for r in deadlines],

@@ -432,12 +432,22 @@ def _match_company(text: str, records: list[dict], sender: str = "") -> tuple[in
             if _name_similarity(domain_key, saved_company, company=True) >= 0.72:
                 score += 1
         # Job match (only when company already matched)
-        if score > 0 and saved_job and saved_job.lower() in text:
+        if score > 0 and saved_job and _compact_name(saved_job) in compact_text:
             score += 1
         if score > 0:
             matches.append((score, record, saved_company, saved_job))
     matches.sort(key=lambda item: item[0], reverse=True)
-    return matches[0] if matches else (0, None, "", "")
+    if not matches:
+        return 0, None, "", ""
+    best = matches[0]
+    # Several positions under one company are independent records.  A company
+    # hit alone must never select whichever child happened to be listed first.
+    tied = [item for item in matches if item[0] == best[0]]
+    if len(tied) > 1:
+        companies = {_compact_name(item[2]) for item in tied}
+        company = best[2] if len(companies) == 1 else ""
+        return best[0], None, company, ""
+    return best
 
 
 # ── 本地关键词识别 ──────────────────────────────────
@@ -563,12 +573,30 @@ def _match_ai_record(company: str, job: str, records: list[dict]) -> tuple[str |
         company_score = _name_similarity(company, saved_company, company=True)
         job_score = _name_similarity(job, saved_job)
         if company_score >= 0.72:
-            score = 2 + int(job_score >= 0.82)
-            candidates.append((score, record["record_id"], saved_company, saved_job))
+            candidates.append({
+                "record_id": record["record_id"],
+                "company": saved_company,
+                "job": saved_job,
+                "company_score": company_score,
+                "job_score": job_score,
+            })
     if not candidates:
         return None, company.strip(), job.strip()
-    candidates.sort(reverse=True)
-    return candidates[0][1], candidates[0][2], candidates[0][3]
+    if len(candidates) == 1:
+        match = candidates[0]
+        return match["record_id"], match["company"], match["job"]
+
+    # A company can own multiple job-position records.  Only a unique, strong
+    # job match may select one of them; otherwise leave the event unmatched for
+    # confirmation instead of writing progress to an arbitrary child record.
+    if not _compact_name(job):
+        return None, company.strip(), job.strip()
+    candidates.sort(key=lambda item: item["job_score"], reverse=True)
+    best = candidates[0]
+    runner_up = candidates[1]
+    if best["job_score"] < 0.82 or best["job_score"] - runner_up["job_score"] < 0.08:
+        return None, company.strip(), job.strip()
+    return best["record_id"], best["company"], best["job"]
 
 
 def _ai_recognize_batch(

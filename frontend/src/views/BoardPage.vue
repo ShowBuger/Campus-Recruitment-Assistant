@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useToastStore } from '@/stores/toast'
 import { useDialogStore } from '@/stores/dialog'
@@ -7,6 +7,7 @@ import ProgressBadge from '@/components/ProgressBadge.vue'
 import TooltipCell from '@/components/TooltipCell.vue'
 import { post } from '@/utils/api'
 import { boardDwellChina } from '@/utils/date'
+import { useRecordGroups } from '@/composables/useRecordGroups'
 
 const store = useDashboardStore()
 const toast = useToastStore()
@@ -31,7 +32,17 @@ var DAY = 86400000
 
 function toArray(v) { return Array.isArray(v) ? v : (v ? [v] : []) }
 
-function applicationRecords() { return store.data?.main?.recent || [] }
+const allRecords = computed(() => store.data?.main?.records || [])
+const { groupedRecords } = useRecordGroups(allRecords)
+
+function isAppliedRecord(record) {
+  const progress = toArray(record?.progress)[0]
+  return (progress && progress !== '未投递') || !!(record && (record.apply_date || record.exam_date || record.interview1 || record.interview2 || record.interview3 || record.warm || record.result))
+}
+
+const primaryApplicationRecords = computed(() => groupedRecords.value.filter(isAppliedRecord))
+
+function applicationRecords() { return primaryApplicationRecords.value }
 
 /* 停留天数 */
 function boardDwell(ts) {
@@ -141,7 +152,7 @@ async function onDrop(e, targetCol) {
 <template>
   <div class="page active board-page">
     <div class="card board-shell">
-      <div class="board-hint"><strong>拖动更新</strong><span>将记录拖到目标阶段。回退时会先确认，并同步更新时间。</span><em>{{ applicationRecords().length }} 条记录</em></div>
+      <div class="board-hint"><strong>拖动更新</strong><span>每家公司仅显示当前主记录，切换主记录后自动同步。</span><em>{{ applicationRecords().length }} 条主记录</em></div>
 
       <div class="board-columns" id="board-columns">
         <div

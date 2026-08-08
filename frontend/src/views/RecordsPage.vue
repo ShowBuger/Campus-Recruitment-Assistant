@@ -6,9 +6,11 @@ import ProgressBadge from '@/components/ProgressBadge.vue'
 import { fmtDateChina, fmtDateFullChina } from '@/utils/date'
 import { externalHttpUrl } from '@/utils/externalUrl'
 import TooltipCell from '@/components/TooltipCell.vue'
+import RecordPositionPicker from '@/components/RecordPositionPicker.vue'
 import { get, post } from '@/utils/api'
 import { useAppStore } from '@/stores/app'
 import { useDialogStore } from '@/stores/dialog'
+import { useRecordGroups } from '@/composables/useRecordGroups'
 const app = useAppStore()
 const store = useDashboardStore()
 const auth = useAuthStore()
@@ -23,6 +25,7 @@ const importLoading = ref(false)
 const feishuSyncing = ref(false)
 const givemeocSyncing = ref(false)
 const qiuzhiSyncing = ref(false)
+const positionPickerGroup = ref(null)
 const givemeocProgress = ref('')
 const givemeocShow = ref(false)
 const givemeocPhase = ref('scanning')
@@ -73,9 +76,13 @@ const displayRecords = computed(() => {
   return items
 })
 
+const groupSource = computed(() => showShared.value ? [] : displayRecords.value)
+const { groupedRecords, selectPosition, toggleExpanded, isExpanded } = useRecordGroups(groupSource)
+const tableRecords = computed(() => showShared.value ? displayRecords.value : groupedRecords.value)
+
 const recordCountText = computed(() => {
   const total = showShared.value ? sharedRecords.value.length : store.records.length
-  const filtered = displayRecords.value.length
+  const filtered = tableRecords.value.length
   const prefix = showShared.value ? '共享' : '个人'
   if (searchQuery.value.trim()) {
     return prefix + ' · ' + filtered + ' / ' + total + ' 条记录'
@@ -133,6 +140,12 @@ async function loadShared() {
 
 function openDetail(r) {
   app.openDetail(r.record_id)
+}
+
+function openPositionPicker(group) { positionPickerGroup.value = group }
+function choosePosition(position) {
+  if (positionPickerGroup.value) selectPosition(positionPickerGroup.value, position)
+  positionPickerGroup.value = null
 }
 
 /* ---- Personal tab actions ---- */
@@ -400,13 +413,20 @@ async function qiuzhiSync() {
           </thead>
           <tbody>
             <tr v-if="store.loading"><td colspan="9" class="center">加载中…</td></tr>
-            <tr v-else-if="!displayRecords.length"><td colspan="9" class="center">没有匹配的记录</td></tr>
-            <tr v-for="r in displayRecords" :key="r.record_id">
+            <tr v-else-if="!tableRecords.length"><td colspan="9" class="center">没有匹配的记录</td></tr>
+            <template v-for="r in tableRecords" :key="r.record_id">
+            <tr :class="{ 'group-parent-row': !showShared && r._positions?.length > 1 }">
               <td class="company">
                 <button v-if="!showShared" class="company-link" @click="openDetail(r)">{{ r.company || '-' }}</button>
                 <span v-else>{{ r.company || '-' }}</span>
               </td>
-              <td class="job"><TooltipCell :text="r.job || '-'" /></td>
+              <td class="job">
+                <div v-if="!showShared && r._positions?.length > 1" class="position-cell-actions">
+                  <button class="position-picker-trigger" type="button" title="选择要展示的岗位记录" @click="openPositionPicker(r)"><span>{{ r.job || '未命名岗位' }}</span><b aria-hidden="true">▾</b></button>
+                  <button class="position-expand-btn" type="button" :aria-expanded="isExpanded(r)" @click="toggleExpanded(r)">{{ isExpanded(r) ? '收起' : '展开' }}</button>
+                </div>
+                <TooltipCell v-else :text="r.job || '-'" />
+              </td>
               <td><TooltipCell :text="dirText(r.dir)" /></td>
               <td><TooltipCell :text="r.type || '-'" /></td>
               <td><span class="table-date" :title="fmtDateFull(r.deadline)">{{ fmtDate(r.deadline) }}</span></td>
@@ -431,6 +451,17 @@ async function qiuzhiSync() {
                 >{{ r.is_added ? '已添加' : '添加个人' }}</button>
               </td>
             </tr>
+            <tr v-for="position in (!showShared && isExpanded(r) ? r._positions.filter(item => item.record_id !== r.record_id) : [])" :key="'child-' + position.record_id" class="position-child-row">
+              <td class="company"><button class="company-link child-company" @click="openDetail(position)">↳ {{ position.company || '-' }}</button></td>
+              <td class="job"><button class="position-child-job" type="button" @click="selectPosition(r, position)">{{ position.job || '-' }}</button></td>
+              <td><TooltipCell :text="dirText(position.dir)" /></td><td><TooltipCell :text="position.type || '-'" /></td>
+              <td><span class="table-date" :title="fmtDateFull(position.deadline)">{{ fmtDate(position.deadline) }}</span></td>
+              <td><span class="badge bdg-b">{{ position.batch || '-' }}</span></td>
+              <td><ProgressBadge :progress="(position.progress||[])[0]||'未投递'" /></td>
+              <td><a v-if="externalHttpUrl(position.url)" :href="externalHttpUrl(position.url)" target="_blank" rel="noopener noreferrer">查看</a><span v-else class="table-date">-</span></td>
+              <td class="total-action"><button class="btn" @click="openDetail(position)">打开详情</button></td>
+            </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -454,10 +485,12 @@ async function qiuzhiSync() {
         <span class="muted">共享总表所有用户均可查看；完整个人记录可在"个人总表 → 管理记录"中上传。</span>
       </div>
     </div>
+    <RecordPositionPicker v-if="positionPickerGroup" :group="positionPickerGroup" @close="positionPickerGroup = null" @select="choosePosition" />
   </section>
 </template>
 
 <style scoped>
 .records-page{min-width:0}.records-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:18px}.records-page-head h2{margin:0;font-size:clamp(22px,2.5vw,30px);line-height:1.2;letter-spacing:-.035em}.records-page-head p{max-width:620px;margin-top:7px;color:var(--muted);font-size:13px}.records-count{display:flex;align-items:baseline;gap:7px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.records-count strong{color:var(--blue);font-size:18px}.records-count span{color:var(--sub);font-size:10px}.records-shell{overflow:hidden;border-radius:16px}.total-tools{display:grid;grid-template-columns:auto minmax(220px,1fr) auto auto auto;align-items:center;gap:9px;padding:13px 14px;border-bottom:1px solid var(--line);background:var(--panel)}.total-view-switch{padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}.total-view-switch button{height:31px;padding:0 13px;border:0;border-radius:7px;background:transparent;color:var(--muted);font:800 10px var(--font);cursor:pointer}.total-view-switch button.active{background:var(--panel);color:var(--ink);box-shadow:0 1px 5px color-mix(in srgb,var(--ink) 10%,transparent)}.total-search input,.total-tools>select{height:39px;border:1px solid var(--line2);border-radius:10px;outline:none;background:var(--bg);color:var(--ink);font:11px var(--font)}.total-search input{width:100%;padding:0 12px}.total-tools>select{padding:0 30px 0 10px}.total-search input:focus,.total-tools>select:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueS)}.records-shell .tbl{background:var(--panel)}.records-shell .table-actions{min-height:58px;padding:10px 14px;border-top:1px solid var(--line);background:var(--bg)}.master-table tbody tr{transition:background .15s ease}.master-table tbody tr:hover{background:var(--blueS)}.master-table .total-action .btn{min-width:72px}.hide-applied-btn.active{border-color:var(--blue);background:var(--blueS);color:var(--blue)}@media(max-width:1100px){.total-tools{grid-template-columns:auto minmax(200px,1fr) auto}.total-tools>.btn,.total-tools>select{grid-row:2}}@media(max-width:720px){.records-page-head{align-items:flex-start;flex-direction:column}.records-count{width:100%;justify-content:space-between}.total-tools{grid-template-columns:1fr}.total-tools>*{width:100%}.total-tools>.btn,.total-tools>select{grid-row:auto}.total-view-switch{display:grid;grid-template-columns:1fr 1fr}.records-shell{border-radius:12px}}@media(prefers-reduced-motion:reduce){.master-table tbody tr{transition:none}}
 .total-search input{padding-left:40px}.records-inline-count{justify-self:end;color:var(--sub);font-size:10px;white-space:nowrap}@media(max-width:1100px){.records-inline-count{grid-row:2;justify-self:end}}@media(max-width:720px){.records-inline-count{grid-row:auto;justify-self:start}}
+.group-parent-row{cursor:default}.position-cell-actions{display:grid;grid-template-columns:minmax(0,1fr) 34px;align-items:center;gap:5px;width:100%}.position-picker-trigger{display:grid;grid-template-columns:minmax(0,1fr) 12px;align-items:center;gap:3px;width:100%;height:30px;padding:0;overflow:hidden;border:0;border-radius:7px;color:var(--ink);text-align:left;background:transparent;font:inherit;cursor:pointer}.position-picker-trigger span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.position-picker-trigger b{justify-self:end;color:var(--muted);font-size:11px}.position-picker-trigger:hover,.position-picker-trigger:focus-visible{outline:none;color:var(--blue);background:var(--blueS)}.position-expand-btn{height:26px;padding:0;border:1px solid var(--line);border-radius:6px;color:var(--muted);background:var(--bg);font:800 9px var(--font);cursor:pointer}.position-expand-btn:hover,.position-expand-btn[aria-expanded="true"]{border-color:var(--blue);color:var(--blue);background:var(--blueS)}.position-child-row{background:color-mix(in srgb,var(--blueS) 42%,var(--panel))}.position-child-row td{border-top-color:transparent}.child-company{padding-left:12px;color:var(--muted)}.position-child-job{max-width:150px;border:0;background:transparent;color:var(--ink);padding-left:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:inherit;cursor:pointer}.position-child-job:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
 </style>

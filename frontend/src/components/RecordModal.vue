@@ -14,7 +14,7 @@ const loading = ref(false)
 const isShared = computed(() => app.recordShared)
 
 const editId = ref('')
-const company = ref(''), job = ref(''), city = ref(''), batch = ref('秋招'), progress = ref('已投递'), url = ref('')
+const company = ref(''), job = ref(''), jobs = ref(['']), city = ref(''), batch = ref('秋招'), progress = ref('已投递'), url = ref('')
 const applyDate = ref(''), examDate = ref(''), interview1 = ref(''), interview2 = ref(''), interview3 = ref(''), warm = ref(''), resultDate = ref(''), deadline = ref('')
 const companyType = ref(''), directions = ref('')
 
@@ -26,13 +26,17 @@ function onBlur(e) { if (!e.target.value) e.target.type = 'text' }
 function inputDate(ts) { return inputDateChina(ts) }
 
 function reset() {
-  editId.value = ''; company.value = ''; job.value = ''; city.value = ''; batch.value = '秋招'; progress.value = '已投递'; url.value = ''
+  editId.value = ''; company.value = ''; job.value = ''; jobs.value = ['']; city.value = ''; batch.value = '秋招'; progress.value = '已投递'; url.value = ''
   companyType.value = ''; directions.value = ''
   dateIds.forEach(id => { const el = document.getElementById(id); if (el) { el.type = 'text'; el.value = '' } })
 }
 
 async function submit() {
   if (!company.value.trim()) { toast.error('请填写公司名称'); return }
+  const targetJobs = isShared.value
+    ? [job.value.trim()]
+    : [...new Set(jobs.value.map(value => value.trim()).filter(Boolean))]
+  if (!targetJobs.length) { toast.error('请至少填写一个目标岗位'); return }
   loading.value = true
   try {
     const token = localStorage.getItem('rb_token')
@@ -49,20 +53,29 @@ async function submit() {
         body: JSON.stringify(payload)
       })
     } else {
-      const payload = {
-        company: company.value.trim(), job: job.value.trim(), city: city.value.trim(), batch: batch.value,
+      let lastData = null
+      for (let index = 0; index < targetJobs.length; index += 1) {
+        const payload = {
+        company: company.value.trim(), job: targetJobs[index], city: city.value.trim(), batch: batch.value,
         apply_date: applyDate.value || null, exam_date: examDate.value || null,
         interview1: interview1.value || null, interview2: interview2.value || null, interview3: interview3.value || null,
         warm: warm.value || null, result_date: resultDate.value || null, deadline: deadline.value || null,
         progress: progress.value, url: url.value.trim() || null
       }
-      r = await fetch(`/api/dashboard/records${editId.value ? '/' + encodeURIComponent(editId.value) + '/update' : ''}`, {
+        const updateCurrent = Boolean(editId.value && index === 0)
+        r = await fetch(`/api/dashboard/records${updateCurrent ? '/' + encodeURIComponent(editId.value) + '/update' : ''}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload)
-      })
+        })
+        if (!r.ok) throw new Error((await r.json()).detail || '保存失败')
+        lastData = await r.json()
+      }
+      data = lastData
     }
-    if (!r.ok) throw new Error((await r.json()).detail || '保存失败')
-    data = await r.json()
+    if (isShared.value) {
+      if (!r.ok) throw new Error((await r.json()).detail || '保存失败')
+      data = await r.json()
+    }
     if (data.dashboard) store.data = data.dashboard; else await store.fetch()
     toast.success(data.message || '记录已保存')
     reset(); emit('saved'); emit('close')
@@ -70,7 +83,10 @@ async function submit() {
   finally { loading.value = false }
 }
 
-defineExpose({ editId, company, job, city, batch, progress, url, applyDate, examDate, interview1, interview2, interview3, warm, resultDate, deadline, companyType, directions, inputDate, reset })
+function addJob() { jobs.value.push('') }
+function removeJob(index) { if (jobs.value.length > 1) jobs.value.splice(index, 1) }
+
+defineExpose({ editId, company, job, jobs, city, batch, progress, url, applyDate, examDate, interview1, interview2, interview3, warm, resultDate, deadline, companyType, directions, inputDate, reset })
 </script>
 
 <template>
@@ -81,7 +97,15 @@ defineExpose({ editId, company, job, city, batch, progress, url, applyDate, exam
         <div class="modal-body">
           <div class="grid-2">
             <div class="form-group"><label for="record-company">公司</label><input id="record-company" v-model="company" required maxlength="100"></div>
-            <div class="form-group"><label for="record-job">目标岗位</label><input id="record-job" v-model="job" maxlength="200"></div>
+            <div v-if="isShared" class="form-group"><label for="record-job">目标岗位</label><input id="record-job" v-model="job" maxlength="200"></div>
+            <div v-else class="form-group job-options">
+              <div class="job-options-head"><label>目标岗位</label><button class="btn job-add" type="button" @click="addJob">增加岗位</button></div>
+              <div v-for="(_, index) in jobs" :key="index" class="job-option-row">
+                <input v-model="jobs[index]" :aria-label="`目标岗位 ${index + 1}`" maxlength="200" required>
+                <button v-if="jobs.length > 1" class="icon-btn job-remove" type="button" title="移除此岗位" @click="removeJob(index)">&times;</button>
+              </div>
+              <small>每个岗位会保存为独立记录，可分别维护时间、批次和进展。</small>
+            </div>
             <template v-if="isShared">
               <div class="form-group"><label for="record-directions">嵌入式方向</label><input id="record-directions" v-model="directions" placeholder="多个方向用逗号或顿号分隔" maxlength="500"></div>
               <div class="form-group"><label for="record-company-type">公司/行业类型</label><input id="record-company-type" v-model="companyType" maxlength="200"></div>
@@ -109,3 +133,7 @@ defineExpose({ editId, company, job, city, batch, progress, url, applyDate, exam
     </div>
   </div>
 </template>
+
+<style scoped>
+.job-options{grid-column:span 2}.job-options-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.job-options-head label{margin:0}.job-add{height:28px;padding:0 10px}.job-option-row{display:grid;grid-template-columns:1fr 32px;gap:8px;margin-top:8px}.job-option-row:first-of-type{grid-template-columns:1fr}.job-remove{width:32px;height:32px}.job-options small{display:block;margin-top:7px;color:var(--muted);font-size:10px}@media(max-width:720px){.job-options{grid-column:auto}}
+</style>

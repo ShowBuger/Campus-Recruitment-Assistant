@@ -208,6 +208,132 @@ class ProgressTrackerCompanyMatchingTests(unittest.TestCase):
         )
         self.assertIsNone(record_id)
 
+    def test_local_match_selects_the_child_record_named_in_email(self):
+        records = [
+            {
+                "record_id": "rec-embedded",
+                "fields": {
+                    "公司名称": "北京星河科技有限公司",
+                    "秋招岗位": "嵌入式软件工程师",
+                },
+            },
+            {
+                "record_id": "rec-finance",
+                "fields": {
+                    "公司名称": "北京星河科技有限公司",
+                    "秋招岗位": "财务管培生",
+                },
+            },
+        ]
+
+        score, record, _, job = progress_tracker._match_company(
+            "星河科技嵌入式软件工程师二面通知", records,
+        )
+
+        self.assertEqual(score, 3)
+        self.assertEqual(record["record_id"], "rec-embedded")
+        self.assertEqual(job, "嵌入式软件工程师")
+
+    def test_local_match_does_not_guess_between_same_company_children(self):
+        records = [
+            {
+                "record_id": "rec-embedded",
+                "fields": {
+                    "公司名称": "北京星河科技有限公司",
+                    "秋招岗位": "嵌入式软件工程师",
+                },
+            },
+            {
+                "record_id": "rec-finance",
+                "fields": {
+                    "公司名称": "北京星河科技有限公司",
+                    "秋招岗位": "财务管培生",
+                },
+            },
+        ]
+
+        score, record, company, job = progress_tracker._match_company(
+            "星河科技面试安排", records,
+        )
+
+        self.assertEqual(score, 2)
+        self.assertIsNone(record)
+        self.assertEqual(company, "北京星河科技有限公司")
+        self.assertEqual(job, "")
+
+    def test_ai_fallback_selects_unique_job_child(self):
+        records = [
+            {
+                "record_id": "rec-embedded",
+                "fields": {
+                    "公司名称": "北京星河科技有限公司",
+                    "秋招岗位": "嵌入式软件工程师",
+                },
+            },
+            {
+                "record_id": "rec-finance",
+                "fields": {
+                    "公司名称": "北京星河科技有限公司",
+                    "秋招岗位": "财务管培生",
+                },
+            },
+        ]
+
+        record_id, _, job = progress_tracker._match_ai_record(
+            "星河科技", "嵌入式软件工程师", records,
+        )
+
+        self.assertEqual(record_id, "rec-embedded")
+        self.assertEqual(job, "嵌入式软件工程师")
+
+    def test_ai_fallback_does_not_guess_without_job_between_children(self):
+        records = [
+            {
+                "record_id": "rec-embedded",
+                "fields": {
+                    "公司名称": "北京星河科技有限公司",
+                    "秋招岗位": "嵌入式软件工程师",
+                },
+            },
+            {
+                "record_id": "rec-finance",
+                "fields": {
+                    "公司名称": "北京星河科技有限公司",
+                    "秋招岗位": "财务管培生",
+                },
+            },
+        ]
+
+        record_id, company, job = progress_tracker._match_ai_record(
+            "星河科技", "", records,
+        )
+
+        self.assertIsNone(record_id)
+        self.assertEqual(company, "星河科技")
+        self.assertEqual(job, "")
+
+    def test_apply_event_updates_only_matched_child_record(self):
+        event = {
+            "record_id": "rec-finance",
+            "progress": "面试",
+            "received_ms": 1720000000000,
+        }
+        finance_record = {
+            "record_id": "rec-finance",
+            "fields": {"公司名称": "星河科技", "秋招岗位": "财务管培生", "进展": ["已投递"]},
+        }
+        with (
+            patch("app.routers.progress_tracker.local_records.get_record", return_value=finance_record) as get_record,
+            patch("app.routers.progress_tracker.local_records.update_record", return_value=True) as update,
+            patch("app.routers.progress_tracker.local_records.get_dashboard_data"),
+            patch("app.routers.progress_tracker.state.set_cache"),
+        ):
+            progress_tracker._apply_event(1, event, interview_round=1)
+
+        get_record.assert_called_once_with(1, "rec-finance")
+        self.assertEqual(update.call_args.args[1], "rec-finance")
+        self.assertEqual(update.call_args.args[2]["进展"], ["面试"])
+
 
 if __name__ == "__main__":
     unittest.main()

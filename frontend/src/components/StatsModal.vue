@@ -4,7 +4,7 @@
       <div class="modal-hd">
         <div>
           <h2>投递统计</h2>
-          <p>{{ '仅统计投递记录中的 ' + records.length + ' 个岗位' }}</p>
+          <p>{{ '仅统计 ' + records.length + ' 家公司的当前主记录' }}</p>
         </div>
         <button class="icon-btn" @click="$emit('close')" title="关闭">&times;</button>
       </div>
@@ -92,10 +92,16 @@
 <script setup>
 import { computed } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
+import { useRecordGroups } from '@/composables/useRecordGroups'
 
 const emit = defineEmits(['close'])
 const store = useDashboardStore()
-const records = computed(() => store.recentRecords || [])
+const allRecords = computed(() => store.records || [])
+const { groupedRecords } = useRecordGroups(allRecords)
+const records = computed(() => groupedRecords.value.filter(record => {
+  const progress = toArray(record?.progress)[0]
+  return (progress && progress !== '未投递') || !!(record && (record.apply_date || record.exam_date || record.interview1 || record.interview2 || record.interview3 || record.warm || record.result))
+}))
 
 function toArray(v) {
   return Array.isArray(v) ? v : (v ? [v] : [])
