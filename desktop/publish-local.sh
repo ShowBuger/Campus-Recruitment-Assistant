@@ -64,9 +64,15 @@ trap - EXIT
   .venv/bin/python - "$version" <<'PY'
 import sys
 
-from app import database
+from app import database, desktop_releases
 
 version = sys.argv[1]
+deleted = desktop_releases.cleanup_old_releases()
+if deleted:
+    print(
+        f"Cleaned {len(deleted)} old release assets; "
+        f"kept the latest {desktop_releases.RELEASE_VERSIONS_TO_KEEP} versions."
+    )
 database.get_db()
 database.create_notification(
     title=f"桌面端 v{version} 已发布",

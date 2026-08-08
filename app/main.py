@@ -11,7 +11,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import bus, database_backup
+from app import bus, database_backup, desktop_releases
 from app.routers import dashboard, status, config, resume, ai, auth, admin, chat, progress_tracker, recommendations, desktop
 from app.version import APP_VERSION
 
@@ -27,6 +27,16 @@ PROJECT_DIR = os.path.join(os.path.dirname(__file__), "..")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     bus.log(f"校招信息看板已启动 · PID {os.getpid()}", channel="system", level="success")
+    try:
+        deleted_releases = desktop_releases.cleanup_old_releases()
+        if deleted_releases:
+            bus.log(
+                f"已清理 {len(deleted_releases)} 个过期桌面端发布文件，"
+                f"保留最近 {desktop_releases.RELEASE_VERSIONS_TO_KEEP} 个版本",
+                channel="system",
+            )
+    except Exception as exc:
+        bus.log(f"桌面端旧版本清理失败 · {exc}", channel="system", level="error")
     recovered = recommendations.recover_recommendation_runs()
     if recovered:
         bus.log(f"已恢复 {recovered} 个智能筛选任务", channel="system", level="info")

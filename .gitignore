@@ -13,6 +13,7 @@ analysis_history/*
 # 本地数据库与用户数据
 data/app.db
 data/app.db-*
+data/*.db.bak*
 data/users/
 data/backups/
 data/desktop-releases/
@@ -29,6 +30,8 @@ __pycache__/
 venv/
 
 # 临时文件 / 调试产物
+tmp/
+*.orig
 *.output
 sync_report.txt
 sync_report_dry_run.txt
