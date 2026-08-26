@@ -11,7 +11,7 @@
 - 投递记录：新增/编辑/删除，日历事件、进展追踪
 - 总表信息：个人&共享双标签，搜索、排序、导入导出 Excel
 - 秋招日历：月视图，投递/机考/面试/保温/结果/截止事件，自定义日程
-- 站内聊天：文字/图片/岗位转发，双人实时轮询
+- 站内聊天：按用户名添加好友，通知中心接受/拒绝申请；仅好友之间可发送文字、图片和岗位信息
 - AI 分析：简历+岗位匹配、面试训练、简历优化，支持 DeepSeek/OpenAI/Claude/Kimi
 - AI 补全：一键补全公司类型、方向、岗位 JD 等字段
 - 邮件跟踪：IMAP 读取招聘邮件，AI 识别进展自动更新
@@ -49,7 +49,8 @@ cd frontend && npm install && npm run build && cd ..
 
 # 3. 静态文件
 mkdir -p /var/www/campus-dashboard
-cp -r static/dist /var/www/campus-dashboard/dist
+mkdir -p /var/www/campus-dashboard/dist
+cp -a static/dist/. /var/www/campus-dashboard/dist/
 
 # 4. JWT 密钥（首次自动生成）
 echo "JWT_SECRET=$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')" > .env
@@ -96,9 +97,29 @@ pkill -f "gunicorn app.main:app"  # 停止
 tail -f data/logs/system.jsonl    # 日志
 ```
 
+拉取后端代码更新后，需要重启服务或让 Gunicorn 平滑重载，否则现有工作进程仍会运行旧代码：
+
+```bash
+# 推荐：由当前 Gunicorn 主进程平滑加载新代码
+kill -HUP "$(pgrep -o -f '.venv/bin/gunicorn app.main:app')"
+
+# 若同时更新了前端，重新构建并部署静态文件
+cd frontend && npm install && npm run build && cd ..
+mkdir -p /var/www/campus-dashboard/dist
+cp -a static/dist/. /var/www/campus-dashboard/dist/
+```
+
+## 好友与站内聊天
+
+1. 打开右上角的站内聊天，在联系人区域输入对方的完整用户名并发送好友申请。
+2. 对方会在通知中心看到申请，可选择“接受”或“拒绝”。
+3. 接受后双方会出现在彼此的好友联系人列表中，随后才能查看聊天记录或发送消息。
+
+服务端会统一校验文字消息、图片、岗位转发、聊天记录和聊天图片的好友权限。未建立好友关系的注册用户不会出现在联系人列表中，也不能通过直接调用接口发起聊天。
+
 ## 本地数据
 
-- `data/app.db` — SQLite 数据库（用户、配置、记录、聊天、通知）
+- `data/app.db` — SQLite 数据库（用户、配置、记录、好友关系、聊天、通知）
 - `data/users/` — 简历文件、分析历史
 - `.env` — JWT 密钥（不提交到 Git）
 - 备份：持久化 `data/` 目录和 `.env` 文件
