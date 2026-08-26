@@ -6,12 +6,20 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test src/**/*.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.10.4",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.8",
+    "@phosphor-icons/vue": "^2.2.1",
+    "dompurify": "^3.4.13",
     "gsap": "^3.15.0",
     "jquery": "^3.7.1",
     "jquery.ripples": "^0.6.3",
+    "markdown-it": "^15.0.0",
     "pinia": "^2.2.0",
     "vue": "^3.5.0",
     "vue-router": "^4.4.0"

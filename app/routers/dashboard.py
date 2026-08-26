@@ -5,7 +5,7 @@ import time as _time_module
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -26,6 +26,7 @@ EVENT_TYPE_FIELD_MAP = {
     "interview1": "一面",
     "interview2": "二面",
     "interview3": "三面",
+    "interview4": "四面",
     "warm": "保温",
     "result": "结果",
     "deadline": "投递截止时间",
@@ -37,6 +38,7 @@ EVENT_TYPE_PROGRESS_MAP = {
     "interview1": "面试",
     "interview2": "面试",
     "interview3": "面试",
+    "interview4": "面试",
     "warm": "面试",
 }
 
@@ -52,6 +54,7 @@ class ApplicationRecord(BaseModel):
     interview1: date | None = None
     interview2: date | None = None
     interview3: date | None = None
+    interview4: date | None = None
     warm: date | None = None
     result_date: date | None = None
     deadline: date | None = None
@@ -83,6 +86,7 @@ class TotalRecordUpdate(BaseModel):
     interview1: date | None = None
     interview2: date | None = None
     interview3: date | None = None
+    interview4: date | None = None
     warm: date | None = None
     result_date: date | None = None
     offer_total: str = Field(default="", max_length=100)
@@ -94,13 +98,19 @@ class TotalRecordUpdate(BaseModel):
 
 class CalendarEventCreate(BaseModel):
     record_id: str
-    event_type: Literal["apply", "exam", "interview1", "interview2", "interview3", "warm", "result", "deadline"]
+    event_type: Literal["apply", "exam", "interview1", "interview2", "interview3", "interview4", "warm", "result", "deadline"]
     date: date
 
 
 class LocalEventCreate(BaseModel):
     date: date
     label: str = Field(max_length=200)
+
+
+class CalendarEventTimeUpdate(BaseModel):
+    event_id: str = Field(min_length=1, max_length=100)
+    event_type: Literal["local", "apply", "exam", "interview1", "interview2", "interview3", "interview4", "warm", "result", "deadline"]
+    time: datetime_time | None = None
 
 
 class FeishuSyncRequest(BaseModel):
@@ -113,7 +123,7 @@ def _application_fields(record: ApplicationRecord) -> dict:
         if value is None:
             return None
         china_tz = timezone(timedelta(hours=8))
-        return int(datetime.combine(value, time.min, china_tz).timestamp() * 1000)
+        return int(datetime.combine(value, datetime_time.min, china_tz).timestamp() * 1000)
 
     return {
         "公司名称": record.company.strip(),
@@ -125,6 +135,7 @@ def _application_fields(record: ApplicationRecord) -> dict:
         "一面": date_ms(record.interview1),
         "二面": date_ms(record.interview2),
         "三面": date_ms(record.interview3),
+        "四面": date_ms(record.interview4),
         "保温": date_ms(record.warm),
         "结果": record.result_date.isoformat() if record.result_date else None,
         "投递截止时间": date_ms(record.deadline),
@@ -140,7 +151,7 @@ def _total_record_fields(record: TotalRecordUpdate) -> dict:
     china_tz = timezone(timedelta(hours=8))
     def date_ms(value: date | None):
         return (
-            int(datetime.combine(value, time.min, china_tz).timestamp() * 1000)
+            int(datetime.combine(value, datetime_time.min, china_tz).timestamp() * 1000)
             if value else None
         )
 
@@ -164,6 +175,7 @@ def _total_record_fields(record: TotalRecordUpdate) -> dict:
         "一面": date_ms(record.interview1),
         "二面": date_ms(record.interview2),
         "三面": date_ms(record.interview3),
+        "四面": date_ms(record.interview4),
         "保温": date_ms(record.warm),
         "结果": date_ms(record.result_date),
         "Offer总包": record.offer_total.strip(),
@@ -375,6 +387,7 @@ DATE_PATTERN = re.compile(r"(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})")
 _sync_guard = threading.Lock()
 _SYNC_CONFIG_PREFIX = "givemeoc_sync_"
 _ACTIVE_SYNC_KEY = "givemeoc_sync_active_id"
+_ACTIVE_DEDUP_KEY = "shared_dedup_active_id"
 
 
 def _sync_progress_get(sync_id: str) -> dict | None:
@@ -403,6 +416,76 @@ def _active_sync_set(sync_id: str | None) -> None:
     else:
         database.set_system_config(_ACTIVE_SYNC_KEY, "0")
 
+
+def _new_existing_dedup(user_id: int) -> tuple[str, bool]:
+    """Start one DB-backed shared-table dedup job, or join the running job."""
+    with _sync_guard:
+        active_id = database.get_system_config(_ACTIVE_DEDUP_KEY)
+        if active_id and active_id != "0":
+            active = _sync_progress_get(active_id)
+            if active and not active.get("finished"):
+                return active_id, False
+
+        sync_id = "dedup-" + uuid.uuid4().hex[:12]
+        database.set_system_config(_ACTIVE_DEDUP_KEY, sync_id)
+        progress = {
+            "phase": "rule_deduplicating", "done": 0, "total": 0,
+            "finished": False, "failed": False,
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "message": "正在读取共享总表并执行规则去重…",
+        }
+        _sync_progress_set(sync_id, progress)
+
+    def _run() -> None:
+        try:
+            records = local_records.list_shared_records(user_id)
+            progress["total_records"] = len(records)
+            if len(records) < 2:
+                progress.update(
+                    finished=True, phase="finished", duplicates_removed=0,
+                    message="共享总表记录不足 2 条，无需去重",
+                )
+                return
+
+            def _report(message: str) -> None:
+                progress.update(phase="ai_deduplicating", message=message)
+                match = re.search(r"(\d+)\s*/\s*(\d+)", message)
+                if match:
+                    progress.update(done=int(match.group(1)), total=int(match.group(2)))
+                _sync_progress_set(sync_id, progress)
+
+            duplicate_map, stats = sync_dedup.find_ai_duplicates(user_id, records, _report)
+            progress.update(phase="merging", message="重复记录分析完成，正在合并数据…")
+            _sync_progress_set(sync_id, progress)
+            removed = local_records.merge_shared_records(duplicate_map) if duplicate_map else 0
+            message = (
+                f"智能去重完成：共 {len(records)} 条记录，"
+                f"规则确认 {stats['rule_duplicates']} 条，"
+                f"AI 复核 {stats['ai_reviewed']} 组，"
+                f"AI 确认 {stats['ai_duplicates']} 条，已合并 {removed} 条"
+            )
+            if stats["ai_unavailable"]:
+                message += f"，{stats['ai_unavailable']} 组 AI 调用失败已安全保留"
+            progress.update(
+                finished=True, phase="finished", duplicates_removed=removed,
+                rule_duplicates=stats["rule_duplicates"], reviewed=stats["ai_reviewed"],
+                ai_duplicates=stats["ai_duplicates"], ai_unavailable=stats["ai_unavailable"],
+                message=message,
+            )
+            bus.log(message, channel="sync", level="success")
+        except Exception as exc:
+            progress.update(finished=True, failed=True, phase="failed", message=f"智能去重失败：{exc}")
+            bus.log(progress["message"], channel="sync", level="error")
+        finally:
+            progress["finished_at"] = datetime.now().isoformat(timespec="seconds")
+            _sync_progress_set(sync_id, progress)
+            with _sync_guard:
+                if database.get_system_config(_ACTIVE_DEDUP_KEY) == sync_id:
+                    database.set_system_config(_ACTIVE_DEDUP_KEY, "0")
+
+    threading.Thread(target=_run, daemon=True).start()
+    return sync_id, True
+
 def _parse_givemeoc_deadline(deadline_str: str) -> int | None:
     """Convert givemeoc deadline string to millisecond timestamp."""
     if not deadline_str:
@@ -414,7 +497,7 @@ def _parse_givemeoc_deadline(deadline_str: str) -> int | None:
     try:
         parsed = datetime(int(match[1]), int(match[2]), int(match[3]))
         china_tz = timezone(timedelta(hours=8))
-        return int(datetime.combine(parsed.date(), time.min, china_tz).timestamp() * 1000)
+        return int(datetime.combine(parsed.date(), datetime_time.min, china_tz).timestamp() * 1000)
     except ValueError:
         return None
 
@@ -1075,36 +1158,13 @@ def ai_dedup_shared_records(user: dict = Depends(auth_module.get_current_user)):
     """
     if not (user.get("is_root") or user.get("is_admin")):
         raise HTTPException(status_code=403, detail="仅管理员可以对共享总表执行 AI 去重")
-    user_id = user["user_id"]
-
-    records = local_records.list_shared_records(user_id)
-    if len(records) < 2:
-        return {"success": True, "total": len(records), "duplicates_removed": 0,
-                "reviewed": 0, "message": "共享总表记录不足 2 条，无需去重"}
-
-    duplicate_map, stats = sync_dedup.find_ai_duplicates(user_id, records)
-    removed = 0
-    if duplicate_map:
-        removed = local_records.merge_shared_records(duplicate_map)
-    message = (
-        f"智能去重完成：共 {len(records)} 条记录，"
-        f"规则确认 {stats['rule_duplicates']} 条，"
-        f"AI 复核 {stats['ai_reviewed']} 组，"
-        f"AI 确认 {stats['ai_duplicates']} 条，"
-        f"已合并 {removed} 条"
-    )
-    if stats["ai_unavailable"]:
-        message += f"，{stats['ai_unavailable']} 组 AI 调用失败已安全保留"
-    bus.log(message, channel="sync", level="success")
+    sync_id, started = _new_existing_dedup(user["user_id"])
     return {
         "success": True,
-        "total": len(records),
-        "duplicates_removed": removed,
-        "rule_duplicates": stats["rule_duplicates"],
-        "reviewed": stats["ai_reviewed"],
-        "ai_duplicates": stats["ai_duplicates"],
-        "ai_unavailable": stats["ai_unavailable"],
-        "message": message,
+        "sync_id": sync_id,
+        "started": started,
+        "status": "running",
+        "message": "智能去重已启动" if started else "已有智能去重任务正在运行，已连接当前进度",
     }
 
 
@@ -1142,7 +1202,7 @@ def remove_application(
     try:
         updated = local_records.update_record(user["user_id"], record_id, {
             "进展": ["未投递"], "投递时间": None, "机考时间": None,
-            "一面": None, "二面": None, "三面": None, "保温": None, "结果": None,
+            "一面": None, "二面": None, "三面": None, "四面": None, "保温": None, "结果": None,
         })
         if not updated:
             raise HTTPException(status_code=404, detail="未找到对应的本地记录")
@@ -1212,7 +1272,7 @@ _PROGRESS_ORDER = ["未投递", "已投递", "机考", "面试", "OC", "已挂",
 _PROGRESS_CLEAR_FIELDS: dict[str, list[str]] = {
     "已投递": ["投递时间"],
     "机考":   ["机考时间"],
-    "面试":   ["一面", "二面", "三面"],
+    "面试":   ["一面", "二面", "三面", "四面"],
     "OC":     ["结果"],
     "已挂":   ["结果"],
 }
@@ -1327,7 +1387,7 @@ def create_calendar_event(
         raise HTTPException(status_code=422, detail="无效的本地记录 ID")
 
     china_tz = timezone(timedelta(hours=8))
-    ts = int(datetime.combine(event.date, time.min, china_tz).timestamp() * 1000)
+    ts = int(datetime.combine(event.date, datetime_time.min, china_tz).timestamp() * 1000)
     field_name = EVENT_TYPE_FIELD_MAP.get(event.event_type)
     if not field_name:
         raise HTTPException(status_code=422, detail=f"未知事件类型: {event.event_type}")
@@ -1382,7 +1442,26 @@ def create_local_event(
 
 @router.get("/calendar/local-events")
 def list_local_events(user: dict = Depends(auth_module.get_current_user)):
-    return {"events": database.get_local_events(user["user_id"])}
+    return {
+        "events": database.get_local_events(user["user_id"]),
+        "times": database.get_calendar_event_times(user["user_id"]),
+    }
+
+
+@router.post("/calendar/event-time")
+def update_calendar_event_time(
+    body: CalendarEventTimeUpdate,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    if body.event_type == "local":
+        exists = any(event["id"] == body.event_id for event in database.get_local_events(user["user_id"]))
+    else:
+        exists = body.event_id.startswith("rec") and local_records.get_record(user["user_id"], body.event_id) is not None
+    if not exists:
+        raise HTTPException(status_code=404, detail="未找到该日程")
+    value = body.time.strftime("%H:%M") if body.time else None
+    database.set_calendar_event_time(user["user_id"], body.event_id, body.event_type, value)
+    return {"success": True, "message": "日程时间已更新", "time": value}
 
 
 @router.delete("/calendar/local-event/{event_id}")
@@ -1399,7 +1478,7 @@ def delete_local_event(
 
 class CalendarEventDelete(BaseModel):
     record_id: str
-    event_type: Literal["apply", "exam", "interview1", "interview2", "interview3", "warm", "result", "deadline"]
+    event_type: Literal["apply", "exam", "interview1", "interview2", "interview3", "interview4", "warm", "result", "deadline"]
 
 
 @router.delete("/calendar/event")
@@ -1421,6 +1500,7 @@ def delete_calendar_event(
         updates = {field_name: None}
         if not local_records.update_record(user["user_id"], body.record_id, updates):
             raise HTTPException(status_code=404, detail="未找到对应的本地记录")
+        database.set_calendar_event_time(user["user_id"], body.record_id, body.event_type, None)
         data = local_records.get_dashboard_data(user["user_id"])
         state.set_cache(user["user_id"], data)
     except HTTPException:

@@ -21,7 +21,7 @@ const applicationRecords = computed(() => data.value?.main?.recent || [])
 const records = computed(() => applicationRecords.value)
 const eventNames = {
   exam_date: '机考 / 笔试', interview1: '一面', interview2: '二面',
-  interview3: '三面', deadline: '截止', warm: '保温', result: '结果',
+  interview3: '三面', interview4: '四面', deadline: '截止', warm: '泡池子', result: '结果',
 }
 
 const schedules = computed(() => {
@@ -81,6 +81,7 @@ function detailRows(record) {
     ['一面', fmtDateChina(record.interview1)],
     ['二面', fmtDateChina(record.interview2)],
     ['三面', fmtDateChina(record.interview3)],
+    ['四面', fmtDateChina(record.interview4)],
     ['截止时间', fmtDateChina(record.deadline)],
   ].filter(([, value]) => value && value !== '未填写')
 }

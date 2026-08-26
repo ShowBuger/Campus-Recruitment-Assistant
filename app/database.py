@@ -80,6 +80,7 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             kimi_base_url TEXT DEFAULT 'https://api.moonshot.cn/v1',
             feishu_sync_url TEXT NOT NULL DEFAULT '',
             dashboard_filters TEXT NOT NULL DEFAULT '[]',
+            offershow_access_token TEXT NOT NULL DEFAULT '',
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
@@ -141,6 +142,29 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS calendar_event_times (
+            user_id INTEGER NOT NULL,
+            event_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            time TEXT NOT NULL,
+            PRIMARY KEY (user_id, event_id, event_type),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS notes (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            parent_id TEXT,
+            record_id TEXT,
+            title TEXT NOT NULL DEFAULT '未命名笔记',
+            content TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_id) REFERENCES notes(id) ON DELETE CASCADE,
+            FOREIGN KEY (record_id) REFERENCES job_records(id) ON DELETE SET NULL
+        );
+
         CREATE TABLE IF NOT EXISTS job_records (
             id TEXT PRIMARY KEY,
             user_id INTEGER NOT NULL,
@@ -161,6 +185,7 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             interview1 INTEGER,
             interview2 INTEGER,
             interview3 INTEGER,
+            interview4 INTEGER,
             warm INTEGER,
             result INTEGER,
             created_at TEXT DEFAULT (datetime('now')),
@@ -170,6 +195,9 @@ def _init_tables(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_job_records_user
             ON job_records(user_id, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_notes_user_parent
+            ON notes(user_id, parent_id, updated_at DESC);
 
         CREATE TABLE IF NOT EXISTS shared_job_records (
             id TEXT PRIMARY KEY,
@@ -227,6 +255,7 @@ def _init_tables(conn: sqlite3.Connection) -> None:
         "offer_bonus": "TEXT NOT NULL DEFAULT ''",
         "offer_deadline": "INTEGER",
         "progress_updated_at": "INTEGER",
+        "interview4": "INTEGER",
     }
     for column, declaration in job_record_migrations.items():
         if column not in record_columns:
@@ -278,6 +307,7 @@ def _init_tables(conn: sqlite3.Connection) -> None:
         "recommendation_model": "TEXT DEFAULT ''",
         "feishu_sync_url": "TEXT NOT NULL DEFAULT ''",
         "dashboard_filters": "TEXT NOT NULL DEFAULT '[]'",
+        "offershow_access_token": "TEXT NOT NULL DEFAULT ''",
     }
     for column, declaration in config_migrations.items():
         if column not in config_columns:
@@ -886,6 +916,18 @@ def save_feishu_sync_url(user_id: int, url: str) -> None:
         db.commit()
 
 
+def save_offershow_token(user_id: int, token: str) -> None:
+    with _write_lock:
+        db = get_db()
+        db.execute(
+            """INSERT INTO user_configs (user_id, offershow_access_token) VALUES (?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET
+               offershow_access_token=excluded.offershow_access_token""",
+            (user_id, token.strip()),
+        )
+        db.commit()
+
+
 def save_dashboard_filters(user_id: int, filters_json: str) -> None:
     with _write_lock:
         db = get_db()
@@ -926,6 +968,31 @@ def create_recommendation_run(run: dict) -> bool:
         )
         db.commit()
         return True
+
+
+def restart_recommendation_run(user_id: int, run_id: str, run: dict) -> bool:
+    """Reuse a finished history row for an incremental recommendation update."""
+    with _write_lock:
+        db = get_db()
+        try:
+            cursor = db.execute(
+                """UPDATE recommendation_runs
+                   SET preference = ?, resume_filename = ?, provider = ?, model = ?,
+                       status = 'running', phase = ?, message = ?, scanned = ?,
+                       total_chunks = 0, completed_chunks = 0,
+                       base_run_id = id, run_mode = 'incremental',
+                       updated_at = datetime('now')
+                   WHERE id = ? AND user_id = ? AND status = 'finished'""",
+                (run.get("preference", ""), run.get("resume_filename", ""),
+                 run.get("provider", ""), run.get("model", ""),
+                 run.get("phase", "preparing"), run.get("message", ""),
+                 int(run.get("scanned", 0)), run_id, user_id),
+            )
+        except sqlite3.IntegrityError:
+            db.rollback()
+            return False
+        db.commit()
+        return cursor.rowcount > 0
 
 
 def list_running_recommendation_runs() -> list[dict]:
@@ -1057,5 +1124,38 @@ def delete_local_event(user_id: int, event_id: str) -> bool:
             "DELETE FROM local_events WHERE id = ? AND user_id = ?",
             (event_id, user_id),
         )
+        db.execute(
+            "DELETE FROM calendar_event_times WHERE user_id = ? AND event_id = ? AND event_type = 'local'",
+            (user_id, event_id),
+        )
         db.commit()
         return cur.rowcount > 0
+
+
+def get_calendar_event_times(user_id: int) -> list[dict]:
+    db = get_db()
+    rows = db.execute(
+        "SELECT event_id, event_type, time FROM calendar_event_times WHERE user_id = ?",
+        (user_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def set_calendar_event_time(
+    user_id: int, event_id: str, event_type: str, event_time: str | None,
+) -> None:
+    with _write_lock:
+        db = get_db()
+        if event_time:
+            db.execute(
+                """INSERT INTO calendar_event_times (user_id, event_id, event_type, time)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(user_id, event_id, event_type) DO UPDATE SET time = excluded.time""",
+                (user_id, event_id, event_type, event_time),
+            )
+        else:
+            db.execute(
+                "DELETE FROM calendar_event_times WHERE user_id = ? AND event_id = ? AND event_type = ?",
+                (user_id, event_id, event_type),
+            )
+        db.commit()

@@ -100,7 +100,7 @@ const allRecords = computed(() => store.records || [])
 const { groupedRecords } = useRecordGroups(allRecords)
 const records = computed(() => groupedRecords.value.filter(record => {
   const progress = toArray(record?.progress)[0]
-  return (progress && progress !== '未投递') || !!(record && (record.apply_date || record.exam_date || record.interview1 || record.interview2 || record.interview3 || record.warm || record.result))
+  return (progress && progress !== '未投递') || !!(record && (record.apply_date || record.exam_date || record.interview1 || record.interview2 || record.interview3 || record.interview4 || record.warm || record.result))
 }))
 
 function toArray(v) {
@@ -116,7 +116,7 @@ function esc(s) {
 function applicationMilestones(record) {
   const progress = toArray(record && record.progress).join(' ')
   const offer = /\bOC\b|offer|录用/i.test(progress)
-  const interview = !!(record && (record.interview1 || record.interview2 || record.interview3)) || offer || /面试/.test(progress)
+  const interview = !!(record && (record.interview1 || record.interview2 || record.interview3 || record.interview4)) || offer || /面试/.test(progress)
   const exam = !!(record && record.exam_date) || /机考|笔试/.test(progress)
   return { exam, interview, offer }
 }

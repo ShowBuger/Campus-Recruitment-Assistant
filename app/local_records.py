@@ -35,6 +35,7 @@ FIELD_COLUMNS = {
     "一面": "interview1",
     "二面": "interview2",
     "三面": "interview3",
+    "四面": "interview4",
     "保温": "warm",
     "结果": "result",
     "Offer总包": "offer_total",
@@ -53,7 +54,28 @@ _DATE_PROGRESS = {
     "一面": "面试",
     "二面": "面试",
     "三面": "面试",
+    "四面": "面试",
     "保温": "面试",
+}
+
+_PROGRESS_DATE_FIELDS = {
+    "已投递": ("投递时间",),
+    "机考": ("机考时间",),
+    "面试": ("一面", "二面", "三面", "四面", "保温"),
+    "OC": ("结果",),
+    "已挂": ("结果",),
+    "放弃": ("结果",),
+}
+
+_STAGE_DATE_RANK = {
+    "投递时间": 1,
+    "机考时间": 2,
+    "一面": 3,
+    "二面": 3,
+    "三面": 3,
+    "四面": 3,
+    "保温": 3,
+    "结果": 4,
 }
 
 
@@ -61,11 +83,38 @@ def _sync_progress_with_dates(fields: dict, current_fields: dict | None = None) 
     """Keep non-terminal progress aligned with explicitly edited stage dates."""
     result = dict(fields)
     current_fields = current_fields or {}
+
+    old_progress = current_fields.get("进展") or []
+    if not isinstance(old_progress, list):
+        old_progress = [old_progress] if old_progress else []
+    old_stage = old_progress[0] if old_progress else "未投递"
+
     progress = result.get("进展", current_fields.get("进展")) or []
     if not isinstance(progress, list):
         progress = [progress] if progress else []
     current = progress[0] if progress else "未投递"
     current_rank = _PROGRESS_RANK.get(current, 0)
+    old_rank = _PROGRESS_RANK.get(old_stage, 0)
+
+    # An explicit rollback must also discard dates belonging to later stages.
+    # Otherwise the reconciliation below would immediately promote the record
+    # back to the stage implied by those stale dates.
+    if "进展" in result and current_rank < old_rank:
+        for date_field, stage_rank in _STAGE_DATE_RANK.items():
+            if stage_rank > current_rank:
+                result[date_field] = None
+
+    # When a user explicitly advances progress from the record detail page,
+    # timestamp the destination stage if it has no date yet.  The detail form
+    # submits empty date fields as None, so this must happen before the
+    # date-to-progress reconciliation below (which would otherwise roll the
+    # manually selected progress back).
+    if "进展" in result and current_rank > old_rank:
+        stage_fields = _PROGRESS_DATE_FIELDS.get(current, ())
+        if stage_fields and not any(
+            result.get(field, current_fields.get(field)) for field in stage_fields
+        ):
+            result[stage_fields[0]] = _now_ms()
 
     required = None
     for date_field, target in _DATE_PROGRESS.items():
@@ -126,6 +175,7 @@ def _row_fields(row: dict) -> dict:
         "一面": row["interview1"],
         "二面": row["interview2"],
         "三面": row["interview3"],
+        "四面": row["interview4"] if "interview4" in row.keys() else None,
         "保温": row["warm"],
         "结果": result,
         "Offer总包": row["offer_total"] if "offer_total" in row.keys() else "",
@@ -678,6 +728,7 @@ def _serialize(record: dict) -> dict:
         "interview1": fields.get("一面"),
         "interview2": fields.get("二面"),
         "interview3": fields.get("三面"),
+        "interview4": fields.get("四面"),
         "warm": fields.get("保温"),
         "result": fields.get("结果"),
         "offer_total": fields.get("Offer总包") or "",
@@ -698,7 +749,7 @@ def _is_applied(fields: dict) -> bool:
         return True
     return any(
         fields.get(field)
-        for field in ("投递时间", "机考时间", "一面", "二面", "三面", "保温", "结果")
+        for field in ("投递时间", "机考时间", "一面", "二面", "三面", "四面", "保温", "结果")
     )
 
 
@@ -732,7 +783,7 @@ def get_dashboard_data(user_id: int) -> dict:
             company_types.update(fields.get("公司/行业类型") or [])
             if fields.get("机考时间"):
                 exam_companies.add(company_key)
-            if fields.get("一面") or fields.get("二面") or fields.get("三面"):
+            if fields.get("一面") or fields.get("二面") or fields.get("三面") or fields.get("四面"):
                 interview_companies.add(company_key)
             if any(item in {"OC", "Offer"} for item in prog):
                 offer_companies.add(company_key)

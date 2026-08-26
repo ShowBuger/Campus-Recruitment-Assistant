@@ -24,6 +24,14 @@ test('distinguishes application and external origins', () => {
   assert.equal(externalUrlFromNavigation(`${appOrigin}/records`, appOrigin), null)
 })
 
+test('keeps salary inside the app and opens OfferShow in the system browser', () => {
+  assert.equal(isAppUrl(`${appOrigin}/salary`, appOrigin), true)
+  assert.equal(
+    externalUrlFromNavigation('https://www.offershow.cn/', appOrigin),
+    'https://www.offershow.cn/',
+  )
+})
+
 test('recovers a bare domain that Chromium resolved on the app origin', () => {
   assert.equal(
     externalUrlFromNavigation(`${appOrigin}/jobs.example.com/campus?source=board`, appOrigin),

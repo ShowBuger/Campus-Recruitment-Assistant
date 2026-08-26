@@ -49,6 +49,44 @@ class RecommendationRequest(BaseModel):
     run_mode: str = Field(default="full", pattern="^(full|incremental|refine)$")
 
 
+def _grade_for_score(score: int) -> str:
+    if score >= 90:
+        return "S"
+    if score >= 75:
+        return "A"
+    if score >= 60:
+        return "B"
+    return "C"
+
+
+def _normalize_run_result_grades(run: dict | None) -> dict | None:
+    """Keep legacy and live history grades consistent with their scores."""
+    if not run:
+        return run
+    result = run.get("result") or {}
+    for item in result.get("items") or []:
+        score = max(0, min(100, int(item.get("recommendation_score") or 0)))
+        item["recommendation_score"] = score
+        item["recommendation_grade"] = _grade_for_score(score)
+    return run
+
+
+def _attach_added_status(run: dict | None, user_id: int) -> dict | None:
+    """Attach personal-table membership without a second client dashboard request."""
+    if not run:
+        return run
+    items = (run.get("result") or {}).get("items") or []
+    if not items:
+        return run
+    added_by_id = {
+        item["record_id"]: bool(item.get("is_added"))
+        for item in local_records.list_shared_records(user_id)
+    }
+    for item in items:
+        item["is_added"] = added_by_id.get(item.get("record_id"), False)
+    return run
+
+
 def _json_array(text: str) -> list[dict]:
     text = (text or "").strip()
     if "```" in text:
@@ -155,7 +193,6 @@ def _result_payload(records: list[dict], ranked: dict[str, dict], cfg: dict, pro
         score = max(0, min(100, int(item.get("score") or 0)))
         if score < minimum:
             continue
-        grade = str(item.get("grade") or "C").upper()
         confidence = str(item.get("profile_confidence") or "low").lower()
         if confidence not in {"medium", "low"}:
             confidence = "low"
@@ -172,7 +209,7 @@ def _result_payload(records: list[dict], ranked: dict[str, dict], cfg: dict, pro
         results.append({
             **record,
             "recommendation_score": score,
-            "recommendation_grade": grade if grade in {"S", "A", "B", "C"} else "C",
+            "recommendation_grade": _grade_for_score(score),
             "recommendation_reason": str(item.get("reason") or "模型未给出理由")[:160],
             "match_strengths": _string_list(item.get("match_strengths"), limit=4),
             "match_gaps": _string_list(item.get("match_gaps"), limit=4),
@@ -181,6 +218,10 @@ def _result_payload(records: list[dict], ranked: dict[str, dict], cfg: dict, pro
     if seed_items:
         seen = {item["record_id"] for item in results}
         results.extend(item for item in seed_items if item.get("record_id") not in seen)
+    for item in results:
+        score = max(0, min(100, int(item.get("recommendation_score") or 0)))
+        item["recommendation_score"] = score
+        item["recommendation_grade"] = _grade_for_score(score)
     results.sort(key=lambda item: -item["recommendation_score"])
     limit = int(cfg.get("recommendation_limit") or 0)
     if limit > 0:
@@ -317,8 +358,14 @@ def _select_run_records(user_id: int, run: dict, all_records: list[dict]) -> tup
     mode = str(run.get("run_mode") or "full")
     if mode == "full":
         return all_records, None, []
-    base = database.get_recommendation_run(user_id, str(run.get("base_run_id") or ""))
-    if not base or base.get("status") != "finished":
+    base_run_id = str(run.get("base_run_id") or "")
+    # Incremental updates reuse the original history row. Its previous result
+    # remains stored while that same row is temporarily marked as running.
+    if mode == "incremental" and base_run_id == str(run.get("id") or ""):
+        base = run
+    else:
+        base = database.get_recommendation_run(user_id, base_run_id)
+    if not base or base.get("status") not in {"finished", "running"}:
         raise ValueError("所选筛选历史不存在或尚未完成")
     base_result = base.get("result") or {}
     base_items = base_result.get("items") or []
@@ -372,14 +419,21 @@ def recommend_jobs(request: RecommendationRequest, user: dict = Depends(auth_mod
         records, _, _ = _select_run_records(user["user_id"], {
             "run_mode": request.run_mode, "base_run_id": request.base_run_id,
         }, all_records)
-    run_id = uuid4().hex
+    run_id = request.base_run_id if request.run_mode == "incremental" else uuid4().hex
     run = {"id": run_id, "user_id": user["user_id"], "status": "running", "phase": "preparing",
            "message": "正在准备岗位数据…", "total_chunks": 0, "completed_chunks": 0,
            "preference": request.preference.strip(), "resume_filename": request.resume_filename.strip(),
            "provider": provider, "model": model, "scanned": len(records),
-           "base_run_id": request.base_run_id, "run_mode": request.run_mode}
-    if not database.create_recommendation_run(run):
+           "base_run_id": run_id if request.run_mode == "incremental" else request.base_run_id,
+           "run_mode": request.run_mode}
+    if request.run_mode == "incremental":
+        created = database.restart_recommendation_run(user["user_id"], run_id, run)
+    else:
+        created = database.create_recommendation_run(run)
+    if not created:
         raise HTTPException(status_code=409, detail="已有智能筛选任务正在进行，请等待完成")
+    if request.run_mode == "incremental" and base_run:
+        run["result"] = base_run.get("result") or {}
     with _RUNS_LOCK:
         _RUNS[run_id] = run.copy()
     _launch_persisted_run(run_id, user["user_id"])
@@ -393,7 +447,10 @@ def list_recommendation_history(user: dict = Depends(auth_module.get_current_use
 
 @router.get("/history/{run_id}")
 def get_recommendation_history(run_id: str, user: dict = Depends(auth_module.get_current_user)):
-    run = database.get_recommendation_run(user["user_id"], run_id)
+    run = _attach_added_status(
+        _normalize_run_result_grades(database.get_recommendation_run(user["user_id"], run_id)),
+        user["user_id"],
+    )
     if not run:
         raise HTTPException(status_code=404, detail="未找到该筛选历史")
     return run
@@ -415,8 +472,8 @@ def get_recommendation_run(run_id: str, user: dict = Depends(auth_module.get_cur
     with _RUNS_LOCK:
         run = _RUNS.get(run_id)
         if run and run.get("user_id") == user["user_id"]:
-            return {key: value for key, value in run.items() if key != "user_id"}
-    run = database.get_recommendation_run(user["user_id"], run_id)
+            return _normalize_run_result_grades({key: value for key, value in run.items() if key != "user_id"})
+    run = _normalize_run_result_grades(database.get_recommendation_run(user["user_id"], run_id))
     if not run:
         raise HTTPException(status_code=404, detail="未找到该筛选任务")
     return run

@@ -5,6 +5,59 @@ from app.local_records import _sync_progress_with_dates, get_dashboard_data
 
 
 class ProgressDateSyncTests(unittest.TestCase):
+    @patch("app.local_records._now_ms", return_value=456)
+    def test_progress_advance_fills_destination_stage_date(self, _now):
+        fields = _sync_progress_with_dates(
+            {"进展": ["机考"], "机考时间": None},
+            {"进展": ["已投递"], "投递时间": 123, "机考时间": None},
+        )
+        self.assertEqual(fields["进展"], ["机考"])
+        self.assertEqual(fields["机考时间"], 456)
+
+    @patch("app.local_records._now_ms", return_value=456)
+    def test_progress_advance_does_not_replace_existing_stage_date(self, _now):
+        fields = _sync_progress_with_dates(
+            {"进展": ["面试"], "一面": None, "二面": 321},
+            {"进展": ["机考"], "机考时间": 123, "二面": 321},
+        )
+        self.assertIsNone(fields["一面"])
+        self.assertEqual(fields["二面"], 321)
+
+    @patch("app.local_records._now_ms", return_value=456)
+    def test_progress_advance_to_offer_fills_result_date(self, _now):
+        fields = _sync_progress_with_dates(
+            {"进展": ["OC"], "结果": None},
+            {"进展": ["面试"], "一面": 123, "结果": None},
+        )
+        self.assertEqual(fields["结果"], 456)
+
+    @patch("app.local_records._now_ms", return_value=456)
+    def test_progress_rollback_clears_later_stage_dates(self, _now):
+        fields = _sync_progress_with_dates(
+            {"进展": ["已投递"]},
+            {
+                "进展": ["面试"],
+                "投递时间": 100,
+                "机考时间": 200,
+                "一面": 300,
+                "结果": None,
+            },
+        )
+        self.assertEqual(fields["进展"], ["已投递"])
+        self.assertNotIn("投递时间", fields)
+        self.assertIsNone(fields["机考时间"])
+        self.assertIsNone(fields["一面"])
+        self.assertIsNone(fields["结果"])
+
+    def test_progress_rollback_to_interview_only_clears_result_date(self):
+        fields = _sync_progress_with_dates(
+            {"进展": ["面试"]},
+            {"进展": ["OC"], "投递时间": 100, "一面": 300, "结果": 400},
+        )
+        self.assertEqual(fields["进展"], ["面试"])
+        self.assertNotIn("一面", fields)
+        self.assertIsNone(fields["结果"])
+
     def test_apply_date_promotes_unapplied_record(self):
         fields = _sync_progress_with_dates(
             {"投递时间": 123}, {"进展": ["未投递"]}

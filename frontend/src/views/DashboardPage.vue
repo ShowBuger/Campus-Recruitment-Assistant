@@ -21,6 +21,9 @@ const activeFilter = ref([])
 const positionPickerGroup = ref(null)
 const recordSearch = ref('')
 const recordSort = ref('updated-desc')
+const recordsTableScroll = ref(null)
+const RECORD_LOAD_SIZE = 40
+const visibleRecordCount = ref(RECORD_LOAD_SIZE)
 const draftFilter = ref(null)
 const FILTER_OPERATORS = [
   { value: 'equals', label: '等于' }, { value: 'not_equals', label: '不等于' },
@@ -36,7 +39,8 @@ const FILTER_COLUMNS = [
   { value: 'interview1', label: '一面时间', type: 'date' },
   { value: 'interview2', label: '二面时间', type: 'date' },
   { value: 'interview3', label: '三面时间', type: 'date' },
-  { value: 'warm', label: '保温时间', type: 'date' },
+  { value: 'interview4', label: '四面时间', type: 'date' },
+  { value: 'warm', label: '泡池子时间', type: 'date' },
   { value: 'result', label: '结果时间', type: 'date' },
   { value: 'deadline', label: '截止时间', type: 'date' },
   { value: 'progress', label: '进展', type: 'select', options: ['未投递', '已投递', '机考', '面试', 'OC', '已挂', '放弃'] },
@@ -155,7 +159,7 @@ const editDateValue = ref('')
 const editDateSaving = ref(false)
 const DATE_FIELD_LABELS = {
   apply: '投递时间', exam: '机考时间', interview1: '一面时间', interview2: '二面时间',
-  interview3: '三面时间', warm: '保温时间', result: '结果时间', deadline: '截止时间',
+  interview3: '三面时间', interview4: '四面时间', warm: '泡池子时间', result: '结果时间', deadline: '截止时间',
 }
 
 function openDateEditor(record, eventType, timestamp) {
@@ -197,7 +201,7 @@ const { groupedRecords: kpiPrimaryRecords } = useRecordGroups(kpiSource)
 
 function isAppliedPrimary(record) {
   const progress = (record?.progress || [])[0]
-  return (progress && progress !== '未投递') || !!(record && (record.apply_date || record.exam_date || record.interview1 || record.interview2 || record.interview3 || record.warm || record.result))
+  return (progress && progress !== '未投递') || !!(record && (record.apply_date || record.exam_date || record.interview1 || record.interview2 || record.interview3 || record.interview4 || record.warm || record.result))
 }
 
 const primaryKpi = computed(() => {
@@ -206,7 +210,7 @@ const primaryKpi = computed(() => {
   return {
     total_companies: applied.length,
     exam_count: applied.filter(record => record.exam_date || hasProgress(record, ['机考'])).length,
-    interview_count: applied.filter(record => record.interview1 || record.interview2 || record.interview3 || hasProgress(record, ['面试', 'OC'])).length,
+    interview_count: applied.filter(record => record.interview1 || record.interview2 || record.interview3 || record.interview4 || hasProgress(record, ['面试', 'OC'])).length,
     offer_count: applied.filter(record => hasProgress(record, ['OC', 'Offer'])).length,
   }
 })
@@ -293,14 +297,15 @@ const { groupedRecords, selectPosition, toggleExpanded, isExpanded } = useRecord
 const visibleRecordGroups = computed(() => {
   const items = [...groupedRecords.value]
   const timestamp = (record, field) => Number(record?.[field] || 0)
-  const latestActivity = record => Math.max(timestamp(record, 'progress_updated_at'), timestamp(record, 'apply_date'), timestamp(record, 'exam_date'), timestamp(record, 'interview1'), timestamp(record, 'interview2'), timestamp(record, 'interview3'))
+  const latestActivity = record => Math.max(timestamp(record, 'progress_updated_at'), timestamp(record, 'apply_date'), timestamp(record, 'exam_date'), timestamp(record, 'interview1'), timestamp(record, 'interview2'), timestamp(record, 'interview3'), timestamp(record, 'interview4'))
   const priorityScore = record => (String(record?.priority || '').match(/⭐/g) || []).length
   const progressScore = record => {
     const progress = (record?.progress || [])[0] || '未投递'
     if (progress === '已挂' || progress === '放弃') return 0
     if (progress === 'OC') return 8
     if (record?.result) return 7
-    if (record?.warm) return 6
+    if (record?.warm) return 7
+    if (record?.interview4) return 6
     if (record?.interview3) return 5
     if (record?.interview2) return 4
     if (record?.interview1 || progress === '面试') return 3
@@ -319,6 +324,34 @@ const visibleRecordGroups = computed(() => {
   })
   return items
 })
+const pagedRecordGroups = computed(() => visibleRecordGroups.value.slice(0, visibleRecordCount.value))
+const hasMoreRecordGroups = computed(() => pagedRecordGroups.value.length < visibleRecordGroups.value.length)
+
+watch([recordSearch, recordSort, activeFilter], async () => {
+  visibleRecordCount.value = RECORD_LOAD_SIZE
+  await nextTick()
+  if (recordsTableScroll.value) recordsTableScroll.value.scrollTop = 0
+}, { deep: true })
+
+function loadMoreRecordGroups() {
+  if (!hasMoreRecordGroups.value) return
+  visibleRecordCount.value = Math.min(
+    visibleRecordGroups.value.length,
+    visibleRecordCount.value + RECORD_LOAD_SIZE,
+  )
+}
+
+function onRecordsTableScroll(event) {
+  const target = event.currentTarget
+  if (target.scrollHeight - target.scrollTop - target.clientHeight > 120) return
+  loadMoreRecordGroups()
+}
+
+function onPageScroll() {
+  if (!calendarCollapsed.value || !hasMoreRecordGroups.value || !recordsTableScroll.value) return
+  const tableBottom = recordsTableScroll.value.getBoundingClientRect().bottom
+  if (tableBottom - window.innerHeight <= 160) loadMoreRecordGroups()
+}
 const draftFilteredCount = computed(() => {
   return filterRecords(records.value, draftFilter.value).length
 })
@@ -362,6 +395,7 @@ function changeFilterColumn(condition) {
 function toggleCalendarFromRecordHeader(event) {
   if (event.target.closest('button, input, select, label, a, [role="dialog"]')) return
   calendarCollapsed.value = !calendarCollapsed.value
+  if (calendarCollapsed.value) nextTick(onPageScroll)
 }
 
 function openPositionPicker(group) { positionPickerGroup.value = group }
@@ -376,6 +410,7 @@ function formatDateFull(ts) { return fmtDateFullChina(ts) }
 // ---- Calendar (exact replica of original renderCalendar) ----
 const calendarMonth = ref(new Date())
 const localEvents = ref([])
+const calendarEventTimes = ref({})
 const DAY = 86400000
 
 function calendarKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
@@ -388,13 +423,18 @@ function calendarEvents() {
     const date = calendarDate(ts); if (!date) return
     const key = calendarKey(date)
     if (!groups[key]) groups[key] = []
-    groups[key].push({ date, type, label, company: r.company || '-', job: r.job || '', ...(extra || {}) })
+    const item = { date, type, label, company: r.company || '-', job: r.job || '', ...(extra || {}) }
+    const eventId = item.rid || item.lid
+    const eventType = item.etype || 'local'
+    item.time = calendarEventTimes.value[`${eventId}:${eventType}`] || ''
+    groups[key].push(item)
   }
 	  records.value.forEach(r => {
 	    add(r.exam_date, 'exam', '机考/笔试', r, { rid: r.record_id, etype: 'exam' })
 	    add(r.interview1, 'interview', '一面', r, { rid: r.record_id, etype: 'interview1' })
 	    add(r.interview2, 'interview', '二面', r, { rid: r.record_id, etype: 'interview2' })
 	    add(r.interview3, 'interview', '三面', r, { rid: r.record_id, etype: 'interview3' })
+	    add(r.interview4, 'interview', '四面', r, { rid: r.record_id, etype: 'interview4' })
 	    add(r.deadline, 'deadline', '截止', r, { rid: r.record_id, etype: 'deadline' })
   })
   localEvents.value.forEach(e => { add(e.date, 'other', e.label, { company: '', job: '' }, { lid: e.id }) })
@@ -434,7 +474,9 @@ const countdownItems = computed(() => {
       if (days >= 0 && days <= 15) upcoming.push({ item, days, key })
     })
   })
-  upcoming.sort((a, b) => a.item.date - b.item.date || (a.item.company || '').localeCompare(b.item.company || ''))
+  upcoming.sort((a, b) => a.item.date - b.item.date
+    || (a.item.time || '99:99').localeCompare(b.item.time || '99:99')
+    || (a.item.company || '').localeCompare(b.item.company || ''))
   return upcoming.slice(0, 30)
 })
 
@@ -465,8 +507,10 @@ async function submitCalendarEvent() {
 async function loadLocalEvents() {
   try {
     const r = await fetch('/api/dashboard/calendar/local-events', { headers: { Authorization: `Bearer ${localStorage.getItem('rb_token')}` } })
-    localEvents.value = (await r.json()).events || []
-  } catch { localEvents.value = [] }
+    const data = await r.json()
+    localEvents.value = data.events || []
+    calendarEventTimes.value = Object.fromEntries((data.times || []).map(item => [`${item.event_id}:${item.event_type}`, item.time]))
+  } catch { localEvents.value = []; calendarEventTimes.value = {} }
 }
 
 async function deleteEvent(id, etype) {
@@ -494,10 +538,36 @@ async function deleteEvent(id, etype) {
 // Day detail modal
 const dayDetailKey = ref('')
 const dayDetailItems = computed(() => dayDetailKey.value ? (events.value[dayDetailKey.value] || []) : [])
+const editingCalendarEvent = ref(null)
+const calendarEventTimeValue = ref('')
+const calendarEventTimeSaving = ref(false)
 function openDayDetail(key) { dayDetailKey.value = key }
 function closeDayDetail() { dayDetailKey.value = '' }
 
-const EVENT_TYPE_MAP = { apply: '投递', exam: '机考/笔试', interview: '面试', warm: '保温', result: '结果', deadline: '截止', other: '自定义' }
+function openCalendarTimeEditor(event) {
+  editingCalendarEvent.value = event
+  calendarEventTimeValue.value = event.time || ''
+}
+
+async function saveCalendarEventTime() {
+  const event = editingCalendarEvent.value
+  if (!event) return
+  calendarEventTimeSaving.value = true
+  try {
+    const { post } = await import('@/utils/api')
+    await post('/api/dashboard/calendar/event-time', {
+      event_id: event.rid || event.lid,
+      event_type: event.etype || 'local',
+      time: calendarEventTimeValue.value || null,
+    })
+    await loadLocalEvents()
+    editingCalendarEvent.value = null
+  } finally {
+    calendarEventTimeSaving.value = false
+  }
+}
+
+const EVENT_TYPE_MAP = { apply: '投递', exam: '机考/笔试', interview: '面试', warm: '泡池子', result: '结果', deadline: '截止', other: '自定义' }
 const EVENT_BADGE_MAP = { other: 'bdg-a', deadline: 'bdg-r', exam: 'bdg-a', warm: 'bdg-a' }
 function eventBadgeClass(type) { return EVENT_BADGE_MAP[type] || 'bdg-b' }
 function eventTypeName(type) { return EVENT_TYPE_MAP[type] || type }
@@ -533,8 +603,8 @@ async function deleteCalendarEvent(id, etype) {
 function onKeydown(e) { if (e.key === 'Escape' && showFilter.value) applyFilter() }
 
 let trackerPollTimer = null
-onMounted(() => { loadRecordViewState(); store.fetch(); loadSavedFilters(); loadLocalEvents(); loadTrackerPending(); store.startPolling(); trackerPollTimer = setInterval(loadTrackerPending, 30000); document.addEventListener('keydown', onKeydown) })
-onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(trackerPollTimer); document.removeEventListener('keydown', onKeydown) })
+onMounted(() => { loadRecordViewState(); store.fetch(); loadSavedFilters(); loadLocalEvents(); loadTrackerPending(); store.startPolling(); trackerPollTimer = setInterval(loadTrackerPending, 30000); document.addEventListener('keydown', onKeydown); window.addEventListener('scroll', onPageScroll, { passive: true }) })
+onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(trackerPollTimer); document.removeEventListener('keydown', onKeydown); window.removeEventListener('scroll', onPageScroll) })
 </script>
 
 <template>
@@ -558,7 +628,7 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
           <button class="btn" @click="goToday">今天</button>
           <button class="btn btn-primary" @click="openCalendarEventModal()">新建日程</button>
           <div class="calendar-legend">
-            <span class="lg-apply">投递</span><span class="lg-exam">机考/笔试</span><span>面试</span><span class="lg-warm">保温</span><span class="lg-result">结果</span><span class="lg-deadline">截止</span><span class="lg-other">其他</span>
+            <span class="lg-apply">投递</span><span class="lg-exam">机考/笔试</span><span>面试</span><span class="lg-warm">泡池子</span><span class="lg-result">结果</span><span class="lg-deadline">截止</span><span class="lg-other">其他</span>
           </div>
         </div>
         <div class="calendar-layout">
@@ -583,7 +653,7 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
               <div v-for="x in countdownItems" :key="x.key + x.item.label + x.item.company" class="countdown-item">
                 <div>
                   <b>{{ x.item.company ? x.item.company + ' · ' : '' }}{{ x.item.label }}</b>
-                  <span>{{ x.key }}{{ x.item.job ? ' · ' + x.item.job : '' }}</span>
+                  <span>{{ x.key }}{{ x.item.time ? ' ' + x.item.time : '' }}{{ x.item.job ? ' · ' + x.item.job : '' }}</span>
                 </div>
                 <div class="countdown-days" :class="{ urgent: x.days <= 3 }">
                   {{ x.days === 0 ? '今天' : x.days === 1 ? '明天' : '还有 ' + x.days + ' 天' }}
@@ -647,25 +717,25 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
         <button v-if="recordSearch" type="button" class="record-search-clear" @click="recordSearch = ''">清除搜索</button>
       </div>
 
-      <div class="tbl records-table-scroll">
+      <div ref="recordsTableScroll" class="tbl records-table-scroll" @scroll="onRecordsTableScroll">
         <table class="data-table records-table">
           <colgroup>
             <col style="width:120px"><col style="width:168px"><col style="width:68px"><col style="width:88px">
             <col style="width:68px"><col style="width:58px"><col style="width:58px"><col style="width:58px"><col style="width:58px">
-            <col style="width:58px"><col style="width:58px"><col style="width:68px"><col style="width:76px"><col style="width:58px">
+            <col style="width:58px"><col style="width:58px"><col style="width:58px"><col style="width:76px"><col style="width:58px">
           </colgroup>
           <thead>
             <tr>
               <th>公司</th><th>目标岗位</th><th>城市</th><th>批次</th>
               <th>投递</th><th>机考</th><th>一面</th><th>二面</th><th>三面</th>
-              <th>保温</th><th>结果</th><th>截止</th><th>进展</th><th>入口</th>
+              <th>四面</th><th>泡池子</th><th>结果</th><th>进展</th><th>入口</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="store.loading"><td colspan="14" class="center">加载中…</td></tr>
             <tr v-else-if="store.error"><td colspan="14" class="center" style="color:var(--red)">{{ store.error }}</td></tr>
             <tr v-else-if="!visibleRecordGroups.length"><td colspan="14" class="center">{{ recordSearch ? '没有匹配的投递记录' : '暂无记录' }}</td></tr>
-            <template v-for="r in visibleRecordGroups.slice(0, 40)" :key="r.record_id">
+            <template v-for="r in pagedRecordGroups" :key="r.record_id">
             <tr :class="{ 'group-parent-row': r._positions?.length > 1 }">
               <td class="company"><button class="company-link" @click="app.openDetail(r.record_id)">{{ r.company || '-' }}</button></td>
               <td class="job"><div v-if="r._positions?.length > 1" class="position-cell-actions"><button class="position-picker-trigger" type="button" title="选择要展示的岗位记录" @click="openPositionPicker(r)"><span>{{ r.job || '未命名岗位' }}</span><b aria-hidden="true">▾</b></button><button class="position-expand-btn" type="button" :aria-expanded="isExpanded(r)" @click="toggleExpanded(r)">{{ isExpanded(r) ? '收起' : '展开' }}</button></div><TooltipCell v-else :text="r.job || '-'" /></td>
@@ -676,9 +746,9 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
               <td><button class="table-date date-edit" :title="'修改一面时间：' + (formatDateFull(r.interview1) || '未填写')" @click="openDateEditor(r, 'interview1', r.interview1)">{{ formatDate(r.interview1) }}</button></td>
               <td><button class="table-date date-edit" :title="'修改二面时间：' + (formatDateFull(r.interview2) || '未填写')" @click="openDateEditor(r, 'interview2', r.interview2)">{{ formatDate(r.interview2) }}</button></td>
               <td><button class="table-date date-edit" :title="'修改三面时间：' + (formatDateFull(r.interview3) || '未填写')" @click="openDateEditor(r, 'interview3', r.interview3)">{{ formatDate(r.interview3) }}</button></td>
-              <td><button class="table-date date-edit" :title="'修改保温时间：' + (formatDateFull(r.warm) || '未填写')" @click="openDateEditor(r, 'warm', r.warm)">{{ formatDate(r.warm) }}</button></td>
+              <td><button class="table-date date-edit" :title="'修改四面时间：' + (formatDateFull(r.interview4) || '未填写')" @click="openDateEditor(r, 'interview4', r.interview4)">{{ formatDate(r.interview4) }}</button></td>
+              <td><button class="table-date date-edit" :title="'修改泡池子时间：' + (formatDateFull(r.warm) || '未填写')" @click="openDateEditor(r, 'warm', r.warm)">{{ formatDate(r.warm) }}</button></td>
               <td><button class="table-date date-edit" :title="'修改结果时间：' + (formatDateFull(r.result) || '未填写')" @click="openDateEditor(r, 'result', r.result)">{{ formatDate(r.result) }}</button></td>
-              <td><button class="table-date date-edit" :title="'修改截止时间：' + (formatDateFull(r.deadline) || '未填写')" @click="openDateEditor(r, 'deadline', r.deadline)">{{ formatDate(r.deadline) }}</button></td>
               <td><ProgressBadge :progress="(r.progress||[])[0]||'未投递'" /></td>
               <td><a v-if="externalHttpUrl(r.url)" :href="externalHttpUrl(r.url)" target="_blank" rel="noopener noreferrer">查看</a><span v-else class="table-date">-</span></td>
             </tr>
@@ -691,21 +761,20 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
               <td><button class="table-date date-edit" @click="openDateEditor(position, 'interview1', position.interview1)">{{ formatDate(position.interview1) }}</button></td>
               <td><button class="table-date date-edit" @click="openDateEditor(position, 'interview2', position.interview2)">{{ formatDate(position.interview2) }}</button></td>
               <td><button class="table-date date-edit" @click="openDateEditor(position, 'interview3', position.interview3)">{{ formatDate(position.interview3) }}</button></td>
+              <td><button class="table-date date-edit" @click="openDateEditor(position, 'interview4', position.interview4)">{{ formatDate(position.interview4) }}</button></td>
               <td><button class="table-date date-edit" @click="openDateEditor(position, 'warm', position.warm)">{{ formatDate(position.warm) }}</button></td>
               <td><button class="table-date date-edit" @click="openDateEditor(position, 'result', position.result)">{{ formatDate(position.result) }}</button></td>
-              <td><button class="table-date date-edit" @click="openDateEditor(position, 'deadline', position.deadline)">{{ formatDate(position.deadline) }}</button></td>
               <td><ProgressBadge :progress="(position.progress||[])[0]||'未投递'" /></td><td><a v-if="externalHttpUrl(position.url)" :href="externalHttpUrl(position.url)" target="_blank" rel="noopener noreferrer">查看</a><span v-else class="table-date">-</span></td>
             </tr>
             </template>
+            <tr v-if="hasMoreRecordGroups" class="records-load-more-row"><td colspan="14" class="center">继续向下滚动，加载更多记录</td></tr>
           </tbody>
         </table>
       </div>
 
       <div class="table-actions">
-        <button class="btn btn-primary" @click="app.openRecord()">新增记录</button>
-        <button class="btn" @click="app.openManager('applications')">管理记录</button>
         <button class="btn" @click="app.openStats()">统计信息</button>
-        <button class="btn" @click="app.openOffer()">Offer 对比</button>
+        <span class="muted table-render-count dashboard-record-count">已显示 {{ pagedRecordGroups.length }} / {{ visibleRecordGroups.length }} 组；向下滚动自动加载更多。</span>
       </div>
     </div>
 
@@ -726,16 +795,24 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
           <div v-if="!dayDetailItems.length" class="center">该日暂无日程</div>
           <div v-for="e in dayDetailItems" :key="e.rid || e.lid || e.label" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)">
             <div>
-              <b>{{ e.label }}</b>
+              <b>{{ e.time ? e.time + ' · ' : '' }}{{ e.label }}</b>
               <div style="color:var(--muted);font-size:12px;margin-top:2px"><template v-if="e.company">{{ e.company }}{{ e.job ? ' · ' + e.job : '' }} · </template><span :class="'badge ' + eventBadgeClass(e.type)">{{ eventTypeName(e.type) }}</span></div>
             </div>
-            <button class="btn" style="height:28px;padding:0 10px;font-size:11px;flex-shrink:0" @click="deleteCalendarEvent(e.rid || e.lid, e.etype)">删除</button>
+            <div class="day-event-actions"><button class="btn" @click="openCalendarTimeEditor(e)">修改</button><button class="btn" @click="deleteCalendarEvent(e.rid || e.lid, e.etype)">删除</button></div>
           </div>
         </div>
         <div class="modal-ft">
           <button class="btn btn-primary" @click="openCalendarEventModal(dayDetailKey); closeDayDetail()">新建日程</button>
           <button class="btn" @click="closeDayDetail">关闭</button>
         </div>
+      </div>
+    </div>
+
+    <div class="modal-mask show" v-if="editingCalendarEvent" @mousedown.self="!calendarEventTimeSaving && (editingCalendarEvent = null)">
+      <div class="modal date-editor-modal">
+        <div class="modal-hd"><div><h2>修改日程时间</h2><p>{{ editingCalendarEvent.label }}</p></div><button class="icon-btn" :disabled="calendarEventTimeSaving" @click="editingCalendarEvent = null" title="关闭">&times;</button></div>
+        <div class="modal-body"><div class="form-group"><label for="calendar-event-time">具体时间</label><input id="calendar-event-time" v-model="calendarEventTimeValue" type="time" autofocus></div><div class="help">仅补充日历中的具体时间，不会修改投递记录。</div></div>
+        <div class="modal-ft"><button class="btn" :disabled="calendarEventTimeSaving || !calendarEventTimeValue" @click="calendarEventTimeValue = ''; saveCalendarEventTime()">清除时间</button><button class="btn" :disabled="calendarEventTimeSaving" @click="editingCalendarEvent = null">取消</button><button class="btn btn-primary" :disabled="calendarEventTimeSaving || !calendarEventTimeValue" @click="saveCalendarEventTime">{{ calendarEventTimeSaving ? '保存中…' : '保存' }}</button></div>
       </div>
     </div>
 
@@ -802,7 +879,9 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
 
 <style scoped>
 .date-edit{appearance:none;padding:4px 3px;border:1px solid transparent;border-radius:6px;background:transparent;cursor:pointer;transition:color .15s ease,border-color .15s ease,background .15s ease}.date-edit:hover,.date-edit:focus-visible{border-color:var(--line);color:var(--blue);background:var(--blueS);outline:none}.date-editor-modal{width:min(420px,94vw)}
+.day-event-actions{display:flex;flex-shrink:0;gap:6px}.day-event-actions .btn{height:28px;padding:0 10px;font-size:11px}
 .record-card-hd{cursor:pointer;user-select:none}.record-card-hd :is(button,input,select,label,a){cursor:pointer}.record-expand-hint{margin-left:2px;color:var(--muted);font:500 10px/1.2 var(--font);letter-spacing:.01em;opacity:.82;transition:color .15s ease,opacity .15s ease}.record-card-hd:hover .record-expand-hint,.calendar-collapsed .record-expand-hint{color:var(--sub);opacity:1}.data-table-card.filter-open{position:relative;z-index:40;overflow:visible}.data-table-card.filter-open .record-card-hd{position:relative;z-index:41}.records-table-scroll{max-height:440px}.calendar-collapsed .data-table-card{display:flex;min-height:calc(100dvh - 260px);flex-direction:column}.calendar-collapsed .records-table-scroll{flex:1;max-height:none;min-height:280px}.calendar-collapsed .data-table-card .table-actions{margin-top:auto}
+.dashboard-record-count{margin-left:auto;text-align:right}@media(max-width:700px){.dashboard-record-count{width:100%;margin-left:0;text-align:left}}
 .record-controls{position:relative;display:grid;grid-template-columns:minmax(260px,1fr) minmax(170px,220px) auto auto;align-items:end;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--bg)}.record-search,.record-sort{display:grid;min-width:0;gap:5px}.record-search>span,.record-sort>span{color:var(--muted);font-size:9px;font-weight:800}.record-search input,.record-sort select{width:100%;height:38px;padding:0 11px;border:1px solid var(--line2);border-radius:9px;outline:none;color:var(--ink);background:var(--panel);font:600 11px var(--font)}.record-search input:focus,.record-sort select:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueS)}.record-search input::placeholder{color:var(--muted)}.record-controls .progress-filter{align-self:end}.record-controls .progress-filter-toggle{height:38px;min-width:112px;border-radius:9px;background:var(--panel);box-shadow:none}.record-controls .progress-filter-toggle.has-filter,.record-controls .progress-filter.active .progress-filter-toggle.has-filter{color:#fff;border-color:transparent;background:var(--blue)}.record-search-clear{align-self:end;height:38px;padding:0 10px;border:0;color:var(--muted);background:transparent;font:700 10px var(--font);white-space:nowrap;cursor:pointer}.record-search-clear:hover{color:var(--blue)}.data-table-card.filter-open .record-controls{z-index:42}
 .progress-filter-menu{width:min(680px,calc(100vw - 32px))}.filter-builder{display:grid;gap:8px;max-height:min(52dvh,420px);padding:12px;overflow:auto;background:var(--panel)}.filter-condition{display:grid;grid-template-columns:24px minmax(112px,.8fr) minmax(86px,.55fr) minmax(190px,1.5fr) 30px;align-items:center;gap:8px;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}.filter-condition-index{display:grid;width:22px;height:22px;place-items:center;border-radius:50%;color:var(--muted);background:var(--panel);font:800 10px var(--mono)}.filter-condition :is(select,input){min-width:0;width:100%;height:34px;padding:0 9px;border:1px solid var(--line2);border-radius:7px;outline:none;color:var(--ink);background:var(--panel);font:600 11px var(--font)}.filter-condition :is(select,input):focus{border-color:var(--blue);box-shadow:0 0 0 2px var(--blueS)}.filter-range-label{color:var(--sub);font-size:11px;font-weight:700;text-align:center}.filter-date-range{display:grid;grid-template-columns:minmax(118px,1fr) auto minmax(118px,1fr);align-items:center;gap:6px}.filter-date-range span{color:var(--muted);font-size:10px}.filter-condition-remove{display:grid;width:28px;height:28px;place-items:center;padding:0;border:1px solid transparent;border-radius:7px;color:var(--muted);background:transparent;font:700 17px/1 var(--font);cursor:pointer}.filter-condition-remove:hover{border-color:var(--line);color:var(--red);background:var(--redS)}.filter-add-condition{justify-self:start;padding:7px 10px;border:1px dashed var(--line2);border-radius:8px;color:var(--blue);background:transparent;font:800 11px var(--font);cursor:pointer}.filter-add-condition:hover{border-color:var(--blue);background:var(--blueS)}.filter-builder-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--line);background:var(--panel)}.filter-builder-footer span{color:var(--muted);font-size:10px}.filter-builder-footer .btn{height:30px}
 .dashboard-page{min-width:0}.dashboard-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:18px}.dashboard-page-head h2{margin:0;font-size:clamp(22px,2.5vw,30px);line-height:1.2;letter-spacing:-.035em}.dashboard-page-head p{max-width:620px;margin-top:7px;color:var(--muted);font-size:13px}.dashboard-add{min-width:104px}.kpis{display:grid;grid-template-columns:1.15fr .95fr .95fr 1.05fr;gap:12px;margin-bottom:14px}.kpi{position:relative;overflow:hidden;min-height:112px;padding:17px 18px;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow)}.kpi:after{content:"";position:absolute;right:-28px;bottom:-38px;width:105px;height:105px;border-radius:50%;background:color-mix(in srgb,var(--blue) 7%,transparent);pointer-events:none}.kpi-label{color:var(--muted);font-size:10px;font-weight:800}.kpi-value{margin-top:11px;color:var(--ink);font-size:30px;line-height:1;letter-spacing:-.04em}.kpi-sub{margin-top:8px;color:var(--sub);font-size:9px}.dashboard-calendar,.data-table-card{overflow:hidden;border-radius:16px}.dashboard-calendar{margin-bottom:14px}.dashboard-calendar>.card-hd,.data-table-card>.card-hd{min-height:54px;padding:0 16px;border-bottom:1px solid var(--line)}.dashboard-calendar>.card-body{padding:12px;background:var(--bg)}.calendar-toolbar{padding:0 0 11px}.calendar-layout{gap:12px}.calendar-scroll,.countdown-panel{overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.calendar-grid{border:0}.countdown-panel{padding:14px}.countdown-panel h3{margin:0 0 10px;font-size:12px}.countdown-item{border-radius:9px;transition:background .15s ease}.countdown-item:hover{background:var(--blueS)}.data-table-card .tbl{background:var(--panel)}.data-table-card .table-actions{min-height:58px;padding:10px 14px;border-top:1px solid var(--line);background:var(--bg)}.records-table tbody tr{transition:background .15s ease}.records-table tbody tr:hover{background:var(--blueS)}@media(max-width:980px){.kpis{grid-template-columns:1fr 1fr}.calendar-layout{grid-template-columns:1fr}.countdown-panel{max-height:260px}}@media(max-width:620px){.dashboard-page-head{align-items:flex-start;flex-direction:column}.dashboard-add{width:100%}.kpis{grid-template-columns:1fr 1fr;gap:8px}.kpi{min-height:104px;padding:14px}.dashboard-calendar,.data-table-card{border-radius:12px}.calendar-toolbar{align-items:stretch}.calendar-legend{width:100%}}@media(prefers-reduced-motion:reduce){.countdown-item,.records-table tbody tr{transition:none}}

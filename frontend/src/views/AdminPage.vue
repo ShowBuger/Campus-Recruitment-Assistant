@@ -33,15 +33,33 @@ let sourcePollTimer = null
 const aiDedupRunning = ref(false)
 async function runAiDedup() {
   aiDedupRunning.value = true
-  sourceProgress.value = { phase: 'ai_dedup', message: '正在用规则和 AI 分析共享总表中的重复记录…' }
+  sourceProgress.value = { phase: 'rule_deduplicating', message: '正在创建智能去重任务…' }
   try {
-    const data = await apiReq('POST', '/api/dashboard/shared/records/ai-dedup')
-    sourceProgress.value = { finished: true, message: data.message }
-    data.duplicates_removed > 0 ? toast.success(data.message) : toast.info(data.message)
+    const started = await apiReq('POST', '/api/dashboard/shared/records/ai-dedup')
+    stopSourcePolling()
+    const poll = async () => {
+      try {
+        const data = await apiReq('GET', '/api/dashboard/sync-from-givemeoc/progress?sync_id=' + encodeURIComponent(started.sync_id))
+        sourceProgress.value = data
+        if (data.finished) {
+          stopSourcePolling()
+          aiDedupRunning.value = false
+          if (data.failed) toast.error(data.message)
+          else if (data.duplicates_removed > 0) toast.success(data.message)
+          else toast.info(data.message)
+        }
+      } catch (e) {
+        stopSourcePolling()
+        aiDedupRunning.value = false
+        sourceProgress.value = { failed: true, finished: true, message: e.message }
+        toast.error('智能去重进度读取失败：' + e.message)
+      }
+    }
+    await poll()
+    if (aiDedupRunning.value) sourcePollTimer = setInterval(poll, 1000)
   } catch (e) {
     sourceProgress.value = { failed: true, finished: true, message: e.message }
     toast.error('智能去重失败：' + e.message)
-  } finally {
     aiDedupRunning.value = false
   }
 }
@@ -284,6 +302,11 @@ const sourceProgressPercent = computed(() => {
   const p = sourceProgress.value
   if (!p) return 0
   if (p.finished && !p.failed) return 100
+  if (p.phase === 'rule_deduplicating') return 12
+  if (p.phase === 'ai_deduplicating') {
+    return p.total ? Math.min(92, 15 + Math.round((Number(p.done || 0) / p.total) * 75)) : 18
+  }
+  if (p.phase === 'merging') return 96
   if (p.phase === 'deduplicating') return 94
   if (p.phase === 'cleaning' || p.phase === 'preparing') return 4
   const sourcePart = p.source_total ? ((Number(p.source_index || 1) - 1) / p.source_total) * 80 : 0
@@ -432,10 +455,10 @@ onUnmounted(() => {
               </label>
             </div>
             <div style="display:flex;align-items:center;gap:10px">
-              <button class="btn btn-primary" :disabled="sourceSyncing || (!syncSources.givemeoc && !syncSources.qiuzhifangzhou)" @click="runSourceSync">
+              <button class="btn btn-primary" :disabled="sourceSyncing || aiDedupRunning || (!syncSources.givemeoc && !syncSources.qiuzhifangzhou)" @click="runSourceSync">
                 {{ sourceSyncing ? '同步中…' : '立即同步已开启来源' }}
               </button>
-              <button class="btn" :disabled="aiDedupRunning" @click="runAiDedup">
+              <button class="btn" :disabled="aiDedupRunning || sourceSyncing" @click="runAiDedup">
                 {{ aiDedupRunning ? '智能去重中…' : '对已有数据智能去重' }}
               </button>
               <span style="font-size:11px;color:var(--muted)">所有来源获取完成后统一去重并写入共享总表</span>

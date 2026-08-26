@@ -4,18 +4,42 @@ import { useAuthStore } from '@/stores/auth'
 import UserProfileModal from '@/components/UserProfileModal.vue'
 import { isDesktopRuntime } from '@/utils/runtime'
 import UserAvatar from '@/components/UserAvatar.vue'
+import {
+  PhChartBar,
+  PhFileText,
+  PhHouse,
+  PhKanban,
+  PhNotebook,
+  PhMoney,
+  PhTable,
+  PhUserGear,
+} from '@phosphor-icons/vue'
 const auth = useAuthStore()
 const version = ref('')
 const collapsed = ref(false)
 const showProfile = ref(false)
 let styleObserver = null
+const navIcons = {
+  home: PhHouse,
+  board: PhKanban,
+  table: PhTable,
+  resume: PhFileText,
+  analysis: PhChartBar,
+  notes: PhNotebook,
+  salary: PhMoney,
+  admin: PhUserGear,
+}
 const navItems = computed(() => [
   { to: '/', label: '投递信息', icon: 'home' },
   { to: '/board', label: '投递看板', icon: 'board' },
   { to: '/records', label: '总表信息', icon: 'table' },
   { to: '/resumes', label: '简历管理', icon: 'resume' },
   { to: '/analysis', label: '简历分析', icon: 'analysis' },
-  ...(auth.isAdmin ? [{ to: '/admin', label: '管理页面', icon: 'admin' }] : []),
+  { to: '/notes', label: '校招笔记', icon: 'notes' },
+  { to: '/salary', label: '薪资查询', icon: 'salary' },
+  ...(auth.isAdmin ? [
+    { to: '/admin', label: '管理页面', icon: 'admin' },
+  ] : []),
 ])
 
 function syncCollapsedLayout() {
@@ -77,14 +101,7 @@ onUnmounted(() => {
     </div>
     <div class="nav-sec">工作台</div>
     <router-link v-for="item in navItems" :key="item.to" :to="item.to" :title="collapsed ? item.label : undefined">
-      <svg class="sidebar-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path v-if="item.icon === 'home'" d="M4 10.5 12 4l8 6.5V20h-5v-6H9v6H4v-9.5Z"/>
-        <path v-else-if="item.icon === 'board'" d="M4 4h6v16H4V4Zm10 0h6v9h-6V4Zm0 13h6v3h-6v-3Z"/>
-        <path v-else-if="item.icon === 'table'" d="M4 5h16v14H4V5Zm0 5h16M9 5v14"/>
-        <path v-else-if="item.icon === 'resume'" d="M6 3h9l3 3v15H6V3Zm9 0v4h3M9 11h6M9 15h6"/>
-        <path v-else-if="item.icon === 'analysis'" d="M4 19V9m5 10V5m5 14v-7m5 7V3"/>
-        <path v-else d="M4 20v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2M12 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm6-5v4M16 7h4"/>
-      </svg>
+      <component :is="navIcons[item.icon]" class="sidebar-nav-icon" :size="20" weight="regular" aria-hidden="true" />
       <span class="sidebar-nav-label">{{ item.label }}</span>
     </router-link>
     <div class="sidebar-foot">

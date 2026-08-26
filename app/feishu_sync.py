@@ -450,7 +450,7 @@ def _is_applied(fields: dict) -> bool:
         return True
     return any(
         fields.get(name)
-        for name in ("投递时间", "机考时间", "一面", "二面", "三面", "保温", "结果")
+        for name in ("投递时间", "机考时间", "一面", "二面", "三面", "四面", "保温", "结果")
     )
 
 

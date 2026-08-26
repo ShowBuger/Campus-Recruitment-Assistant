@@ -103,6 +103,23 @@ tail -f data/logs/system.jsonl    # 日志
 - `.env` — JWT 密钥（不提交到 Git）
 - 备份：持久化 `data/` 目录和 `.env` 文件
 
+## OfferShow 薪资采集工具
+
+工具位于 `tools/offershow_scraper.py`，用于低频采集 OfferShow 当前公开的薪酬报告目录；只有显式添加 `--with-details` 时才会逐份请求岗位薪资详情。
+
+```bash
+# 按公司采集目录并导出 JSON
+.venv/bin/python tools/offershow_scraper.py \
+  --search 腾讯 --max-pages 2 --output data/offershow_tencent.json
+
+# 同时采集详情并导出 CSV
+.venv/bin/python tools/offershow_scraper.py \
+  --search 腾讯 --max-pages 2 --with-details \
+  --output data/offershow_tencent.csv
+```
+
+默认请求间隔为 1.5 秒，程序禁止设置为低于 0.5 秒。该工具不绕过登录、会员或其他访问控制；数据源自 OfferShow，仅限个人查询与企业内部使用，使用时请遵守网站条款及适用法律。
+
 ## 技术栈
 
 | 组件 | 技术 |

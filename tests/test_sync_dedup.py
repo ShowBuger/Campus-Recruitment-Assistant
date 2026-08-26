@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from app import local_records, sync_dedup
+from app.routers import dashboard
 
 
 def record(record_id, company, batch, job, url):
@@ -19,6 +20,30 @@ def record(record_id, company, batch, job, url):
 
 
 class SyncDedupTests(unittest.TestCase):
+    def test_existing_dedup_endpoint_starts_background_job(self):
+        with patch(
+            "app.routers.dashboard._new_existing_dedup",
+            return_value=("dedup-test", True),
+        ) as start:
+            result = dashboard.ai_dedup_shared_records(
+                {"user_id": 7, "is_admin": True}
+            )
+        start.assert_called_once_with(7)
+        self.assertEqual(result["sync_id"], "dedup-test")
+        self.assertTrue(result["started"])
+        self.assertEqual(result["status"], "running")
+
+    def test_existing_dedup_endpoint_reuses_running_job(self):
+        with patch(
+            "app.routers.dashboard._new_existing_dedup",
+            return_value=("dedup-existing", False),
+        ):
+            result = dashboard.ai_dedup_shared_records(
+                {"user_id": 7, "is_root": True}
+            )
+        self.assertFalse(result["started"])
+        self.assertIn("已有", result["message"])
+
     def test_yearless_autumn_matches_explicit_2027_but_not_2026(self):
         yearless = record("a", "示例科技", "秋招", "研发类", "https://example.com/campus")
         year_2027 = record("b", "示例科技", "27秋招", "研发类", "https://example.com/campus")

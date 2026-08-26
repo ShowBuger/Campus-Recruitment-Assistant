@@ -90,6 +90,10 @@ def _public_user(user: dict) -> dict:
         "nickname": user.get("nickname") or user["username"],
         "avatar_key": user.get("avatar_key") or "indigo",
         "avatar_url": f"/api/auth/users/{user['id']}/avatar" if has_custom_avatar else "",
+        # 登录/注册响应必须和 /me 保持相同的权限字段，否则管理员首次
+        # 登录时前端无法识别其身份，只有刷新并重新请求 /me 后才会显示管理页。
+        "is_admin": bool(user.get("is_admin")),
+        "is_root": user["username"] == "root",
     }
 
 

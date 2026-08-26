@@ -22,7 +22,7 @@ var _PROGRESS_ORDER_BOARD = ['未投递', '已投递', '机考', '面试', 'OC',
 var BOARD_DATE_FIELD = {
   '已投递': { get: r => r.apply_date, set: '投递时间', label: '投递时间' },
   '机考': { get: r => r.exam_date, set: '机考时间', label: '机考时间' },
-  '面试': { get: r => Math.max(r.interview1 || 0, r.interview2 || 0, r.interview3 || 0) || null, set: '一面', label: '面试时间' },
+  '面试': { get: r => Math.max(r.interview1 || 0, r.interview2 || 0, r.interview3 || 0, r.interview4 || 0) || null, set: '一面', label: '面试时间' },
   'OC': { get: r => r.result, set: '结果', label: '结果时间' },
   '已挂': { get: r => r.result, set: '结果', label: '结果时间' },
   '放弃': { get: r => r.result, set: '结果', label: '结果时间' },
@@ -37,7 +37,7 @@ const { groupedRecords } = useRecordGroups(allRecords)
 
 function isAppliedRecord(record) {
   const progress = toArray(record?.progress)[0]
-  return (progress && progress !== '未投递') || !!(record && (record.apply_date || record.exam_date || record.interview1 || record.interview2 || record.interview3 || record.warm || record.result))
+  return (progress && progress !== '未投递') || !!(record && (record.apply_date || record.exam_date || record.interview1 || record.interview2 || record.interview3 || record.interview4 || record.warm || record.result))
 }
 
 const primaryApplicationRecords = computed(() => groupedRecords.value.filter(isAppliedRecord))
@@ -74,6 +74,15 @@ function boardDwellFor(col, r) {
   var mapper = BOARD_DATE_FIELD[col] || BOARD_DATE_FIELD['已投递']
   var fieldDate = mapper.get(r)
   return boardDwell(fieldDate)
+}
+
+/* 面试列展示当前已记录的最高面试轮次。 */
+function interviewRoundLabel(record) {
+  if (record?.interview4) return '四面'
+  if (record?.interview3) return '三面'
+  if (record?.interview2) return '二面'
+  if (record?.interview1) return '一面'
+  return '轮次待定'
 }
 
 onMounted(function () {
@@ -190,7 +199,12 @@ async function onDrop(e, targetCol) {
                     @dragstart="onDragStart($event, r)"
                     @dragend="onDragEnd"
                   >
-                    <td class="b-company"><TooltipCell :text="r.company || '-'" /></td>
+                    <td class="b-company">
+                      <div class="board-company-cell">
+                        <TooltipCell :text="r.company || '-'" />
+                        <span v-if="col === '面试'" class="interview-round-tag">{{ interviewRoundLabel(r) }}</span>
+                      </div>
+                    </td>
                     <td><TooltipCell :text="r.job || '-'" /></td>
                     <td class="b-dwell" :class="{ stale: boardDwellFor(col, r).days >= 14 && boardDwellFor(col, r).days >= 0 }">
                       {{ boardDwellFor(col, r).text }}
@@ -212,4 +226,5 @@ async function onDrop(e, targetCol) {
 <style scoped>
 .board-page{min-width:0}.board-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:18px}.board-page-head h2{margin:0;font-size:clamp(22px,2.5vw,30px);line-height:1.2;letter-spacing:-.035em}.board-page-head p{max-width:620px;margin-top:7px;color:var(--muted);font-size:13px}.board-overview{display:flex;align-items:baseline;gap:7px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.board-overview strong{color:var(--blue);font-size:18px}.board-overview span{color:var(--sub);font-size:10px}.board-shell{overflow:hidden;border-radius:16px}.board-hint{display:flex;align-items:baseline;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line);background:var(--bg);color:var(--muted);font-size:11px}.board-hint strong{color:var(--ink);font-size:11px}.board-columns{padding:12px;background:var(--bg)}.board-col{overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--panel);transition:border-color .18s ease,background .18s ease,transform .18s ease}.board-col.drag-over{border-color:var(--blue);background:var(--blueS);transform:translateY(-2px)}.board-col-hd{padding:11px 12px;border-bottom:1px solid var(--line);background:var(--panel)}.board-col-count{min-width:23px;height:23px;padding:0 7px;border-radius:7px;background:var(--bg);color:var(--muted);font-size:10px;line-height:23px;text-align:center}.board-row{transition:background .15s ease,opacity .15s ease}.board-row:hover{background:var(--blueS)}.board-row.dragging{opacity:.42}.board-col-empty{min-height:92px;padding:30px 16px;color:var(--sub);font-size:10px;line-height:1.6;text-align:center}.b-dwell.stale{color:var(--red);font-weight:800}@media(max-width:820px){.board-page-head{align-items:flex-start;flex-direction:column}.board-overview{width:100%;justify-content:space-between}.board-hint{align-items:flex-start;flex-direction:column;gap:4px}.board-columns{padding:8px}}@media(prefers-reduced-motion:reduce){.board-col,.board-row{transition:none}}
 .board-hint em{margin-left:auto;color:var(--sub);font-size:10px;font-style:normal;white-space:nowrap}@media(max-width:820px){.board-hint em{margin-left:0}}
+.board-company-cell{display:flex;align-items:center;gap:7px;min-width:0}.board-company-cell :deep(.tooltip-cell){min-width:0}.interview-round-tag{flex:none;padding:2px 6px;border:1px solid color-mix(in srgb,var(--blue) 24%,var(--line));border-radius:5px;background:var(--blueS);color:var(--blue);font-size:9px;font-weight:800;line-height:1.35;white-space:nowrap}
 </style>

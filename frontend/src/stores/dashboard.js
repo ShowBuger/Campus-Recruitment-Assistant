@@ -11,7 +11,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const recentRecords = computed(() => records.value.filter((r) => {
     const p = (r.progress || [])[0]
     return (p && p !== '未投递') ||
-      !!(r.apply_date || r.exam_date || r.interview1 || r.interview2 || r.interview3 || r.warm || r.result)
+      !!(r.apply_date || r.exam_date || r.interview1 || r.interview2 || r.interview3 || r.interview4 || r.warm || r.result)
   }))
   const kpi = computed(() => ({
     total_companies: data.value?.main?.total_companies || 0,

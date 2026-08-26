@@ -157,7 +157,12 @@
             </div>
 
             <div class="form-group">
-              <label for="total-edit-warm">保温</label>
+              <label for="total-edit-interview4">四面</label>
+              <input id="total-edit-interview4" type="text" v-model="form.interview4" @focus="activateOptionalDate" @blur="deactivateOptionalDate">
+            </div>
+
+            <div class="form-group">
+              <label for="total-edit-warm">泡池子</label>
               <input id="total-edit-warm" type="text" v-model="form.warm" @focus="activateOptionalDate" @blur="deactivateOptionalDate">
             </div>
 
@@ -329,7 +334,8 @@ const PROGRESS_TIME_FIELDS = [
   { rank: 3, key: 'interview1', label: '一面' },
   { rank: 3, key: 'interview2', label: '二面' },
   { rank: 3, key: 'interview3', label: '三面' },
-  { rank: 3, key: 'warm', label: '保温时间' },
+  { rank: 3, key: 'interview4', label: '四面' },
+  { rank: 3, key: 'warm', label: '泡池子时间' },
   { rank: 4, key: 'result_date', label: '结果时间' },
 ]
 
@@ -398,7 +404,7 @@ function isApplicationRecord(r) {
   if (!r) return false
   const progress = String(Array.isArray(r.progress) ? r.progress[0] : (r.progress || '未投递'))
   return progress !== '未投递'
-    || !!(r.apply_date || r.exam_date || r.interview1 || r.interview2 || r.interview3 || r.warm || r.result)
+    || !!(r.apply_date || r.exam_date || r.interview1 || r.interview2 || r.interview3 || r.interview4 || r.warm || r.result)
 }
 
 function computeAiState() {
@@ -443,6 +449,7 @@ const form = reactive({
   interview1: '',
   interview2: '',
   interview3: '',
+  interview4: '',
   warm: '',
   result_date: '',
   offer_total: '',
@@ -523,6 +530,7 @@ function recordPayload(job = form.job) {
     interview1: form.interview1 || null,
     interview2: form.interview2 || null,
     interview3: form.interview3 || null,
+    interview4: form.interview4 || null,
     warm: form.warm || null,
     result_date: form.result_date || null,
     offer_total: form.offer_total.trim(),
@@ -745,6 +753,7 @@ function loadRecordForm(r) {
   form.interview1 = inputDate(r.interview1)
   form.interview2 = inputDate(r.interview2)
   form.interview3 = inputDate(r.interview3)
+  form.interview4 = inputDate(r.interview4)
   form.warm = inputDate(r.warm)
   form.result_date = inputDate(r.result)
   form.offer_deadline = inputDate(r.offer_deadline)
@@ -791,7 +800,7 @@ onMounted(async () => {
     // For date fields with values, set input type to 'date' (matching original openRecordDetails behavior)
     const TOTAL_DETAIL_DATE_IDS = [
       'total-edit-deadline', 'total-edit-apply-date', 'total-edit-exam-date',
-      'total-edit-interview1', 'total-edit-interview2', 'total-edit-interview3',
+      'total-edit-interview1', 'total-edit-interview2', 'total-edit-interview3', 'total-edit-interview4',
       'total-edit-warm', 'total-edit-result-date', 'total-edit-offer-deadline'
     ]
     TOTAL_DETAIL_DATE_IDS.forEach(id => {

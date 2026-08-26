@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import bus, database_backup, desktop_releases
-from app.routers import dashboard, status, config, resume, ai, auth, admin, chat, progress_tracker, recommendations, desktop
+from app.routers import dashboard, status, config, resume, ai, auth, admin, chat, progress_tracker, recommendations, desktop, notes, salary
 from app.version import APP_VERSION
 
 # Start background sync scheduler
@@ -69,6 +69,8 @@ app.include_router(recommendations.router)
 app.include_router(chat.router)
 app.include_router(progress_tracker.router)
 app.include_router(desktop.router)
+app.include_router(notes.router)
+app.include_router(salary.router)
 
 
 def _dist_index():

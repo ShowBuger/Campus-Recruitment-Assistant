@@ -15,11 +15,11 @@ const isShared = computed(() => app.recordShared)
 
 const editId = ref('')
 const company = ref(''), job = ref(''), jobs = ref(['']), city = ref(''), batch = ref('秋招'), progress = ref('已投递'), url = ref('')
-const applyDate = ref(''), examDate = ref(''), interview1 = ref(''), interview2 = ref(''), interview3 = ref(''), warm = ref(''), resultDate = ref(''), deadline = ref('')
+const applyDate = ref(''), examDate = ref(''), interview1 = ref(''), interview2 = ref(''), interview3 = ref(''), interview4 = ref(''), warm = ref(''), resultDate = ref(''), deadline = ref('')
 const companyType = ref(''), directions = ref('')
 
-const dateIds = ['record-date','record-exam','record-interview1','record-interview2','record-interview3','record-warm','record-result','record-deadline']
-const dateRefs = { 'record-date': applyDate, 'record-exam': examDate, 'record-interview1': interview1, 'record-interview2': interview2, 'record-interview3': interview3, 'record-warm': warm, 'record-result': resultDate, 'record-deadline': deadline }
+const dateIds = ['record-date','record-exam','record-interview1','record-interview2','record-interview3','record-interview4','record-warm','record-result','record-deadline']
+const dateRefs = { 'record-date': applyDate, 'record-exam': examDate, 'record-interview1': interview1, 'record-interview2': interview2, 'record-interview3': interview3, 'record-interview4': interview4, 'record-warm': warm, 'record-result': resultDate, 'record-deadline': deadline }
 
 function onFocus(e) { e.target.type = 'date'; try { e.target.showPicker?.() } catch {} }
 function onBlur(e) { if (!e.target.value) e.target.type = 'text' }
@@ -58,7 +58,7 @@ async function submit() {
         const payload = {
         company: company.value.trim(), job: targetJobs[index], city: city.value.trim(), batch: batch.value,
         apply_date: applyDate.value || null, exam_date: examDate.value || null,
-        interview1: interview1.value || null, interview2: interview2.value || null, interview3: interview3.value || null,
+        interview1: interview1.value || null, interview2: interview2.value || null, interview3: interview3.value || null, interview4: interview4.value || null,
         warm: warm.value || null, result_date: resultDate.value || null, deadline: deadline.value || null,
         progress: progress.value, url: url.value.trim() || null
       }
@@ -86,7 +86,7 @@ async function submit() {
 function addJob() { jobs.value.push('') }
 function removeJob(index) { if (jobs.value.length > 1) jobs.value.splice(index, 1) }
 
-defineExpose({ editId, company, job, jobs, city, batch, progress, url, applyDate, examDate, interview1, interview2, interview3, warm, resultDate, deadline, companyType, directions, inputDate, reset })
+defineExpose({ editId, company, job, jobs, city, batch, progress, url, applyDate, examDate, interview1, interview2, interview3, interview4, warm, resultDate, deadline, companyType, directions, inputDate, reset })
 </script>
 
 <template>
@@ -120,7 +120,8 @@ defineExpose({ editId, company, job, jobs, city, batch, progress, url, applyDate
               <div class="form-group"><label for="record-interview1">一面</label><input id="record-interview1" v-model="interview1" type="text" @focus="onFocus" @blur="onBlur"></div>
               <div class="form-group"><label for="record-interview2">二面</label><input id="record-interview2" v-model="interview2" type="text" @focus="onFocus" @blur="onBlur"></div>
               <div class="form-group"><label for="record-interview3">三面</label><input id="record-interview3" v-model="interview3" type="text" @focus="onFocus" @blur="onBlur"></div>
-              <div class="form-group"><label for="record-warm">保温</label><input id="record-warm" v-model="warm" type="text" @focus="onFocus" @blur="onBlur"></div>
+              <div class="form-group"><label for="record-interview4">四面</label><input id="record-interview4" v-model="interview4" type="text" @focus="onFocus" @blur="onBlur"></div>
+              <div class="form-group"><label for="record-warm">泡池子</label><input id="record-warm" v-model="warm" type="text" @focus="onFocus" @blur="onBlur"></div>
               <div class="form-group"><label for="record-result">结果时间</label><input id="record-result" v-model="resultDate" type="text" @focus="onFocus" @blur="onBlur"></div>
             </template>
             <div class="form-group"><label for="record-deadline">截止</label><input id="record-deadline" v-model="deadline" type="text" @focus="onBlur"></div>

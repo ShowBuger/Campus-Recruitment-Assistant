@@ -10,6 +10,7 @@ export const useAppStore = defineStore('app', () => {
   const showOffer = ref(false)
   const showManager = ref(false)
   const showRecommendation = ref(false)
+  const appliedRecommendation = ref(null)
   const detailId = ref('')
   const recordShared = ref(false)
   const managerShared = ref(false)
@@ -34,6 +35,8 @@ export const useAppStore = defineStore('app', () => {
   function closeManager() { showManager.value = false; managerShared.value = false; managerScope.value = 'records' }
   function openRecommendation() { showRecommendation.value = true }
   function closeRecommendation() { showRecommendation.value = false }
+  function applyRecommendation(result) { appliedRecommendation.value = result || null }
+  function clearAppliedRecommendation() { appliedRecommendation.value = null }
 
   // Chat unread count (shared between ChatModal & Topbar)
   const chatUnread = ref(0)
@@ -44,8 +47,8 @@ export const useAppStore = defineStore('app', () => {
   function setTrackerPending(events) { trackerPending.value = events || [] }
   function clearTrackerPending() { trackerPending.value = [] }
 
-  return { showConfig, showChat, showRecord, showHelp, showStats, showOffer, showManager, showRecommendation, detailId, recordShared, managerShared, managerScope,
+  return { showConfig, showChat, showRecord, showHelp, showStats, showOffer, showManager, showRecommendation, appliedRecommendation, detailId, recordShared, managerShared, managerScope,
     toggleConfig, toggleChat, toggleHelp, openRecord, closeRecord, openDetail, closeDetail,
-    openStats, closeStats, openOffer, closeOffer, openManager, closeManager, openRecommendation, closeRecommendation,
+    openStats, closeStats, openOffer, closeOffer, openManager, closeManager, openRecommendation, closeRecommendation, applyRecommendation, clearAppliedRecommendation,
     trackerPending, setTrackerPending, clearTrackerPending, chatUnread, setChatUnread }
 })

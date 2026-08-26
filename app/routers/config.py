@@ -61,7 +61,7 @@ class RecommendationConfig(BaseModel):
 class DashboardFilterCondition(BaseModel):
     column: Literal[
         "company", "job", "city", "batch", "apply_date", "exam_date",
-        "interview1", "interview2", "interview3", "warm", "result", "deadline", "progress",
+        "interview1", "interview2", "interview3", "interview4", "warm", "result", "deadline", "progress",
     ]
     operator: Literal["equals", "contains", "not_contains", "not_equals", "range"]
     value: str = Field(default="", max_length=100)

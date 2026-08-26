@@ -1,5 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { normalizeRecordId, parseRecordSelections, selectedRecord } from '@/utils/recordSelection'
 
 const selectedByCompany = ref({})
 
@@ -15,8 +16,7 @@ function groupRecords(records) {
     groups.get(key).push(record)
   }
   return [...groups.entries()].map(([key, positions]) => {
-    const selectedId = selectedByCompany.value[key]
-    const selected = positions.find(item => item.record_id === selectedId) || positions[0]
+    const selected = selectedRecord(positions, selectedByCompany.value[key])
     return { ...selected, _companyKey: key, _positions: positions }
   })
 }
@@ -38,8 +38,7 @@ export function useRecordGroups(source) {
       return
     }
     try {
-      const value = JSON.parse(localStorage.getItem(key) || '{}')
-      selectedByCompany.value = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+      selectedByCompany.value = parseRecordSelections(localStorage.getItem(key))
     } catch (_) {
       selectedByCompany.value = {}
     }
@@ -47,21 +46,50 @@ export function useRecordGroups(source) {
 
   function saveSelection() {
     const key = storageKey()
-    if (key) localStorage.setItem(key, JSON.stringify(selectedByCompany.value))
+    if (!key) return
+    try { localStorage.setItem(key, JSON.stringify(selectedByCompany.value)) } catch (_) {}
   }
 
   watch(userIdentity, loadSelection, { immediate: true })
 
+  /* 已选主记录变为“已挂”时，将选择持久切换到最快的未挂子记录。 */
+  watch(source, records => {
+    let changed = false
+    const nextSelections = { ...selectedByCompany.value }
+    const groups = new Map()
+    for (const record of records || []) {
+      const key = companyKey(record)
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key).push(record)
+    }
+    for (const [key, positions] of groups) {
+      const selectedId = normalizeRecordId(nextSelections[key])
+      if (!selectedId) continue
+      const selected = positions.find(item => normalizeRecordId(item.record_id) === selectedId)
+      const progress = Array.isArray(selected?.progress) ? selected.progress[0] : selected?.progress
+      if (progress !== '已挂') continue
+      const replacement = selectedRecord(positions, selectedId)
+      if (!replacement || normalizeRecordId(replacement.record_id) === selectedId) continue
+      nextSelections[key] = normalizeRecordId(replacement.record_id)
+      changed = true
+    }
+    if (changed) {
+      selectedByCompany.value = nextSelections
+      saveSelection()
+    }
+  }, { immediate: true })
+
   function selectPosition(group, position) {
     selectedByCompany.value = {
       ...selectedByCompany.value,
-      [group._companyKey || companyKey(group)]: position.record_id,
+      [group._companyKey || companyKey(group)]: normalizeRecordId(position.record_id),
     }
     saveSelection()
   }
 
   function selectPositionById(group, recordId) {
-    const position = group?._positions?.find(item => item.record_id === recordId)
+    const normalizedId = normalizeRecordId(recordId)
+    const position = group?._positions?.find(item => normalizeRecordId(item.record_id) === normalizedId)
     if (position) selectPosition(group, position)
   }
 

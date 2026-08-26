@@ -5,13 +5,15 @@ let _cachedProvider = ''
 </script>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { del, get, post } from '@/utils/api'
 import { externalHttpUrl } from '@/utils/externalUrl'
 import { useToastStore } from '@/stores/toast'
+import { useAppStore } from '@/stores/app'
 
 const emit = defineEmits(['close'])
 const toast = useToastStore()
+const app = useAppStore()
 
 const showConfig = ref(false)
 const configSaving = ref(false)
@@ -30,14 +32,27 @@ const historyLoading = ref(false)
 const activeHistoryId = ref('')
 const runMode = ref('full')
 const baseRunId = ref('')
+const gradeFilter = ref('all')
+const resultPage = ref(1)
 const expandedJobIds = ref(new Set())
 let pollTimer = null
-let liveRefreshTimer = null
-let liveRefreshRunning = false
+const RESULT_PAGE_SIZE = 25
 
 const gradeTitle = { S: '强烈推荐', A: '优先推荐', B: '值得关注', C: '备选岗位' }
-const historyItems = computed(() => historyResult.value?.items || [])
+const allHistoryItems = computed(() => [...(historyResult.value?.items || [])].sort(
+  (left, right) => Number(right.recommendation_score || 0) - Number(left.recommendation_score || 0),
+))
+const historyItems = computed(() => gradeFilter.value === 'all'
+  ? allHistoryItems.value
+  : allHistoryItems.value.filter(item => item.recommendation_grade === gradeFilter.value))
+const resultPageCount = computed(() => Math.max(1, Math.ceil(historyItems.value.length / RESULT_PAGE_SIZE)))
+const pagedHistoryItems = computed(() => {
+  const start = (resultPage.value - 1) * RESULT_PAGE_SIZE
+  return historyItems.value.slice(start, start + RESULT_PAGE_SIZE)
+})
 const baseHistory = computed(() => histories.value.find(item => item.id === baseRunId.value))
+
+watch([gradeFilter, historyResult], () => { resultPage.value = 1 })
 
 function isLongJobName(value) {
   return String(value || '').length > 42
@@ -107,6 +122,10 @@ async function pollRecommendation(runId) {
     const state = await get('/api/recommendations/' + encodeURIComponent(runId), { timeout: 15000 })
     progress.value = state
     updateHistory(runId, state)
+    if (selectedHistory.value?.id === runId && state.result) {
+      selectedHistory.value = { ...selectedHistory.value, ...state, id: runId }
+      historyResult.value = state.result
+    }
     if (state.status === 'finished') {
       return
     }
@@ -139,15 +158,6 @@ async function viewHistory(history, silent = false) {
     const data = await get('/api/recommendations/history/' + encodeURIComponent(history.id))
     selectedHistory.value = data
     historyResult.value = data.result || { items: [] }
-    try {
-      const dashboard = await get('/api/dashboard', { timeout: 10000 })
-      const personalIds = new Set((dashboard?.main?.recent || []).map(r => r.record_id))
-      if (historyResult.value?.items) {
-        historyResult.value.items.forEach(job => {
-          if (personalIds.has(job.record_id)) job.is_added = true
-        })
-      }
-    } catch (_) {}
   } catch (error) {
     if (!silent) toast.error(error.message || '读取筛选历史失败')
   }
@@ -169,18 +179,22 @@ async function deleteHistory(history) {
   }
 }
 
-async function refreshLiveData() {
-  if (liveRefreshRunning) return
-  liveRefreshRunning = true
+async function applyHistoryToShared(history) {
   try {
-    await loadHistory(true)
-    if (selectedHistory.value?.status === 'running' && historyResult.value) {
-      const latest = histories.value.find(item => item.id === selectedHistory.value.id) || selectedHistory.value
-      await viewHistory(latest, true)
-    }
-  } finally {
-    liveRefreshRunning = false
+    const data = selectedHistory.value?.id === history.id && historyResult.value
+      ? selectedHistory.value
+      : await get('/api/recommendations/history/' + encodeURIComponent(history.id))
+    app.applyRecommendation(data)
+    toast.success('已应用到共享总表，并按评分从高到低排列')
+    emit('close')
+  } catch (error) {
+    toast.error(error.message || '应用智能筛选结果失败')
   }
+}
+
+function clearSharedRecommendation() {
+  app.clearAppliedRecommendation()
+  toast.success('已清除共享总表智能筛选')
 }
 
 function historyTime(value) {
@@ -241,13 +255,11 @@ onMounted(async () => {
   await loadHistory()
   reconnectRunningRecommendation()
   loadRecConfig()
-  liveRefreshTimer = setInterval(refreshLiveData, 1500)
 })
 
 onUnmounted(() => {
   loading.value = false
   if (pollTimer) clearTimeout(pollTimer)
-  if (liveRefreshTimer) clearInterval(liveRefreshTimer)
 })
 </script>
 
@@ -262,7 +274,7 @@ onUnmounted(() => {
         <section class="recommendation-setup" aria-label="筛选条件">
         <div class="recommendation-form">
           <div v-if="baseHistory" class="recommendation-base-notice">
-            <div><b>{{ runMode === 'incremental' ? '增量更新' : '继续筛选' }}</b><span>{{ runMode === 'incremental' ? '只分析该次筛选后新增的岗位，并合并原有推荐结果。' : '仅以上次推荐结果为候选，再按当前条件筛选。' }}</span></div>
+            <div><b>{{ runMode === 'incremental' ? '增量更新' : '继续筛选' }}</b><span>{{ runMode === 'incremental' ? '只分析该次筛选后新增的岗位，结果直接补入这条历史，不会创建新记录。' : '仅以上次推荐结果为候选，再按当前条件筛选。' }}</span></div>
             <button type="button" class="btn" @click="clearHistoryBase">取消</button>
           </div>
           <div class="recommendation-form-body">
@@ -288,7 +300,7 @@ onUnmounted(() => {
         </section>
 
         <section class="recommendation-history">
-          <div class="recommendation-history-hd"><div><h3>筛选历史</h3><span>保留最近 10 次，可查看结果或继续筛选</span></div><button class="btn" :disabled="historyLoading" @click="loadHistory()">刷新</button></div>
+          <div class="recommendation-history-hd"><div><h3>筛选历史</h3><span>可查看、继续筛选或直接应用到共享总表</span></div><div class="recommendation-history-head-actions"><button v-if="app.appliedRecommendation" class="btn recommendation-clear-application" @click="clearSharedRecommendation">清除应用</button><button class="btn" :disabled="historyLoading" @click="loadHistory()">刷新</button></div></div>
           <div v-if="historyLoading" class="recommendation-history-loading" aria-label="正在读取历史"><i></i><i></i><i></i></div>
           <div v-else-if="!histories.length" class="recommendation-empty"><b>还没有筛选记录</b><span>填写左侧条件并开始筛选，结果会保存在这里。</span></div>
           <div v-for="history in histories" v-else :key="history.id" class="recommendation-history-row">
@@ -299,6 +311,7 @@ onUnmounted(() => {
               <div class="recommendation-history-meta"><span v-if="history.run_mode === 'incremental'">增量更新</span><span v-else-if="history.run_mode === 'refine'">继续筛选</span><span>{{ history.resume_filename || '未使用简历' }}</span><span>{{ history.model || '默认模型' }}</span><span v-if="history.status === 'running'">{{ history.total_chunks ? `${history.completed_chunks || 0}/${history.total_chunks} 批` : history.message }}</span></div>
             </button>
             <div class="recommendation-history-actions">
+              <button v-if="history.status === 'finished'" class="btn" :class="{ 'btn-primary': app.appliedRecommendation?.id === history.id }" title="将本次推荐结果应用到共享总表" @click="applyHistoryToShared(history)">{{ app.appliedRecommendation?.id === history.id ? '已应用' : '应用总表' }}</button>
               <button v-if="history.status === 'finished'" class="btn" title="只筛选此后新增的岗位" @click="useHistoryAsBase(history, 'incremental')">筛选新增</button>
               <button v-if="history.status === 'finished'" class="btn" title="在本次结果中继续筛选" @click="useHistoryAsBase(history, 'refine')">继续筛选</button>
               <button class="btn recommendation-history-delete" title="删除这次筛选历史" @click="deleteHistory(history)">删除</button>
@@ -332,12 +345,16 @@ onUnmounted(() => {
       </div>
       <div class="modal-body recommendation-history-result-body">
         <div class="recommendation-result">
-          <div class="recommendation-summary"><span>扫描 {{ historyResult.scanned || selectedHistory?.scanned || 0 }} 条共享岗位</span><span>{{ historyResult.resume_used ? '已结合简历' : '按岗位偏好' }}</span><span>{{ historyItems.length }} 条推荐</span><em v-if="historyResult.partial">结果仍在更新</em></div>
-          <div v-if="!historyItems.length" class="center muted">这次筛选暂时没有符合当前门槛的岗位。</div>
+          <div class="recommendation-summary">
+            <span>扫描 {{ historyResult.scanned || selectedHistory?.scanned || 0 }} 条共享岗位</span><span>{{ historyResult.resume_used ? '已结合简历' : '按岗位偏好' }}</span><span>{{ allHistoryItems.length }} 条推荐</span><em v-if="historyResult.partial">结果仍在更新</em>
+            <label class="recommendation-grade-filter" for="recommendation-grade-filter"><span>显示等级</span><select id="recommendation-grade-filter" v-model="gradeFilter"><option value="all">全部等级</option><option v-for="grade in ['S', 'A', 'B', 'C']" :key="grade" :value="grade">{{ grade }} 级</option></select></label>
+          </div>
+          <div v-if="!allHistoryItems.length" class="center muted">这次筛选暂时没有符合当前门槛的岗位。</div>
+          <div v-else-if="!historyItems.length" class="center muted">当前等级下没有推荐岗位。</div>
           <div v-if="historyItems.length" class="recommendation-columns" aria-hidden="true">
             <span>推荐</span><span>公司</span><span>岗位</span><span>地点 / 方向</span><span>批次</span><span>AI 岗位画像 / 匹配</span><span>操作</span>
           </div>
-          <article v-for="job in historyItems" :key="job.record_id" class="recommendation-card">
+          <article v-for="job in pagedHistoryItems" :key="job.record_id" class="recommendation-card">
             <div class="recommendation-grade" :class="'grade-' + job.recommendation_grade"><b>{{ job.recommendation_grade }}</b><span>{{ job.recommendation_score }} 分</span></div>
             <strong class="recommendation-company">{{ job.company || '-' }}</strong>
             <div class="recommendation-job-cell">
@@ -379,6 +396,11 @@ onUnmounted(() => {
               <a v-if="externalHttpUrl(job.url)" :href="externalHttpUrl(job.url)" target="_blank" rel="noopener noreferrer" class="btn">查看岗位</a>
             </div>
           </article>
+          <nav v-if="historyItems.length > RESULT_PAGE_SIZE" class="recommendation-pagination" aria-label="筛选结果分页">
+            <button class="btn" :disabled="resultPage <= 1" @click="resultPage--">上一页</button>
+            <span>第 {{ resultPage }} / {{ resultPageCount }} 页 · 当前显示 {{ pagedHistoryItems.length }} 条</span>
+            <button class="btn" :disabled="resultPage >= resultPageCount" @click="resultPage++">下一页</button>
+          </nav>
         </div>
       </div>
     </div>
@@ -430,6 +452,7 @@ onUnmounted(() => {
 .recommendation-history-hd { position:sticky; top:-14px; z-index:2; margin:-14px -14px 2px; padding:14px; border-bottom:1px solid var(--line); background:var(--panel); }
 .recommendation-history h3 { font-size:14px; }.recommendation-history-hd span { display:block; margin-top:3px; font-size:9px; }
 .recommendation-history-hd .btn { height:30px; padding:0 11px; font-size:10px; }
+.recommendation-history-head-actions { display:flex; align-items:center; gap:6px; }.recommendation-clear-application { color:var(--red); }
 .recommendation-history-row { grid-template-columns:1fr; gap:0; overflow:hidden; border:1px solid var(--line); border-radius:11px; background:var(--panel); transition:border-color .16s var(--ease),box-shadow .16s var(--ease),transform .16s var(--ease); }
 .recommendation-history-row:hover { border-color:var(--line2); box-shadow:0 7px 20px color-mix(in srgb,var(--ink) 7%,transparent); transform:translateY(-1px); }
 .recommendation-history-item { gap:6px; padding:11px 12px 9px; border:0; border-radius:0; background:transparent; }
@@ -439,16 +462,18 @@ onUnmounted(() => {
 .recommendation-history-meta { gap:8px 12px; font-size:9px; }
 .recommendation-history-actions { justify-content:flex-end; gap:5px; padding:7px 8px; border-top:1px solid var(--line); background:color-mix(in srgb,var(--bg) 72%,var(--panel)); }
 .recommendation-history-actions .btn { height:28px; padding:0 10px; border-color:transparent; background:transparent; font-size:10px; }
+.recommendation-history-actions .btn-primary { border-color:var(--blue); color:#fff; background:var(--blue); }
 .recommendation-history-actions .btn:hover { border-color:var(--line); background:var(--panel); box-shadow:none; transform:none; }
 .recommendation-history-delete { margin-left:auto; }
 .recommendation-empty { display:grid; place-content:center; min-height:210px; padding:24px; text-align:center; }
 .recommendation-empty b { color:var(--ink); font-size:13px; }.recommendation-empty span { max-width:260px; margin-top:5px; color:var(--muted); font-size:10px; }
 .recommendation-history-loading { display:grid; gap:8px; }.recommendation-history-loading i { display:block; height:72px; border-radius:10px; background:color-mix(in srgb,var(--line) 65%,var(--panel)); }
 .recommendation-config-body { display:grid; gap:14px; padding:18px; }
-.recommendation-summary { display:flex; flex-wrap:wrap; gap:6px 16px; padding:8px 2px; }.recommendation-summary em { color:var(--blue); font-style:normal; }
+.recommendation-summary { display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; padding:8px 2px; }.recommendation-summary em { color:var(--blue); font-style:normal; }.recommendation-grade-filter { display:inline-flex; align-items:center; gap:7px; margin-left:auto; color:var(--muted); font:800 10px var(--font); }.recommendation-grade-filter select { width:auto; min-width:104px; height:32px; padding:0 28px 0 10px; font-size:11px; }
 .recommendation-card { transition:background .15s var(--ease); }.recommendation-card:hover { background:color-mix(in srgb,var(--blueS) 35%,var(--panel)); }
 .recommendation-reason { display:grid; gap:2px; }.recommendation-reason span { color:var(--sub); }
-.recommendation-actions .btn { white-space:nowrap; }
+.recommendation-actions .btn { display:inline-flex; align-items:center; justify-content:center; line-height:1; white-space:nowrap; }
+.recommendation-pagination { display:flex; position:sticky; bottom:0; align-items:center; justify-content:center; gap:12px; padding:12px; border:1px solid var(--line2); border-top:0; background:var(--panel); }.recommendation-pagination .btn { height:30px; padding:0 12px; font-size:10px; }.recommendation-pagination .btn:disabled { opacity:.45; cursor:not-allowed; transform:none; }.recommendation-pagination span { color:var(--muted); font:800 10px var(--mono); }
 
 @media (prefers-reduced-motion:no-preference) { .recommendation-history-loading i { animation:recommendation-pulse 1.4s ease-in-out infinite alternate; }.recommendation-history-loading i:nth-child(2) { animation-delay:.12s; }.recommendation-history-loading i:nth-child(3) { animation-delay:.24s; } }
 @keyframes recommendation-pulse { to { opacity:.45; } }
