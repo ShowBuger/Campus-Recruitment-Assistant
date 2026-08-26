@@ -35,7 +35,8 @@ def list_chat_users(current_user_id: int) -> list[dict]:
                    WHERE (latest.sender_id = ? AND latest.receiver_id = u.id)
                       OR (latest.sender_id = u.id AND latest.receiver_id = ?)
                    ORDER BY latest.id DESC LIMIT 1) AS last_message_at
-           FROM users u WHERE u.id <> ?
+           FROM users u
+           JOIN friendships f ON f.friend_id = u.id AND f.user_id = ?
            ORDER BY (last_message_at IS NULL), last_message_at DESC, u.username""",
         (
             current_user_id, current_user_id,

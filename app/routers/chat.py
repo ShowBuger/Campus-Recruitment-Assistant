@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 
-from app import auth as auth_module, chat_store, database, local_records, state
+from app import auth as auth_module, chat_store, database, friend_store, local_records, state
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 DATA_USERS = Path(__file__).resolve().parents[2] / "data" / "users"
@@ -38,11 +38,69 @@ class JobMessage(BaseModel):
     record_id: str
 
 
+class FriendRequestCreate(BaseModel):
+    username: str
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, value: str) -> str:
+        value = value.strip()
+        if not value or len(value) > 100:
+            raise ValueError("请输入有效用户名")
+        return value
+
+
 def _ensure_peer(user_id: int, peer_id: int) -> None:
     if user_id == peer_id:
         raise HTTPException(status_code=422, detail="不能给自己发送消息")
     if not database.get_user_by_id(peer_id):
         raise HTTPException(status_code=404, detail="用户不存在")
+    if not friend_store.are_friends(user_id, peer_id):
+        raise HTTPException(status_code=403, detail="添加好友后才能聊天")
+
+
+@router.post("/friends/requests")
+def request_friend(
+    body: FriendRequestCreate,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    try:
+        request = friend_store.create_request(user["user_id"], body.username)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"success": True, "message": "好友申请已发送", "request": request}
+
+
+@router.post("/friends/requests/{request_id}/accept")
+def accept_friend_request(
+    request_id: int,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    return _respond_to_friend_request(user["user_id"], request_id, True)
+
+
+@router.post("/friends/requests/{request_id}/reject")
+def reject_friend_request(
+    request_id: int,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    return _respond_to_friend_request(user["user_id"], request_id, False)
+
+
+def _respond_to_friend_request(user_id: int, request_id: int, accept: bool) -> dict:
+    try:
+        request = friend_store.respond_to_request(user_id, request_id, accept)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {
+        "success": True,
+        "message": "已接受好友申请" if accept else "已拒绝好友申请",
+        "request": request,
+    }
 
 
 def _image_type(data: bytes) -> tuple[str, str] | None:
@@ -134,6 +192,8 @@ def message_image(message_id: int, user: dict = Depends(auth_module.get_current_
     message = chat_store.get_message_for_user(message_id, user["user_id"])
     if not message or message["kind"] != "image":
         raise HTTPException(status_code=404, detail="图片不存在")
+    peer_id = message["receiver_id"] if message["sender_id"] == user["user_id"] else message["sender_id"]
+    _ensure_peer(user["user_id"], peer_id)
     root = DATA_USERS.resolve()
     path = (DATA_USERS / message["image_path"]).resolve()
     if root not in path.parents or not path.is_file():
@@ -179,6 +239,11 @@ def send_job(body: JobMessage, user: dict = Depends(auth_module.get_current_user
 
 @router.post("/messages/{message_id}/copy-job")
 def copy_job(message_id: int, user: dict = Depends(auth_module.get_current_user)):
+    message = chat_store.get_message_for_user(message_id, user["user_id"])
+    if not message:
+        raise HTTPException(status_code=404, detail="未找到可添加的岗位消息")
+    peer_id = message["receiver_id"] if message["sender_id"] == user["user_id"] else message["sender_id"]
+    _ensure_peer(user["user_id"], peer_id)
     try:
         record_id, created = chat_store.copy_job_message(user["user_id"], message_id)
         dashboard = local_records.get_dashboard_data(user["user_id"])

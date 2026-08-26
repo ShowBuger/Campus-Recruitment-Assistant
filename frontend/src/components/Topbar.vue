@@ -62,14 +62,32 @@ async function loadNotifications(markRead) {
     notifications.value = data.notifications || []
     backendUnread.value = data.unread_count || 0
     if (markRead) {
-      const ids = notifications.value.filter(n => !n.is_read).map(n => n.id)
+      const ids = notifications.value.filter(n => !n.is_read && n.kind !== 'friend_request').map(n => n.id)
       if (ids.length) {
         await api('POST', '/api/notifications/read', { ids }, { silent: true })
         backendUnread.value = Math.max(0, backendUnread.value - ids.length)
-        notifications.value.forEach(n => { n.is_read = true })
+        notifications.value.forEach(n => { if (n.kind !== 'friend_request') n.is_read = true })
       }
     }
   } catch (_) {}
+}
+
+async function respondFriendRequest(item, accept) {
+  if (!item || item.status !== 'pending') return
+  item._processing = true
+  try {
+    const action = accept ? 'accept' : 'reject'
+    const data = await api('POST', `/api/chat/friends/requests/${item.request_id}/${action}`, {}, { silent: true })
+    item.status = accept ? 'accepted' : 'rejected'
+    item.is_read = true
+    backendUnread.value = Math.max(0, backendUnread.value - 1)
+    toast.success(data.message || (accept ? '已接受好友申请' : '已拒绝好友申请'))
+    await loadChatUnread()
+  } catch (error) {
+    toast.error(error.message || '好友申请处理失败')
+  } finally {
+    item._processing = false
+  }
 }
 
 function toggleNotifications(event) {
@@ -423,6 +441,13 @@ onUnmounted(() => {
             <article v-for="item in notifications" :key="item.id" class="notification-item" :class="{ unread: !item.is_read }">
               <h3>{{ item.title }}</h3>
               <p>{{ item.content }}</p>
+              <div v-if="item.kind === 'friend_request' && item.status === 'pending'" class="friend-request-actions">
+                <button class="btn btn-primary" :disabled="item._processing" @click="respondFriendRequest(item, true)">接受</button>
+                <button class="btn" :disabled="item._processing" @click="respondFriendRequest(item, false)">拒绝</button>
+              </div>
+              <div v-else-if="item.kind === 'friend_request'" class="friend-request-status">
+                {{ item.status === 'accepted' ? '已接受' : '已拒绝' }}
+              </div>
               <span class="notification-time">{{ formatTime(item.created_at) }}</span>
             </article>
           </template>
@@ -647,5 +672,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.friend-request-actions{display:flex;gap:8px;margin:10px 0 5px}.friend-request-actions .btn{min-width:58px;height:30px;padding:0 12px}.friend-request-status{margin-top:8px;color:var(--sub);font-size:11px;font-weight:700}
 #style-panel{max-height:min(620px,calc(100vh - 20px));overflow-y:auto;font-family:var(--font)!important}#style-panel .style-item,#style-panel .style-item *{font-family:inherit!important}.floating-style-panel{z-index:32000!important}.style-font-option{display:flex;min-height:56px;align-items:center;justify-content:space-between;gap:12px;margin:6px 7px;padding:9px 10px;border-bottom:1px solid var(--line);cursor:pointer}.style-font-option-copy{min-width:0}.style-font-option-copy b,.style-font-option-copy small{display:block}.style-font-option-copy b{font-size:12px}.style-font-option-copy small{margin-top:3px;color:var(--sub);font-size:10px;font-weight:400}.style-font-toggle{position:relative;width:40px;height:22px;flex:0 0 40px}.style-font-toggle input{position:absolute;opacity:0;pointer-events:none}.style-font-toggle i{display:block;width:40px;height:22px;border:1px solid var(--line2);border-radius:999px;background:var(--line);transition:background .18s var(--ease),border-color .18s var(--ease)}.style-font-toggle i:after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--panel);box-shadow:0 1px 4px rgba(16,24,40,.25);transition:transform .18s var(--ease)}.style-font-toggle input:checked+i{border-color:var(--green);background:var(--green)}.style-font-toggle input:checked+i:after{transform:translateX(18px)}.style-font-toggle input:focus-visible+i{outline:2px solid var(--blue);outline-offset:2px}.style-font-toggle input:disabled+i{opacity:.62;cursor:wait}.style-item-copy{min-width:0;flex:1}.resource-style-item{position:relative;overflow:hidden}.resource-style-item.locked{cursor:default}.style-download-btn{display:grid;width:34px;height:34px;flex:0 0 34px;place-items:center;padding:0;border:1px solid var(--line2);border-radius:6px;background:var(--panel);color:var(--ink);cursor:pointer}.style-download-btn:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}.style-download-btn:disabled{cursor:wait;opacity:.72}.style-download-btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.style-download-btn span{font-size:9px;font-weight:900}.style-resource-progress{position:absolute;left:0;bottom:0;height:3px;background:var(--blue);transition:width .15s linear}
 </style>

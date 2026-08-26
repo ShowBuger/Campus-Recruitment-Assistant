@@ -134,6 +134,34 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (record_id) REFERENCES job_records(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS friend_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id INTEGER NOT NULL,
+            receiver_id INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending'
+                CHECK(status IN ('pending', 'accepted', 'rejected')),
+            created_at TEXT DEFAULT (datetime('now')),
+            responded_at TEXT,
+            CHECK(sender_id <> receiver_id),
+            FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_friend_requests_pending_pair
+            ON friend_requests(sender_id, receiver_id) WHERE status = 'pending';
+        CREATE INDEX IF NOT EXISTS idx_friend_requests_receiver
+            ON friend_requests(receiver_id, status, id DESC);
+
+        CREATE TABLE IF NOT EXISTS friendships (
+            user_id INTEGER NOT NULL,
+            friend_id INTEGER NOT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (user_id, friend_id),
+            CHECK(user_id <> friend_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (friend_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
         CREATE TABLE IF NOT EXISTS local_events (
             id TEXT PRIMARY KEY,
             user_id INTEGER NOT NULL,

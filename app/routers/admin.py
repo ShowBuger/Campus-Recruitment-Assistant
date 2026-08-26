@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 
-from app import auth as auth_module, database, database_backup
+from app import auth as auth_module, database, database_backup, friend_store
 
 router = APIRouter(prefix="/api", tags=["admin"])
 PROJECT_DIR = Path(__file__).resolve().parents[2]
@@ -229,10 +229,28 @@ def remove_notification(notification_id: int, _: dict = Depends(require_admin)):
 @router.get("/notifications")
 def get_notifications(user: dict = Depends(auth_module.get_current_user)):
     notifications = database.list_notifications(user["user_id"])
+    friend_requests = friend_store.list_received_requests(user["user_id"])
+    notifications.extend({
+        "id": f"friend-{item['id']}",
+        "kind": "friend_request",
+        "request_id": item["id"],
+        "title": "好友申请",
+        "content": f"{item['sender_name']}（@{item['sender_username']}）请求添加你为好友",
+        "created_at": item["created_at"],
+        "is_read": item["status"] != "pending",
+        "status": item["status"],
+        "sender": {
+            "id": item["sender_id"], "username": item["sender_username"],
+            "name": item["sender_name"], "avatar_key": item["avatar_key"],
+            "avatar_url": item["avatar_url"],
+        },
+    } for item in friend_requests)
+    notifications.sort(key=lambda item: (item.get("created_at") or "", str(item["id"])), reverse=True)
     return {
         "success": True,
-        "notifications": notifications,
-        "unread_count": database.count_unread_notifications(user["user_id"]),
+        "notifications": notifications[:40],
+        "unread_count": database.count_unread_notifications(user["user_id"])
+        + friend_store.count_pending_requests(user["user_id"]),
     }
 
 

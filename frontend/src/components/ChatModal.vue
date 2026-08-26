@@ -2,18 +2,22 @@
   <div class="modal-mask show" @mousedown.self="$emit('close')">
     <div class="chat-modal-window utility-modal chat-workspace">
       <div class="chat-modal-bar">
-        <div><b>站内聊天</b><span>{{ activePeer ? '消息、图片与岗位分享' : '与已注册用户即时沟通' }}</span></div>
+        <div><b>站内聊天</b><span>{{ activePeer ? '消息、图片与岗位分享' : '先添加好友，再开始聊天' }}</span></div>
         <button class="icon-btn" @click="$emit('close')" title="关闭聊天" aria-label="关闭聊天">&times;</button>
       </div>
       <div class="chat-shell">
         <!-- 联系人列表 -->
         <aside class="chat-contacts">
           <div class="chat-contacts-head">
-            <div><b>消息</b><span>与已注册用户即时沟通</span></div>
+            <div><b>好友消息</b><span>添加好友后即可开始聊天</span></div>
+            <form class="chat-add-friend" @submit.prevent="addFriend">
+              <input v-model="friendUsername" maxlength="100" placeholder="输入用户名添加好友" autocomplete="off">
+              <button class="btn btn-primary" :disabled="addingFriend || !friendUsername.trim()">{{ addingFriend ? '发送中…' : '添加' }}</button>
+            </form>
             <label class="chat-search"><span>⌕</span><input v-model="searchQuery" type="search" placeholder="搜索联系人" autocomplete="off"></label>
           </div>
           <div class="chat-user-list">
-            <div v-if="!filteredUsers.length" class="center" style="padding:20px;font-size:12px;color:var(--muted)">暂无用户</div>
+            <div v-if="!filteredUsers.length" class="center" style="padding:20px;font-size:12px;color:var(--muted)">暂无好友，可通过用户名添加</div>
             <button
               v-for="u in filteredUsers"
               :key="u.id"
@@ -237,6 +241,8 @@ const text = ref('')
 const msgList = ref(null)
 const imgInput = ref(null)
 const searchQuery = ref('')
+const friendUsername = ref('')
+const addingFriend = ref(false)
 let pollTimer = null
 
 // ── 岗位转发弹窗 ──
@@ -287,6 +293,27 @@ async function loadUsers() {
     const total = users.value.reduce((s, u) => s + (u.unread_count || 0), 0)
     app.setChatUnread(total)
   } catch { users.value = [] }
+}
+
+async function addFriend() {
+  const username = friendUsername.value.trim()
+  if (!username || addingFriend.value) return
+  addingFriend.value = true
+  try {
+    const response = await fetch('/api/chat/friends/requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
+      body: JSON.stringify({ username })
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(data.detail || '好友申请发送失败')
+    friendUsername.value = ''
+    toast.success(data.message || '好友申请已发送')
+  } catch (error) {
+    toast.error(error.message || '好友申请发送失败')
+  } finally {
+    addingFriend.value = false
+  }
 }
 
 async function selectPeer(u) {
@@ -615,6 +642,7 @@ function insertEmoji(e) { text.value += e; showEmojiPicker.value = false; docume
 /* 联系人列表可滚动 */
 :deep(.chat-contacts) { min-height: 0; overflow: hidden; }
 :deep(.chat-user-list) { flex: 1; min-height: 0; overflow-y: auto; }
+.chat-add-friend{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;margin-top:12px}.chat-add-friend input{min-width:0;height:34px;padding:0 9px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit}.chat-add-friend .btn{height:34px;padding:0 11px}
 /* 消息计数红点 */
 .chat-count-inline { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 999px; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; vertical-align: middle; }
 .chat-avatar{border-radius:50%;color:#fff}.chat-row{gap:8px}.chat-message-avatar{width:32px;height:32px;flex:0 0 32px;align-self:flex-end;font-size:12px}.chat-row.mine .chat-message-avatar{order:2}
