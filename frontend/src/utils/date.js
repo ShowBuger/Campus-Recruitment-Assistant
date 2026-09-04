@@ -59,7 +59,16 @@ export function chinaDateTimeMs(value) {
  */
 export function calendarDateChina(ts) {
   if (!ts) return null
-  const d = new Date(ts + CHINA_OFFSET_MS)
+  if (typeof ts === 'string') {
+    const dateMatch = ts.trim().match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:$|[T\s])/)
+    if (dateMatch) {
+      const date = new Date(Number(dateMatch[1]), Number(dateMatch[2]) - 1, Number(dateMatch[3]))
+      return Number.isNaN(date.getTime()) ? null : date
+    }
+  }
+  const timestamp = Number(ts)
+  if (!Number.isFinite(timestamp)) return null
+  const d = new Date(timestamp + CHINA_OFFSET_MS)
   if (isNaN(d)) return null
   return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
 }

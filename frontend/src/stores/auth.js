@@ -50,5 +50,9 @@ export const useAuthStore = defineStore('auth', () => {
 
   function setUser(nextUser) { user.value = { ...(user.value || {}), ...nextUser } }
 
+  // 后端封禁或令牌版本失效时，API 层会广播此事件；同步清空内存态，
+  // 使路由立即返回登录页面，而不需要用户手动刷新。
+  window.addEventListener('auth-session-expired', clear)
+
   return { user, token, isLoggedIn, isAdmin, checkSession, login, register, logout, clear, setUser }
 })

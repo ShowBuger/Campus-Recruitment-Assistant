@@ -4,6 +4,8 @@ import { useDashboardStore } from '@/stores/dashboard'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useDialogStore } from '@/stores/dialog'
+import { useToastStore } from '@/stores/toast'
+import { post } from '@/utils/api'
 import ProgressBadge from '@/components/ProgressBadge.vue'
 import TooltipCell from '@/components/TooltipCell.vue'
 import RecordPositionPicker from '@/components/RecordPositionPicker.vue'
@@ -15,6 +17,7 @@ const store = useDashboardStore()
 const app = useAppStore()
 const auth = useAuthStore()
 const dialog = useDialogStore()
+const toast = useToastStore()
 const showFilter = ref(false)
 const calendarCollapsed = ref(false)
 const activeFilter = ref([])
@@ -152,6 +155,7 @@ function trackerEventTime(item) {
 const showEventModal = ref(false)
 const calEventDate = ref('')
 const calEventLabel = ref('')
+const calEventSaving = ref(false)
 
 const editDateRecord = ref(null)
 const editDateType = ref('')
@@ -492,16 +496,30 @@ function openCalendarEventModal(dateStr) {
 }
 
 async function submitCalendarEvent() {
-  if (!calEventDate.value || !calEventLabel.value.trim()) return
+  if (!calEventDate.value) {
+    toast.error('请选择日程日期')
+    return
+  }
+  const label = calEventLabel.value.trim()
+  if (!label) {
+    toast.error('请填写日程内容')
+    return
+  }
+  if (calEventSaving.value) return
+  calEventSaving.value = true
   try {
-    const response = await fetch('/api/dashboard/calendar/local-event', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('rb_token')}` },
-      body: JSON.stringify({ date: calEventDate.value, label: calEventLabel.value.trim() })
+    const result = await post('/api/dashboard/calendar/local-event', {
+      date: calEventDate.value,
+      label,
     })
-    if (!response.ok) return
     await loadLocalEvents()
     showEventModal.value = false
-  } catch {}
+    toast.success(result.message || '日程已保存')
+  } catch (error) {
+    toast.error(`日程保存失败：${error.message || '请稍后重试'}`)
+  } finally {
+    calEventSaving.value = false
+  }
 }
 
 async function loadLocalEvents() {
@@ -817,14 +835,14 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
     </div>
 
     <!-- Calendar Event Modal -->
-    <div class="modal-mask show" v-if="showEventModal" @mousedown.self="showEventModal = false">
+    <div class="modal-mask show" v-if="showEventModal" @mousedown.self="!calEventSaving && (showEventModal = false)">
       <div class="modal" style="width:min(520px,94vw)">
-        <div class="modal-hd"><div><h2>新建日程</h2><p>{{ calEventDate || '-' }}</p></div><button class="icon-btn" @click="showEventModal = false" title="关闭">&times;</button></div>
+        <div class="modal-hd"><div><h2>新建日程</h2><p>{{ calEventDate || '-' }}</p></div><button class="icon-btn" :disabled="calEventSaving" @click="showEventModal = false" title="关闭">&times;</button></div>
         <div class="modal-body">
           <div class="form-group"><label for="cal-event-date">日程日期</label><input id="cal-event-date" type="date" v-model="calEventDate"></div>
           <div class="form-group"><label for="cal-event-label">日程内容</label><input id="cal-event-label" v-model="calEventLabel" maxlength="200" placeholder="例如：参加宣讲会、准备材料、与导师沟通"></div>
         </div>
-        <div class="modal-ft"><button class="btn" @click="showEventModal = false">取消</button><button class="btn btn-primary" @click="submitCalendarEvent">保存日程</button></div>
+        <div class="modal-ft"><button class="btn" :disabled="calEventSaving" @click="showEventModal = false">取消</button><button class="btn btn-primary" :disabled="calEventSaving" @click="submitCalendarEvent">{{ calEventSaving ? '保存中…' : '保存日程' }}</button></div>
       </div>
     </div>
   </div>

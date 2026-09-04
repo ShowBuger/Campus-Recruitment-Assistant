@@ -51,9 +51,11 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def create_token(user_id: int, username: str) -> str:
+    db_user = database.get_user_by_id(user_id) or {}
     payload = {
         "user_id": user_id,
         "username": username,
+        "token_version": int(db_user.get("token_version") or 0),
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
         "iat": datetime.now(timezone.utc),
     }
@@ -85,6 +87,13 @@ async def get_current_user(
     db_user = database.get_user_by_id(payload["user_id"])
     if not db_user or db_user["username"] != payload["username"]:
         raise HTTPException(status_code=401, detail="账号不存在或已被删除")
+    if int(payload.get("token_version") or 0) != int(db_user.get("token_version") or 0):
+        raise HTTPException(status_code=401, detail="登录已过期：账号会话已失效")
+    if db_user.get("banned_until") and database.is_user_banned(db_user["id"]):
+        raise HTTPException(
+            status_code=401,
+            detail=f"登录已过期：账号已被封禁至 {db_user['banned_until']} UTC",
+        )
     database.touch_user_last_seen(db_user["id"])
     return {
         "user_id": db_user["id"],
@@ -111,6 +120,10 @@ def get_optional_user(
         return None
     db_user = database.get_user_by_id(payload["user_id"])
     if not db_user or db_user["username"] != payload["username"]:
+        return None
+    if int(payload.get("token_version") or 0) != int(db_user.get("token_version") or 0):
+        return None
+    if db_user.get("banned_until") and database.is_user_banned(db_user["id"]):
         return None
     database.touch_user_last_seen(db_user["id"])
     return {

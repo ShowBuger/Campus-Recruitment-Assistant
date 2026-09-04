@@ -2,7 +2,7 @@
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
 from app import auth as auth_module, database, database_backup, friend_store
@@ -37,6 +37,26 @@ class PasswordUpdate(BaseModel):
 
 class AdminUpdate(BaseModel):
     is_admin: bool
+
+
+class UserBanCreate(BaseModel):
+    duration_hours: int
+    reason: str = ""
+
+    @field_validator("duration_hours")
+    @classmethod
+    def validate_duration(cls, value: int) -> int:
+        if not 1 <= value <= 87600:
+            raise ValueError("封禁时长需为 1-87600 小时")
+        return value
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) > 200:
+            raise ValueError("封禁原因不能超过 200 个字符")
+        return value
 
 
 class NotificationCreate(BaseModel):
@@ -125,6 +145,14 @@ def get_users(_: dict = Depends(require_admin)):
     return {"success": True, "users": users}
 
 
+@router.get("/admin/user-statistics")
+def get_user_statistics(
+    days: int = Query(default=7, ge=7, le=90),
+    _: dict = Depends(require_admin),
+):
+    return {"success": True, **database.get_user_statistics(days)}
+
+
 @router.get("/admin/invite-codes")
 def get_invite_codes(_: dict = Depends(require_admin)):
     return {"success": True, "invite_codes": database.list_invite_codes()}
@@ -171,6 +199,29 @@ def change_admin(
         raise HTTPException(status_code=400, detail="root 的管理员权限不能撤销")
     database.set_user_admin(user_id, body.is_admin)
     return {"success": True, "message": "管理员权限已更新"}
+
+
+@router.post("/admin/users/{user_id}/ban")
+def ban_user(
+    user_id: int,
+    body: UserBanCreate,
+    _: dict = Depends(require_root),
+):
+    try:
+        target = database.ban_user(user_id, body.duration_hours, body.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return {"success": True, "message": "用户已封禁，现有登录会话已失效", "user": target}
+
+
+@router.post("/admin/users/{user_id}/unban")
+def unban_user(user_id: int, _: dict = Depends(require_root)):
+    target = database.unban_user(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return {"success": True, "message": "用户已解除封禁", "user": target}
 
 
 def _remove_user(user_id: int) -> dict:

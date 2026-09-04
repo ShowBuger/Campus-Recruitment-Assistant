@@ -4,6 +4,15 @@ let _token = localStorage.getItem('rb_token') || ''
 export function setToken(t) { _token = t; t ? localStorage.setItem('rb_token', t) : localStorage.removeItem('rb_token') }
 export function getToken() { return _token }
 
+function errorDetail(detail, fallback) {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const messages = detail.map(item => item?.msg).filter(Boolean)
+    if (messages.length) return messages.join('；')
+  }
+  return fallback
+}
+
 export async function api(method, path, body, opts = {}) {
   const headers = { 'Content-Type': 'application/json' }
   if (_token) headers['Authorization'] = `Bearer ${_token}`
@@ -24,10 +33,13 @@ export async function api(method, path, body, opts = {}) {
         if (res.status === 401) {
           if (String(data.detail || '').includes('登录已过期')) {
             setToken('')
+            window.dispatchEvent(new CustomEvent('auth-session-expired', {
+              detail: { message: String(data.detail || '登录已过期') },
+            }))
             throw new Error('登录已过期')
           }
         }
-        throw new Error(data.detail || `HTTP ${res.status}`)
+        throw new Error(errorDetail(data.detail, `HTTP ${res.status}`))
       }
       if (opts.raw) return res
       return res.json()

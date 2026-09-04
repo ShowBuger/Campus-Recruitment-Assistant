@@ -5,6 +5,7 @@ import json
 import secrets
 import threading
 import time
+from datetime import date, timedelta
 from pathlib import Path
 
 DATA_DIR = Path(__file__).parent.parent / "data"
@@ -264,6 +265,18 @@ def _init_tables(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS user_daily_activity (
+            user_id INTEGER NOT NULL,
+            activity_date TEXT NOT NULL,
+            request_count INTEGER NOT NULL DEFAULT 1,
+            first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+            last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (user_id, activity_date),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_daily_activity_date
+            ON user_daily_activity(activity_date, user_id);
     """)
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
     if "is_admin" not in columns:
@@ -272,6 +285,12 @@ def _init_tables(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE users ADD COLUMN last_seen_at TEXT")
     if "last_login_at" not in columns:
         conn.execute("ALTER TABLE users ADD COLUMN last_login_at TEXT")
+    if "banned_until" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN banned_until TEXT")
+    if "ban_reason" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN ban_reason TEXT NOT NULL DEFAULT ''")
+    if "token_version" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0")
     record_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(job_records)")
     }
@@ -704,15 +723,67 @@ def get_user_by_id(user_id: int) -> dict | None:
     return dict(row) if row else None
 
 
+def is_user_banned(user_id: int) -> bool:
+    row = get_db().execute(
+        """SELECT CASE WHEN banned_until IS NOT NULL AND banned_until > datetime('now')
+                        THEN 1 ELSE 0 END AS is_banned
+           FROM users WHERE id = ?""",
+        (user_id,),
+    ).fetchone()
+    return bool(row and row["is_banned"])
+
+
 def list_users() -> list[dict]:
     db = get_db()
     rows = db.execute(
         """SELECT id, username, is_admin, created_at, last_seen_at, last_login_at,
+                  banned_until, ban_reason, token_version,
                   CASE WHEN last_seen_at >= datetime('now', '-2 minutes')
                        THEN 1 ELSE 0 END AS is_online
+                  , CASE WHEN banned_until IS NOT NULL AND banned_until > datetime('now')
+                         THEN 1 ELSE 0 END AS is_banned
            FROM users ORDER BY id"""
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def ban_user(user_id: int, duration_hours: int, reason: str = "") -> dict | None:
+    """Ban an account and invalidate all tokens issued before this update."""
+    duration_hours = max(1, min(int(duration_hours), 87600))
+    with _write_lock:
+        db = get_db()
+        target = db.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not target:
+            return None
+        if target["username"] == "root":
+            raise ValueError("root 账号不能被封禁")
+        db.execute(
+            """UPDATE users
+               SET banned_until = datetime('now', ?), ban_reason = ?,
+                   token_version = token_version + 1, last_seen_at = NULL
+               WHERE id = ?""",
+            (f"+{duration_hours} hours", reason.strip()[:200], user_id),
+        )
+        db.commit()
+        row = db.execute(
+            "SELECT id, username, banned_until, ban_reason FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        return dict(row)
+
+
+def unban_user(user_id: int) -> dict | None:
+    with _write_lock:
+        db = get_db()
+        target = db.execute("SELECT id, username FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not target:
+            return None
+        db.execute(
+            "UPDATE users SET banned_until = NULL, ban_reason = '' WHERE id = ?",
+            (user_id,),
+        )
+        db.commit()
+        return dict(target)
 
 
 def touch_user_last_seen(user_id: int) -> None:
@@ -728,6 +799,14 @@ def touch_user_last_seen(user_id: int) -> None:
                    )""",
                 (user_id,),
             )
+            db.execute(
+                """INSERT INTO user_daily_activity (user_id, activity_date)
+                   VALUES (?, date('now', 'localtime'))
+                   ON CONFLICT(user_id, activity_date) DO UPDATE SET
+                       request_count = request_count + 1,
+                       last_seen_at = datetime('now')""",
+                (user_id,),
+            )
             db.commit()
     _retry_write(_do_update)
 
@@ -740,7 +819,90 @@ def record_user_login(user_id: int) -> None:
             "UPDATE users SET last_login_at = datetime('now'), last_seen_at = datetime('now') WHERE id = ?",
             (user_id,),
         )
+        db.execute(
+            """INSERT INTO user_daily_activity (user_id, activity_date)
+               VALUES (?, date('now', 'localtime'))
+               ON CONFLICT(user_id, activity_date) DO UPDATE SET
+                   request_count = request_count + 1,
+                   last_seen_at = datetime('now')""",
+            (user_id,),
+        )
         db.commit()
+
+
+def get_user_statistics(days: int = 7) -> dict:
+    """Return admin-facing account and daily activity aggregates."""
+    days = max(7, min(int(days), 90))
+    db = get_db()
+    today = date.today()
+    start = today - timedelta(days=days - 1)
+    previous_start = start - timedelta(days=days)
+
+    activity_rows = db.execute(
+        """SELECT activity_date, COUNT(DISTINCT user_id) AS active_users
+           FROM user_daily_activity
+           WHERE activity_date BETWEEN ? AND ?
+           GROUP BY activity_date""",
+        (previous_start.isoformat(), today.isoformat()),
+    ).fetchall()
+    active_by_date = {row["activity_date"]: row["active_users"] for row in activity_rows}
+    signup_rows = db.execute(
+        """SELECT date(created_at, 'localtime') AS signup_date, COUNT(*) AS new_users
+           FROM users WHERE date(created_at, 'localtime') BETWEEN ? AND ?
+           GROUP BY date(created_at, 'localtime')""",
+        (previous_start.isoformat(), today.isoformat()),
+    ).fetchall()
+    new_by_date = {row["signup_date"]: row["new_users"] for row in signup_rows}
+
+    def unique_active(since: date) -> int:
+        row = db.execute(
+            "SELECT COUNT(DISTINCT user_id) AS count FROM user_daily_activity WHERE activity_date BETWEEN ? AND ?",
+            (since.isoformat(), today.isoformat()),
+        ).fetchone()
+        return int(row["count"] or 0)
+
+    current_active = unique_active(start)
+    previous_active = int(db.execute(
+        """SELECT COUNT(DISTINCT user_id) AS count FROM user_daily_activity
+           WHERE activity_date BETWEEN ? AND ?""",
+        (previous_start.isoformat(), (start - timedelta(days=1)).isoformat()),
+    ).fetchone()["count"] or 0)
+    current_new = sum(new_by_date.get((start + timedelta(days=i)).isoformat(), 0) for i in range(days))
+    previous_new = sum(new_by_date.get((previous_start + timedelta(days=i)).isoformat(), 0) for i in range(days))
+    total_users = int(db.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"] or 0)
+    online_users = int(db.execute(
+        "SELECT COUNT(*) AS count FROM users WHERE last_seen_at >= datetime('now', '-2 minutes')"
+    ).fetchone()["count"] or 0)
+    recent = [dict(row) for row in db.execute(
+        """SELECT u.id, u.username, u.last_seen_at,
+                  COUNT(a.activity_date) AS active_days,
+                  CASE WHEN u.last_seen_at >= datetime('now', '-2 minutes') THEN 1 ELSE 0 END AS is_online
+           FROM users u LEFT JOIN user_daily_activity a
+             ON a.user_id = u.id AND a.activity_date >= date('now', 'localtime', '-6 days')
+           WHERE u.last_seen_at IS NOT NULL
+           GROUP BY u.id ORDER BY u.last_seen_at DESC LIMIT 8"""
+    ).fetchall()]
+    series = []
+    for offset in range(days):
+        item_date = start + timedelta(days=offset)
+        key = item_date.isoformat()
+        series.append({"date": key, "active_users": active_by_date.get(key, 0), "new_users": new_by_date.get(key, 0)})
+
+    return {
+        "days": days,
+        "dau": active_by_date.get(today.isoformat(), 0),
+        "wau": unique_active(today - timedelta(days=6)),
+        "mau": unique_active(today - timedelta(days=29)),
+        "new_users": current_new,
+        "total_users": total_users,
+        "online_users": online_users,
+        "active_rate": round((active_by_date.get(today.isoformat(), 0) / total_users * 100), 1) if total_users else 0,
+        "period_active_users": current_active,
+        "period_active_change": round((current_active - previous_active) / previous_active * 100, 1) if previous_active else None,
+        "new_users_change": round((current_new - previous_new) / previous_new * 100, 1) if previous_new else None,
+        "series": series,
+        "recent_users": recent,
+    }
 
 
 def update_user_password(user_id: int, password_hash: str) -> bool:

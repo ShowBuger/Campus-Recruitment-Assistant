@@ -163,6 +163,13 @@ async function viewHistory(history, silent = false) {
   }
 }
 
+function closeHistoryResult() {
+  historyResult.value = null
+  // Detach the viewed history as well, otherwise the running-task poller sees
+  // it as selected and immediately opens the result modal again.
+  selectedHistory.value = null
+}
+
 async function deleteHistory(history) {
   if (!window.confirm('确定删除这次筛选历史吗？')) return
   try {
@@ -337,11 +344,11 @@ onUnmounted(() => {
     </div>
   </div>
 
-  <div v-if="historyResult" class="modal-mask show recommendation-history-mask" @mousedown.self="historyResult = null">
+  <div v-if="historyResult" class="modal-mask show recommendation-history-mask" @mousedown.self="closeHistoryResult">
     <div class="modal recommendation-history-modal">
       <div class="modal-hd">
         <div><h2>筛选结果</h2><p>{{ selectedHistory?.preference || '按简历筛选' }}<span v-if="selectedHistory?.created_at">，{{ historyTime(selectedHistory.created_at) }}</span></p></div>
-        <button class="icon-btn" @click="historyResult = null" title="关闭">&times;</button>
+        <button class="icon-btn" @click="closeHistoryResult" title="关闭">&times;</button>
       </div>
       <div class="modal-body recommendation-history-result-body">
         <div class="recommendation-result">

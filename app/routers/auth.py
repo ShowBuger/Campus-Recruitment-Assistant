@@ -9,7 +9,7 @@ from app import auth as auth_module, bus, database
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-USERNAME_PATTERN = r"^[a-zA-Z0-9_一-鿿]{2,20}$"
+USERNAME_PATTERN = r"^[a-zA-Z0-9_一-鿿]{2,50}$"
 AVATAR_KEYS = {"indigo", "sunset", "forest", "ocean", "cherry", "mono", "cosmos", "spark", "custom"}
 AVATAR_DIR = Path(__file__).resolve().parents[2] / "data" / "users"
 MAX_AVATAR_SIZE = 2 * 1024 * 1024
@@ -26,7 +26,7 @@ class RegisterBody(BaseModel):
         import re
         v = v.strip()
         if not re.match(USERNAME_PATTERN, v):
-            raise ValueError("用户名须为 2-20 位字母、数字、下划线或中文")
+            raise ValueError("用户名须为 2-50 位字母、数字、下划线或中文")
         return v
 
     @field_validator("password")
@@ -137,6 +137,12 @@ def login(body: LoginBody, request: Request):
     if not user or not auth_module.verify_password(body.password, user["password_hash"]):
         bus.log(f"登录失败 · 用户 {username or '空用户名'} · IP {_client_ip(request)}", channel="auth", level="warn")
         raise HTTPException(status_code=401, detail="用户名或密码错误")
+    if database.is_user_banned(user["id"]):
+        bus.log(f"登录被拒绝 · 封禁用户 {user['username']}#{user['id']} · IP {_client_ip(request)}", channel="auth", level="warn")
+        raise HTTPException(
+            status_code=403,
+            detail=f"账号已被封禁至 {user['banned_until']} UTC" + (f"，原因：{user['ban_reason']}" if user.get("ban_reason") else ""),
+        )
     database.record_user_login(user["id"])
     token = auth_module.create_token(user["id"], user["username"])
     bus.log(f"登录成功 · 用户 {user['username']}#{user['id']} · IP {_client_ip(request)}", channel="auth", level="success")

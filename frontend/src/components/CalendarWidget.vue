@@ -35,7 +35,7 @@
           </div>
           <div style="display:flex;gap:4px;margin-top:6px">
             <input v-model="newLabel" placeholder="添加日程" style="flex:1;height:28px;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:0 8px" @keydown.enter="addEvent">
-            <button class="btn btn-primary" style="font-size:11px;padding:2px 8px" @click="addEvent">添加</button>
+            <button class="btn btn-primary" style="font-size:11px;padding:2px 8px" :disabled="saving" @click="addEvent">{{ saving ? '添加中…' : '添加' }}</button>
           </div>
         </div>
       </div>
@@ -46,14 +46,18 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
+import { post } from '@/utils/api'
 
 const auth = useAuthStore()
+const toast = useToastStore()
 const show = ref(false)
 const year = ref(new Date().getFullYear())
 const month = ref(new Date().getMonth())
 const events = ref([])
 const selectedDate = ref('')
 const newLabel = ref('')
+const saving = ref(false)
 
 onMounted(() => loadEvents())
 
@@ -91,15 +95,27 @@ function nextMonth() {
 }
 
 async function addEvent() {
-  if (!newLabel.value.trim() || !selectedDate.value) return
+  if (!selectedDate.value) {
+    toast.error('请先选择日程日期')
+    return
+  }
+  const label = newLabel.value.trim()
+  if (!label) {
+    toast.error('请填写日程内容')
+    return
+  }
+  if (saving.value) return
+  saving.value = true
   try {
-    await fetch('/api/dashboard/calendar/local-event', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
-      body: JSON.stringify({ date: selectedDate.value, label: newLabel.value })
-    })
+    const result = await post('/api/dashboard/calendar/local-event', { date: selectedDate.value, label })
     newLabel.value = ''
     await loadEvents()
-  } catch {}
+    toast.success(result.message || '日程已添加')
+  } catch (error) {
+    toast.error(`日程添加失败：${error.message || '请稍后重试'}`)
+  } finally {
+    saving.value = false
+  }
 }
 
 async function deleteEvent(id) {
