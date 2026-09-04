@@ -75,12 +75,32 @@ const displayRecords = computed(() => {
   if (!showShared.value && sortValue.value !== 'default') {
     const sorted = items.map((r, i) => ({ r, i }))
     sorted.sort((a, b) => {
-      const pa = priorityScore(a.r)
-      const pb = priorityScore(b.r)
-      if (pa === pb) return a.i - b.i
-      if (!pa) return 1
-      if (!pb) return -1
-      return sortValue.value === 'priority-desc' ? pb - pa : pa - pb
+      const fallback = a.i - b.i
+      const latestDiff = latestActivity(b.r) - latestActivity(a.r)
+      if (sortValue.value === 'company-asc') {
+        return String(a.r.company || '').localeCompare(String(b.r.company || ''), 'zh-CN') || fallback
+      }
+      if (sortValue.value === 'priority-desc') {
+        return priorityScore(b.r) - priorityScore(a.r) || latestDiff || fallback
+      }
+      if (sortValue.value === 'priority-asc') {
+        return priorityScore(a.r) - priorityScore(b.r) || latestDiff || fallback
+      }
+      if (sortValue.value === 'progress-desc') {
+        return progressScore(b.r) - progressScore(a.r) || latestDiff || fallback
+      }
+      if (sortValue.value === 'apply-desc') {
+        return timestamp(b.r, 'apply_date') - timestamp(a.r, 'apply_date') || fallback
+      }
+      if (sortValue.value === 'apply-asc') {
+        return timestamp(a.r, 'apply_date') - timestamp(b.r, 'apply_date') || fallback
+      }
+      if (sortValue.value === 'deadline-asc') {
+        const aDeadline = timestamp(a.r, 'deadline') || Number.MAX_SAFE_INTEGER
+        const bDeadline = timestamp(b.r, 'deadline') || Number.MAX_SAFE_INTEGER
+        return aDeadline - bDeadline || fallback
+      }
+      return latestDiff || fallback
     })
     return sorted.map(s => s.r)
   }
@@ -111,6 +131,36 @@ const recordCountText = computed(() => {
 
 function priorityScore(r) {
   return (String(r.priority || '').match(/⭐/g) || []).length
+}
+
+function timestamp(record, field) {
+  return Number(record?.[field] || 0)
+}
+
+function latestActivity(record) {
+  return Math.max(
+    timestamp(record, 'progress_updated_at'),
+    timestamp(record, 'apply_date'),
+    timestamp(record, 'exam_date'),
+    timestamp(record, 'interview1'),
+    timestamp(record, 'interview2'),
+    timestamp(record, 'interview3'),
+    timestamp(record, 'interview4'),
+  )
+}
+
+function progressScore(record) {
+  const progress = (record?.progress || [])[0] || '未投递'
+  if (progress === '已挂' || progress === '放弃') return 0
+  if (progress === 'OC') return 8
+  if (record?.result || record?.warm) return 7
+  if (record?.interview4) return 6
+  if (record?.interview3) return 5
+  if (record?.interview2) return 4
+  if (record?.interview1 || progress === '面试') return 3
+  if (record?.exam_date || progress === '机考') return 2
+  if (record?.apply_date || progress === '已投递') return 1
+  return 0
 }
 
 function isApplied(r) {
@@ -435,8 +485,14 @@ async function qiuzhiSync() {
           aria-label="总表排序方式"
         >
           <option value="default">默认排序</option>
-          <option value="priority-desc">优先级：高到低</option>
-          <option value="priority-asc">优先级：低到高</option>
+          <option value="updated-desc">最近更新</option>
+          <option value="progress-desc">进展从快到慢</option>
+          <option value="priority-desc">优先级从高到低</option>
+          <option value="priority-asc">优先级从低到高</option>
+          <option value="apply-desc">投递时间从新到旧</option>
+          <option value="apply-asc">投递时间从旧到新</option>
+          <option value="deadline-asc">截止时间临近优先</option>
+          <option value="company-asc">公司名称</option>
         </select>
         <button v-if="!showShared" class="btn hide-applied-btn" :class="{ active: hideApplied }" @click="hideApplied = !hideApplied">{{ hideApplied ? '已隐藏' : '隐藏已投递' }}</button>
         <span class="records-inline-count">{{ recordCountText }}</span>
