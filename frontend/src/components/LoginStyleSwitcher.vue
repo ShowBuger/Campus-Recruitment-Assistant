@@ -4,7 +4,6 @@ import {
   restoreAnimeResource,
   restoreAuroraResource,
   restoreCyberResource,
-  restoreShuimoResource,
 } from '@/utils/skinResources'
 
 const styles = [
@@ -14,13 +13,12 @@ const styles = [
   { value: 'cyber', label: '霓虹终端', resource: 'cyber' },
   { value: 'anime', label: '樱愿手账', resource: 'anime' },
   { value: 'journal', label: '纸页档案' },
-  { value: 'shuimo', label: '云水墨境', resource: 'shuimo' },
 ]
 
 const currentStyle = ref(document.documentElement.dataset.style || 'pixelium')
 const checking = ref(true)
 const open = ref(false)
-const ready = ref({ aurora: false, anime: false, shuimo: false, cyber: false })
+const ready = ref({ aurora: false, anime: false, cyber: false })
 const useDefaultFont = computed(() => document.documentElement.dataset.styleFont === 'default')
 
 function enableSheet(id, enabled) {
@@ -73,13 +71,12 @@ function closeFromOutside(event) {
 }
 
 onMounted(async () => {
-  const [aurora, anime, shuimo, cyber] = await Promise.all([
+  const [aurora, anime, cyber] = await Promise.all([
     restoreAuroraResource(),
     restoreAnimeResource(),
-    restoreShuimoResource(),
     restoreCyberResource(),
   ])
-  ready.value = { aurora, anime, shuimo, cyber }
+  ready.value = { aurora, anime, cyber }
   checking.value = false
   document.addEventListener('click', closeFromOutside)
 })
@@ -124,7 +121,7 @@ onUnmounted(() => document.removeEventListener('click', closeFromOutside))
 .login-style-menu{position:absolute;top:46px;right:0;width:min(360px,calc(100vw - 28px));padding:8px;border:1px solid var(--line);border-radius:12px;background:color-mix(in srgb,var(--panel) 96%,transparent);box-shadow:0 18px 55px color-mix(in srgb,var(--ink) 18%,transparent);backdrop-filter:blur(24px);animation:style-menu-in .18s cubic-bezier(.2,.8,.2,1)}
 .login-style-menu header{display:flex;align-items:center;justify-content:space-between;padding:8px 9px 12px}.login-style-menu header>div{display:flex;flex-direction:column;gap:2px}.login-style-menu header b{font-size:12px}.login-style-menu header small{color:var(--muted);font-size:9px}.login-style-menu header>span{color:var(--blue);font-size:9px;font-weight:800}
 .login-style-options{display:grid;grid-template-columns:1fr 1fr;gap:5px}.login-style-option{position:relative;display:grid;grid-template-columns:30px 1fr 8px;align-items:center;gap:8px;min-height:52px;padding:7px 8px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--ink);text-align:left;cursor:pointer}.login-style-option:hover:not(:disabled){border-color:var(--line);background:var(--bg)}.login-style-option.active{border-color:color-mix(in srgb,var(--blue) 40%,var(--line));background:var(--blueS)}.login-style-option:disabled{cursor:not-allowed;opacity:.42}.login-style-option>span{display:flex;min-width:0;flex-direction:column;gap:2px}.login-style-option b{overflow:hidden;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.login-style-option small{overflow:hidden;color:var(--muted);font-size:8px;text-overflow:ellipsis;white-space:nowrap}
-.login-style-swatch{width:30px;height:30px;border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);border-radius:7px;box-shadow:inset 0 0 0 3px rgba(255,255,255,.38)}.style-classic .login-style-swatch{background:linear-gradient(135deg,#edf5ff 0 52%,#2563a6 53%)}.style-pixelium .login-style-swatch{border-radius:2px;background:linear-gradient(135deg,#e8f0eb 0 48%,#386a57 49% 72%,#e5a84b 73%)}.style-aurora .login-style-swatch{background:linear-gradient(135deg,#7358e8,#4da6cf 55%,#47b59c)}.style-cyber .login-style-swatch{border-radius:2px;background:linear-gradient(145deg,#f8e71c 0 48%,#111923 49% 70%,#00d9f5 71%)}.style-anime .login-style-swatch{background:linear-gradient(145deg,#fff0f4 0 50%,#526dc7 51% 72%,#df6279 73%)}.style-journal .login-style-swatch{border-radius:3px;background:linear-gradient(145deg,#f8f6ed 0 55%,#2f6756 56% 78%,#b95746 79%)}.style-shuimo .login-style-swatch{border-radius:6px 2px 6px 2px;background:radial-gradient(circle at 72% 25%,#a33a32 0 7%,transparent 8%),linear-gradient(145deg,#f4f1e8 0 52%,#344b4a 53% 72%,#232521 73%)}
+.login-style-swatch{width:30px;height:30px;border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);border-radius:7px;box-shadow:inset 0 0 0 3px rgba(255,255,255,.38)}.style-classic .login-style-swatch{background:linear-gradient(135deg,#edf5ff 0 52%,#2563a6 53%)}.style-pixelium .login-style-swatch{border-radius:2px;background:linear-gradient(135deg,#e8f0eb 0 48%,#386a57 49% 72%,#e5a84b 73%)}.style-aurora .login-style-swatch{background:linear-gradient(135deg,#7358e8,#4da6cf 55%,#47b59c)}.style-cyber .login-style-swatch{border-radius:2px;background:linear-gradient(145deg,#f8e71c 0 48%,#111923 49% 70%,#00d9f5 71%)}.style-anime .login-style-swatch{background:linear-gradient(145deg,#fff0f4 0 50%,#526dc7 51% 72%,#df6279 73%)}.style-journal .login-style-swatch{border-radius:3px;background:linear-gradient(145deg,#f8f6ed 0 55%,#2f6756 56% 78%,#b95746 79%)}
 .login-style-check{width:7px;height:7px;border-radius:50%;background:transparent}.login-style-option.active .login-style-check{background:var(--blue);box-shadow:0 0 0 3px var(--blueS)}
 @keyframes style-menu-in{from{opacity:0;transform:translateY(-6px) scale(.98)}}
 @media(max-width:560px){.login-style-switcher{top:14px;right:14px}.login-style-trigger{width:38px;padding:0;justify-content:center}.login-style-trigger>span:last-child{display:none}.login-style-menu{top:44px}.login-style-options{grid-template-columns:1fr}}

@@ -9,11 +9,9 @@ import {
   downloadAnimeResource,
   downloadAuroraResource,
   downloadCyberResource,
-  downloadShuimoResource,
   restoreAnimeResource,
   restoreAuroraResource,
   restoreCyberResource,
-  restoreShuimoResource,
 } from '@/utils/skinResources'
 import { isDesktopRuntime } from '@/utils/runtime'
 
@@ -118,11 +116,8 @@ const styleButton = ref(null)
 const stylePanelPosition = ref({})
 const currentStyle = ref(document.documentElement.dataset.style || 'pixelium')
 const useDefaultFont = ref(document.documentElement.dataset.styleFont === 'default')
-const shuimoTrailEnabled = ref(document.documentElement.dataset.shuimoTrail !== 'off')
 const animeResourceStatus = ref('checking')
 const animeResourceProgress = ref({ percent: 0, received: 0, total: 0 })
-const shuimoResourceStatus = ref('checking')
-const shuimoResourceProgress = ref({ percent: 0, received: 0, total: 0 })
 const cyberResourceStatus = ref('checking')
 const cyberResourceProgress = ref({ percent: 0, received: 0, total: 0 })
 const auroraResourceStatus = ref('checking')
@@ -161,9 +156,8 @@ function enableSheet(id, on) {
 function applyStyle(name) {
   if (name === 'aurora' && auroraResourceStatus.value !== 'ready') return
   if (!useDefaultFont.value && name === 'anime' && animeResourceStatus.value !== 'ready') return
-  if (!useDefaultFont.value && name === 'shuimo' && shuimoResourceStatus.value !== 'ready') return
   if (!useDefaultFont.value && name === 'cyber' && cyberResourceStatus.value !== 'ready') return
-  if (!['classic', 'pixelium', 'aurora', 'anime', 'journal', 'shuimo', 'cyber'].includes(name)) name = 'pixelium'
+  if (!['classic', 'pixelium', 'aurora', 'anime', 'journal', 'cyber'].includes(name)) name = 'pixelium'
   const previousStyle = currentStyle.value
   const leavingAurora = previousStyle === 'aurora' && name !== 'aurora'
   if (name === 'aurora' && previousStyle !== 'aurora') {
@@ -197,10 +191,9 @@ function setDefaultFont(enabled) {
 }
 
 async function checkStyleResources() {
-  const [auroraReady, animeReady, shuimoReady, cyberReady] = await Promise.all([restoreAuroraResource(), restoreAnimeResource(), restoreShuimoResource(), restoreCyberResource()])
+  const [auroraReady, animeReady, cyberReady] = await Promise.all([restoreAuroraResource(), restoreAnimeResource(), restoreCyberResource()])
   auroraResourceStatus.value = auroraReady ? 'ready' : 'missing'
   animeResourceStatus.value = animeReady ? 'ready' : 'missing'
-  shuimoResourceStatus.value = shuimoReady ? 'ready' : 'missing'
   cyberResourceStatus.value = cyberReady ? 'ready' : 'missing'
 }
 
@@ -242,37 +235,6 @@ async function fetchAnimeResource(activateStyle) {
 
 function downloadAnime() { return fetchAnimeResource(true) }
 
-async function fetchShuimoResource(activateStyle) {
-  if (shuimoResourceStatus.value === 'downloading') return
-  shuimoResourceStatus.value = 'downloading'
-  shuimoResourceProgress.value = { percent: 0, received: 0, total: 0 }
-  try {
-    await downloadShuimoResource(progress => { shuimoResourceProgress.value = progress })
-    shuimoResourceStatus.value = 'ready'
-    toast.success('龙吟手书已保存到本地')
-    if (activateStyle) applyStyle('shuimo')
-    return true
-  } catch (error) {
-    shuimoResourceStatus.value = 'error'
-    toast.error(error.message || '水墨资源下载失败')
-    return false
-  }
-}
-
-function downloadShuimo() { return fetchShuimoResource(true) }
-
-watch(() => [authStore.isLoggedIn, authStore.isAdmin], async ([loggedIn, isAdmin]) => {
-  document.documentElement.dataset.adminUser = isAdmin ? 'true' : 'false'
-  if (!loggedIn || localStorage.getItem('radar_style') !== 'shuimo') return
-  if (useDefaultFont.value) {
-    applyStyle('shuimo')
-    return
-  }
-  const ready = await restoreShuimoResource()
-  shuimoResourceStatus.value = ready ? 'ready' : 'missing'
-  if (ready) applyStyle('shuimo')
-}, { immediate: true })
-
 async function fetchCyberResource(activateStyle) {
   if (cyberResourceStatus.value === 'downloading') return
   cyberResourceStatus.value = 'downloading'
@@ -300,17 +262,9 @@ async function toggleDefaultFont(event) {
   }
   let ready = true
   if (currentStyle.value === 'anime' && animeResourceStatus.value !== 'ready') ready = await fetchAnimeResource(false)
-  if (currentStyle.value === 'shuimo' && shuimoResourceStatus.value !== 'ready') ready = await fetchShuimoResource(false)
   if (currentStyle.value === 'cyber' && cyberResourceStatus.value !== 'ready') ready = await fetchCyberResource(false)
   if (ready) setDefaultFont(false)
   else event.target.checked = true
-}
-
-function toggleShuimoTrail(event) {
-  shuimoTrailEnabled.value = Boolean(event.target.checked)
-  const value = shuimoTrailEnabled.value ? 'on' : 'off'
-  document.documentElement.dataset.shuimoTrail = value
-  localStorage.setItem('radar_shuimo_trail', value)
 }
 
 // ---- Theme toggle ----
@@ -476,14 +430,7 @@ onUnmounted(() => {
         <label class="style-font-option">
           <span class="style-font-option-copy"><b>使用默认字体</b><small>关闭后使用各风格的限定字体</small></span>
           <span class="style-font-toggle">
-            <input type="checkbox" role="switch" aria-label="使用默认字体" :checked="useDefaultFont" :disabled="auroraResourceStatus === 'downloading' || animeResourceStatus === 'downloading' || shuimoResourceStatus === 'downloading' || cyberResourceStatus === 'downloading'" @change="toggleDefaultFont">
-            <i aria-hidden="true"></i>
-          </span>
-        </label>
-        <label v-if="authStore.isAdmin && currentStyle === 'shuimo'" class="style-font-option">
-          <span class="style-font-option-copy"><b>毛笔拖尾</b><small>短柔笔迹，可随时关闭</small></span>
-          <span class="style-font-toggle">
-            <input type="checkbox" role="switch" aria-label="启用毛笔拖尾" :checked="shuimoTrailEnabled" @change="toggleShuimoTrail">
+            <input type="checkbox" role="switch" aria-label="使用默认字体" :checked="useDefaultFont" :disabled="auroraResourceStatus === 'downloading' || animeResourceStatus === 'downloading' || cyberResourceStatus === 'downloading'" @change="toggleDefaultFont">
             <i aria-hidden="true"></i>
           </span>
         </label>
@@ -596,38 +543,6 @@ onUnmounted(() => {
           <i class="style-swatch swatch-journal" aria-hidden="true"></i>
           <div>纸页档案<small>精装书页、索引与纸张档案</small></div>
           <span class="style-check">✓</span>
-        </div>
-        <div
-          class="style-item resource-style-item shuimo-style-item"
-          :class="{ active: currentStyle === 'shuimo', locked: !useDefaultFont && shuimoResourceStatus !== 'ready', downloading: shuimoResourceStatus === 'downloading' }"
-          data-style-option="shuimo"
-          @click="applyStyle('shuimo')"
-        >
-          <i class="style-swatch swatch-shuimo" aria-hidden="true"></i>
-          <div class="style-item-copy">
-            云水墨境
-            <small v-if="shuimoResourceStatus === 'downloading'">
-              正在下载 {{ formatDownloadSize(shuimoResourceProgress.received) }}<template v-if="shuimoResourceProgress.total"> / {{ formatDownloadSize(shuimoResourceProgress.total) }}</template>
-            </small>
-            <small v-else-if="useDefaultFont">当前使用系统默认字体</small>
-            <small v-else-if="shuimoResourceStatus === 'error'">下载失败，点击右侧重试</small>
-            <small v-else-if="shuimoResourceStatus !== 'ready'">下载龙吟手书后解锁水墨主题</small>
-            <small v-else>龙吟手书、宣纸远山与朱砂题签</small>
-          </div>
-          <button
-            v-if="!useDefaultFont && shuimoResourceStatus !== 'ready'"
-            class="style-download-btn"
-            type="button"
-            :disabled="shuimoResourceStatus === 'checking' || shuimoResourceStatus === 'downloading'"
-            :title="shuimoResourceStatus === 'downloading' ? '正在下载龙吟手书' : '下载龙吟手书'"
-            :aria-label="shuimoResourceStatus === 'downloading' ? '正在下载龙吟手书' : '下载龙吟手书'"
-            @click.stop="downloadShuimo"
-          >
-            <svg v-if="shuimoResourceStatus !== 'downloading'" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg>
-            <span v-else>{{ Math.round(shuimoResourceProgress.percent) }}%</span>
-          </button>
-          <span v-else class="style-check">✓</span>
-          <i v-if="shuimoResourceStatus === 'downloading'" class="style-resource-progress" :style="{ width: shuimoResourceProgress.percent + '%' }"></i>
         </div>
       </div>
       </Teleport>

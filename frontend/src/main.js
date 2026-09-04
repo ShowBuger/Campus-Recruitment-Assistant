@@ -3,10 +3,11 @@ import { createPinia } from 'pinia'
 import router from './router'
 import App from './App.vue'
 import WidgetApp from './WidgetApp.vue'
-import { restoreAnimeResource, restoreAuroraResource, restoreCyberResource, restoreShuimoResource } from './utils/skinResources'
+import { restoreAnimeResource, restoreAuroraResource, restoreCyberResource } from './utils/skinResources'
 import { hasDesktopTitlebar } from './utils/runtime'
 
 const widgetType = new URLSearchParams(window.location.search).get('desktopWidget')
+const allowedStyles = ['classic', 'pixelium', 'aurora', 'anime', 'journal', 'cyber']
 if (widgetType) document.documentElement.classList.add('desktop-widget-mode')
 else if (hasDesktopTitlebar()) document.documentElement.classList.add('desktop-main-mode')
 
@@ -22,7 +23,6 @@ async function restoreStyleResource(style) {
   if (style === 'aurora') return restoreAuroraResource()
   if (style === 'anime') return restoreAnimeResource()
   if (style === 'cyber') return restoreCyberResource()
-  if (style === 'shuimo') return restoreShuimoResource()
   return true
 }
 
@@ -30,7 +30,7 @@ window.addEventListener('storage', async event => {
   if (event.key === 'radar_style' && event.newValue) {
     const previousStyle = document.documentElement.dataset.style
     let style = event.newValue
-    if (style === 'shuimo' && document.documentElement.dataset.adminUser !== 'true') style = 'pixelium'
+    if (!allowedStyles.includes(style)) style = 'pixelium'
     if ((style === 'aurora' || document.documentElement.dataset.styleFont !== 'default') && !(await restoreStyleResource(style))) style = 'pixelium'
     document.documentElement.dataset.style = style
     if (previousStyle === 'aurora' && style !== 'aurora') {

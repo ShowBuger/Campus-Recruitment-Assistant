@@ -406,7 +406,7 @@ function createTray() {
 
 ipcMain.handle('desktop:get-version', () => app.getVersion())
 ipcMain.handle('desktop:set-skin', (_event, requestedSkin) => {
-  const skin = ['classic', 'pixelium', 'aurora', 'anime', 'journal', 'shuimo', 'cyber'].includes(requestedSkin)
+  const skin = ['classic', 'pixelium', 'aurora', 'anime', 'journal', 'cyber'].includes(requestedSkin)
     ? requestedSkin
     : 'pixelium'
   if (!mainWindow || mainWindow.isDestroyed()) return skin

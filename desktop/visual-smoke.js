@@ -2,19 +2,17 @@ const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
-const styles = (process.env.CAMPUS_VISUAL_STYLES || 'pixelium,aurora,anime,journal,shuimo,cyber').split(',')
+const styles = (process.env.CAMPUS_VISUAL_STYLES || 'pixelium,aurora,anime,journal,cyber').split(',')
 const token = process.env.CAMPUS_VISUAL_TOKEN
 const target = process.env.CAMPUS_VISUAL_URL || 'http://127.0.0.1:8765'
 const outputDir = process.env.CAMPUS_VISUAL_OUTPUT || '/tmp/campus-skin-smoke'
 const theme = process.env.CAMPUS_VISUAL_THEME === 'dark' ? 'dark' : 'light'
 const webMode = process.env.CAMPUS_VISUAL_WEB === '1'
 const resourceOnly = process.env.CAMPUS_VISUAL_RESOURCE_ONLY === '1'
-const trailOnly = process.env.CAMPUS_VISUAL_TRAIL_ONLY === '1'
-const collapsibleStyles = webMode ? ['classic', 'pixelium', 'aurora', 'anime', 'journal', 'shuimo', 'cyber'] : ['classic', 'pixelium', 'anime', 'journal', 'cyber']
+const collapsibleStyles = webMode ? ['classic', 'pixelium', 'aurora', 'anime', 'journal', 'cyber'] : ['classic', 'pixelium', 'anime', 'journal', 'cyber']
 const resourceStyles = {
   aurora: { selector: '.aurora-style-item', family: 'Zihun Haima', sample: '雨幕流光' },
   anime: { selector: '.anime-style-item', family: 'Zihun Buding', sample: '投递信息' },
-  shuimo: { selector: '.shuimo-style-item', family: 'Zixiaohun Danqing Xingshu', sample: '云水墨境' },
   cyber: { selector: '.cyber-style-item', family: 'Zihun Bionic', sample: '投递信息' },
 }
 
@@ -166,8 +164,6 @@ app.whenReady().then(async () => {
           }).length,
           dockVisible: visible('.liquid-dock'),
           collapseButtonVisible: visible('.sidebar-collapse'),
-          inkStageVisible: visible('.ink-stage'),
-          inkTrailVisible: visible('.ink-cursor-trail'),
           assistantPresent: Boolean(assistant),
           appBackground: appStyle.backgroundColor,
           appBorderWidths: [appStyle.borderTopWidth, appStyle.borderRightWidth, appStyle.borderBottomWidth, appStyle.borderLeftWidth],
@@ -182,14 +178,13 @@ app.whenReady().then(async () => {
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
           rootClip: getComputedStyle(document.documentElement).clipPath,
           activePage: (() => { const el = document.querySelector('.page.active'); if (!el) return null; const style = getComputedStyle(el); return { opacity: style.opacity, clipPath: style.clipPath, animation: style.animationName, state: style.animationPlayState } })(),
-          inkSignature: (() => { const el = document.querySelector('.ink-signature'); if (!el) return null; const rect = el.getBoundingClientRect(); return { display: getComputedStyle(el).display, opacity: getComputedStyle(el).opacity, width: rect.width, height: rect.height } })(),
           contentCards: Array.from(document.querySelectorAll('.page.active .card,.page.active .kpi,.page.active .metric')).map(el => { const rect = el.getBoundingClientRect(); const hit = document.elementFromPoint(Math.max(0, Math.min(innerWidth - 1, rect.left + rect.width / 2)), Math.max(0, Math.min(innerHeight - 1, rect.top + Math.min(rect.height, 20) / 2))); return { opacity: getComputedStyle(el).opacity, visibility: getComputedStyle(el).visibility, top: rect.top, left: rect.left, width: rect.width, height: rect.height, hit: hit?.className || hit?.tagName } }),
         }
       })()
     `)
     const expected = webMode
       ? audit.sidebarVisible && !audit.dockVisible
-      : style === 'aurora' || style === 'shuimo'
+      : style === 'aurora'
       ? !audit.sidebarVisible && audit.dockVisible
       : style === 'anime'
         ? audit.sidebarVisible && !audit.assistantPresent
@@ -261,9 +256,6 @@ app.whenReady().then(async () => {
       }
       console.log(`${style} desktop background pixel audit`, JSON.stringify({ changedPixels, motionRect }))
     }
-    if (style !== 'shuimo' && (audit.inkStageVisible || audit.inkTrailVisible || (audit.inkSignature && audit.inkSignature.display !== 'none'))) {
-      throw new Error(`${style} leaked shuimo layer: ${JSON.stringify(audit)}`)
-    }
     if (audit.collapseButtonVisible !== collapsibleStyles.includes(style)) {
       throw new Error(`${style} collapse button availability failed: ${JSON.stringify(audit)}`)
     }
@@ -334,101 +326,10 @@ app.whenReady().then(async () => {
         await win.webContents.executeJavaScript(`document.querySelector(${JSON.stringify(buttonSelector)})?.click()`)
       }
     }
-    if (style === 'shuimo' && !webMode) {
-      if (!audit.inkSignature || audit.inkSignature.display === 'none' || audit.inkSignature.opacity === '0' || audit.inkSignature.height < 40 || audit.contentCards.some(card => card.opacity === '0' || card.visibility === 'hidden' || card.height < 1)) {
-        throw new Error(`shuimo animation audit failed: ${JSON.stringify(audit)}`)
-      }
-      const radiusAudit = await win.webContents.executeJavaScript(`
-        (() => {
-          const root = document.documentElement
-          const surface = document.querySelector('.app')
-          const restored = getComputedStyle(surface).borderRadius
-          root.classList.add('desktop-window-maximized')
-          const maximized = getComputedStyle(surface).borderRadius
-          const clip = getComputedStyle(surface).clipPath
-          root.classList.remove('desktop-window-maximized')
-          return { restored, maximized, clip }
-        })()
-      `)
-      if (radiusAudit.restored === '0px' || radiusAudit.maximized !== '0px' || radiusAudit.clip !== 'none') {
-        throw new Error(`shuimo window radius audit failed: ${JSON.stringify(radiusAudit)}`)
-      }
-      await win.webContents.executeJavaScript(`(() => {
-        window.__campusInkTestMove = () => new Promise(resolve => {
-          let step = 0
-          const move = () => {
-            window.dispatchEvent(new MouseEvent('mousemove', {
-              clientX: 310 + step * 38,
-              clientY: 245 + Math.round(Math.sin(step * .72) * 42),
-              bubbles: true,
-            }))
-            step += 1
-            if (step < 12) setTimeout(move, 12)
-            else resolve()
-          }
-          move()
-        })
-        return window.__campusInkTestMove()
-      })()`)
-      await wait(16)
-      fs.writeFileSync(path.join(outputDir, 'shuimo-trail-active.png'), (await win.capturePage()).toPNG())
-      await win.webContents.executeJavaScript(`window.dispatchEvent(new MouseEvent('mouseleave')); window.__campusInkTestMove()`)
-      await wait(24)
-      const trailAudit = await win.webContents.executeJavaScript(`
-        (() => {
-          const canvas = document.querySelector('.ink-cursor-trail')
-          if (!canvas) return { visible: false, painted: 0 }
-          const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data
-          let painted = 0
-          let minX = canvas.width
-          let maxX = 0
-          for (let index = 3; index < pixels.length; index += 4) {
-            if (pixels[index] <= 0) continue
-            painted += 1
-            const x = ((index - 3) / 4) % canvas.width
-            minX = Math.min(minX, x)
-            maxX = Math.max(maxX, x)
-          }
-          return { visible: getComputedStyle(canvas).display !== 'none', painted, span: painted ? maxX - minX : 0, width: canvas.width, height: canvas.height, buffer: canvas.dataset.buffer, drops: canvas.dataset.drops, points: canvas.dataset.points, newestAge: canvas.dataset.newestAge, oldestAge: canvas.dataset.oldestAge, travelSpan: canvas.dataset.travelSpan, style: document.documentElement.dataset.style }
-        })()
-      `)
-      if (!trailAudit.visible || trailAudit.painted < 1 || trailAudit.span > 480) throw new Error(`shuimo cursor trail audit failed: ${JSON.stringify(trailAudit)}`)
-      await win.webContents.executeJavaScript(`window.dispatchEvent(new MouseEvent('mouseleave')); window.__campusInkTestMove()`)
-      await wait(16)
-      const fadingBaseline = await win.webContents.executeJavaScript(`(() => {
-        const canvas = document.querySelector('.ink-cursor-trail')
-        return Number(canvas.dataset.points || 0)
-      })()`)
-      await wait(480)
-      const fadingTrailAudit = await win.webContents.executeJavaScript(`(() => {
-        const canvas = document.querySelector('.ink-cursor-trail')
-        return { points: Number(canvas.dataset.points || 0), drops: canvas.dataset.drops }
-      })()`)
-      if (fadingTrailAudit.points < 1 || fadingTrailAudit.points >= fadingBaseline) throw new Error(`shuimo cursor trail did not fade progressively: ${JSON.stringify({ fadingBaseline, fadingTrailAudit })}`)
-      await wait(550)
-      const clearedTrailAudit = await win.webContents.executeJavaScript(`(() => {
-        const canvas = document.querySelector('.ink-cursor-trail')
-        if (!canvas) return { painted: -1 }
-        const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data
-        let painted = 0
-        for (let index = 3; index < pixels.length; index += 4) if (pixels[index] > 0) painted += 1
-        return { painted, drops: canvas.dataset.drops }
-      })()`)
-      if (clearedTrailAudit.painted !== 0 || clearedTrailAudit.drops !== '0') throw new Error(`shuimo cursor trail did not clear: ${JSON.stringify(clearedTrailAudit)}`)
-      console.log('shuimo window radius audit', JSON.stringify(radiusAudit))
-      console.log('shuimo cursor trail audit', JSON.stringify(trailAudit))
-      console.log('shuimo fading trail audit', JSON.stringify(fadingTrailAudit))
-      console.log('shuimo cleared trail audit', JSON.stringify(clearedTrailAudit))
-      if (trailOnly) {
-        win.destroy()
-        app.quit()
-        return
-      }
-    }
     console.log(`${style} visual audit`, JSON.stringify(audit))
     const image = await win.capturePage()
     fs.writeFileSync(path.join(outputDir, `${style}.png`), image.toPNG())
-    if (style === 'aurora' || style === 'anime' || style === 'journal' || style === 'shuimo' || style === 'cyber') {
+    if (style === 'aurora' || style === 'anime' || style === 'journal' || style === 'cyber') {
       await win.webContents.executeJavaScript(`document.querySelector('button[aria-label="AI 配置"]')?.click()`)
       await wait(350)
       await win.webContents.executeJavaScript(`document.querySelector('.settings-modal')?.style.setProperty('animation', 'none')`)
@@ -472,7 +373,7 @@ app.whenReady().then(async () => {
     return
   }
 
-  for (const style of ['classic', 'pixelium', 'aurora', 'anime', 'journal', 'shuimo', 'cyber']) {
+  for (const style of ['classic', 'pixelium', 'aurora', 'anime', 'journal', 'cyber']) {
     await win.loadURL(`${target}/?desktopWidget=records`)
     await win.webContents.executeJavaScript(`
       localStorage.setItem('rb_token', ${JSON.stringify(token)});
@@ -499,13 +400,13 @@ app.whenReady().then(async () => {
       })()
     `)
     console.log(`${style} widget audit`, JSON.stringify(widgetAudit))
-    if (!widgetAudit.visible || widgetAudit.overflowX || widgetAudit.overflowY || (style === 'aurora' && !widgetAudit.fontFamily.includes('Zihun Haima')) || (style === 'shuimo' && widgetAudit.style === 'shuimo' && !widgetAudit.fontFamily.includes('Zixiaohun Danqing Xingshu')) || widgetAudit.stateIcons.length !== 2 || widgetAudit.stateIcons.some(icon => icon.fill !== 'none' || icon.stroke === 'none' || icon.width < 15)) {
+    if (!widgetAudit.visible || widgetAudit.overflowX || widgetAudit.overflowY || (style === 'aurora' && !widgetAudit.fontFamily.includes('Zihun Haima')) || widgetAudit.stateIcons.length !== 2 || widgetAudit.stateIcons.some(icon => icon.fill !== 'none' || icon.stroke === 'none' || icon.width < 15)) {
       throw new Error(`${style} widget audit failed: ${JSON.stringify(widgetAudit)}`)
     }
     fs.writeFileSync(path.join(outputDir, `${style}-widget.png`), (await win.capturePage()).toPNG())
   }
 
-  for (const style of ['aurora', 'anime', 'journal', 'shuimo', 'cyber']) {
+  for (const style of ['aurora', 'anime', 'journal', 'cyber']) {
     await win.loadURL(target)
     await win.webContents.executeJavaScript(`
       localStorage.removeItem('rb_token');

@@ -33,6 +33,21 @@ export const useAuthStore = defineStore('auth', () => {
     setToken(data.token)
     token.value = data.token
     user.value = data.user
+
+    // A freshly created account always starts from the lightweight default look.
+    // Keep this registration-only so returning users retain their saved preference.
+    const previousStyle = document.documentElement.dataset.style
+    document.documentElement.dataset.style = 'classic'
+    localStorage.setItem('radar_style', 'classic')
+    if (previousStyle === 'aurora') {
+      const theme = localStorage.getItem('radar_non_aurora_theme') === 'dark' ? 'dark' : 'light'
+      document.documentElement.dataset.theme = theme
+      localStorage.setItem('radar_theme', theme)
+    }
+    for (const id of ['css-pixelium', 'css-pixelfont', 'css-pixelvue']) {
+      document.getElementById(id)?.setAttribute('disabled', '')
+    }
+    window.electronAPI?.setSkin?.('classic')
   }
 
   async function logout() {

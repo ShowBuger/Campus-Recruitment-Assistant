@@ -191,21 +191,6 @@ html[data-style="journal"] .desktop-login>footer{border-color:#c2c8bc;background
 html[data-style="journal"][data-theme="dark"] .desktop-login{border-color:#0d211b;background-color:#252e2a;background-image:linear-gradient(90deg,transparent 0 35px,rgba(220,124,105,.13) 35px 36px,transparent 36px),repeating-linear-gradient(0deg,transparent 0 29px,rgba(114,179,157,.06) 29px 30px);color:#f1eee3;box-shadow:12px 16px 0 rgba(0,0,0,.28),0 28px 70px rgba(0,0,0,.58)}
 html[data-style="journal"][data-theme="dark"] .desktop-login-avatar{border-color:#728178;background:#2d3732;box-shadow:6px 8px 0 rgba(0,0,0,.28),inset 8px 0 rgba(114,179,157,.12)}html[data-style="journal"][data-theme="dark"] input{border-color:#728178;background:rgba(255,255,255,.025);color:#f1eee3}
 
-html[data-style="shuimo"] .desktop-login{border:1px solid #263b37;background-color:#f4f1e8;background-image:linear-gradient(rgba(244,241,232,.54),rgba(244,241,232,.82)),url('/static/themes/shuimo/mountain-panorama.webp');background-position:center,bottom center;background-size:auto,cover;color:#232521;font-family:"Zihun Longyin Shoushu","STKaiti","KaiTi",cursive;box-shadow:0 28px 70px rgba(24,29,25,.32)}
-html[data-style="shuimo"] .desktop-login-titlebar{border-bottom:1px solid rgba(244,241,232,.18);background:linear-gradient(105deg,#202824,#344b4a 65%,#53645a)}
-html[data-style="shuimo"] .desktop-login-titlebar>div{text-shadow:none}html[data-style="shuimo"] .desktop-login-titlebar>div span{border:1px solid rgba(255,255,255,.7);border-radius:1px;background:#a33a32;box-shadow:none;transform:rotate(-5deg)}
-html[data-style="shuimo"] .desktop-login-content{padding-top:20px}
-html[data-style="shuimo"] .desktop-login-avatar{border:0;border-radius:50%;background:radial-gradient(circle at 64% 35%,transparent 0 27%,#232521 29% 48%,rgba(35,37,33,.26) 50% 65%,transparent 67%);box-shadow:none;transform:rotate(-15deg)}
-html[data-style="shuimo"] .desktop-login-avatar span{display:none}
-html[data-style="shuimo"] .desktop-login-copy{margin-top:8px}html[data-style="shuimo"] .desktop-login-copy small{color:#a33a32;font-family:Georgia,serif}html[data-style="shuimo"] .desktop-login-copy h1{font-size:24px;letter-spacing:.15em}
-html[data-style="shuimo"] .desktop-login-copy h1{font-family:"Zihun Longyin Shoushu","STKaiti","KaiTi",cursive;font-weight:400}
-html[data-style="shuimo"] input{border:0;border-bottom:1px solid rgba(43,54,47,.5);border-radius:0;background:rgba(248,245,236,.55);box-shadow:none;color:#232521}
-html[data-style="shuimo"] input:focus{background:#f8f5ec;box-shadow:0 3px 0 rgba(52,75,74,.12)}
-html[data-style="shuimo"] .desktop-login-submit{border:1px solid #263b3a;border-radius:2px 10px;background:linear-gradient(105deg,#263b3a,#4f6258);box-shadow:3px 4px 0 rgba(35,37,33,.18)}
-html[data-style="shuimo"] .desktop-login-switch{color:#344b4a}
-html[data-style="shuimo"] .desktop-login>footer{border-color:rgba(43,54,47,.25);background:rgba(248,245,236,.7);color:#62675f;font-family:Georgia,serif}
-html[data-style="shuimo"][data-theme="dark"] .desktop-login{border-color:#0d110f;background-color:#171b19;background-image:linear-gradient(rgba(23,27,25,.85),rgba(23,27,25,.9)),url('/static/themes/shuimo/mountain-panorama.webp');background-blend-mode:multiply,luminosity;color:#e7e2d6}
-html[data-style="shuimo"][data-theme="dark"] .desktop-login-copy p,html[data-style="shuimo"][data-theme="dark"] .desktop-login-options label{color:#b4b5aa}html[data-style="shuimo"][data-theme="dark"] input{border-color:rgba(216,210,192,.3);background:rgba(255,255,255,.025);color:#e7e2d6}
 
 html[data-style="cyber"] .desktop-login{border:3px solid #111923;border-radius:8px;color:#111923;background-color:#cfd3c4;background-image:linear-gradient(118deg,rgba(248,231,28,.48) 0 32%,transparent 32.2%),linear-gradient(rgba(17,25,35,.11) 1px,transparent 1px),linear-gradient(90deg,rgba(17,25,35,.11) 1px,transparent 1px);background-size:100% 100%,28px 28px,28px 28px;box-shadow:inset 0 0 0 2px #00d9f5}
 html[data-style="cyber"] .desktop-login-titlebar{border-bottom:3px solid #111923;color:#111923;background:#f8e71c;box-shadow:inset 0 -5px #ff2a5f}

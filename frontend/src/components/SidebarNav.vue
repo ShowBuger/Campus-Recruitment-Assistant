@@ -48,7 +48,7 @@ function syncCollapsedLayout() {
   const style = root.dataset.style
   const desktop = root.classList.contains('desktop-main-mode')
   const wide = window.matchMedia('(min-width: 1081px)').matches
-  const width = style === 'anime' ? 80 : style === 'journal' ? 72 : style === 'cyber' ? 76 : ['aurora', 'shuimo'].includes(style) ? 76 : ['classic', 'pixelium'].includes(style) ? 72 : 0
+  const width = style === 'anime' ? 80 : style === 'journal' ? 72 : style === 'cyber' ? 76 : style === 'aurora' ? 76 : ['classic', 'pixelium'].includes(style) ? 72 : 0
   const enabled = Boolean(width) && (style === 'journal' || wide) && (!desktop || ['classic', 'pixelium', 'anime', 'journal', 'cyber'].includes(style))
   const active = collapsed.value && enabled
   root.classList.toggle('sidebar-collapse-enabled', enabled)

@@ -1,33 +1,38 @@
 <script setup>
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { gsap } from 'gsap'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import SidebarNav from '@/components/SidebarNav.vue'
 import Topbar from '@/components/Topbar.vue'
 import LoginModal from '@/components/LoginModal.vue'
-import ConfigModal from '@/components/ConfigModal.vue'
-import ChatModal from '@/components/ChatModal.vue'
-import RecordModal from '@/components/RecordModal.vue'
-import RecordDetailModal from '@/components/RecordDetailModal.vue'
-import RecordManagerModal from '@/components/RecordManagerModal.vue'
-import HelpModal from '@/components/HelpModal.vue'
-import StatsModal from '@/components/StatsModal.vue'
-import OfferCompareModal from '@/components/OfferCompareModal.vue'
-import RecommendationModal from '@/components/RecommendationModal.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 import AppDialog from '@/components/AppDialog.vue'
 import DesktopTitlebar from '@/components/DesktopTitlebar.vue'
 import DesktopLogin from '@/components/DesktopLogin.vue'
 import DesktopSkinLayer from '@/components/DesktopSkinLayer.vue'
 import AuroraVideoBackdrop from '@/components/AuroraVideoBackdrop.vue'
-import ShuimoRippleLayer from '@/components/ShuimoRippleLayer.vue'
 import { hasDesktopTitlebar } from '@/utils/runtime'
 
 
 const auth = useAuthStore()
 const app = useAppStore()
 const hasCustomTitlebar = hasDesktopTitlebar()
+const main = ref(null)
+const activeStyle = ref(document.documentElement.dataset.style || 'pixelium')
+let styleObserver = null
+let uiObserver = null
+let hoverBindFrame = 0
+
+const ConfigModal = defineAsyncComponent(() => import('@/components/ConfigModal.vue'))
+const ChatModal = defineAsyncComponent(() => import('@/components/ChatModal.vue'))
+const RecordModal = defineAsyncComponent(() => import('@/components/RecordModal.vue'))
+const RecordDetailModal = defineAsyncComponent(() => import('@/components/RecordDetailModal.vue'))
+const RecordManagerModal = defineAsyncComponent(() => import('@/components/RecordManagerModal.vue'))
+const HelpModal = defineAsyncComponent(() => import('@/components/HelpModal.vue'))
+const StatsModal = defineAsyncComponent(() => import('@/components/StatsModal.vue'))
+const OfferCompareModal = defineAsyncComponent(() => import('@/components/OfferCompareModal.vue'))
+const RecommendationModal = defineAsyncComponent(() => import('@/components/RecommendationModal.vue'))
 
 watch(() => auth.isLoggedIn, loggedIn => {
   if (!hasCustomTitlebar) return
@@ -56,8 +61,8 @@ function onCardMouseMove(e) {
   card.style.setProperty('--my', `${((e.clientY-rect.top)/rect.height)*100}%`)
 }
 function onCardMouseLeave(e) { e.currentTarget.style.removeProperty('--mx'); e.currentTarget.style.removeProperty('--my') }
-function bindCardHover() {
-  document.querySelectorAll('.kpi-card,.metric').forEach(el => {
+function bindCardHover(root = main.value) {
+  root?.querySelectorAll('.kpi-card,.metric').forEach(el => {
     if (boundHoverCards.has(el)) return
     boundHoverCards.add(el)
     el.addEventListener('mousemove', onCardMouseMove); el.addEventListener('mouseleave', onCardMouseLeave)
@@ -94,25 +99,34 @@ onMounted(async () => {
   setTimeout(bindCardHover, 500)
   await nextTick()
   animateNewUi()
-  let hoverBindFrame = 0
-  new MutationObserver(() => {
+  uiObserver = new MutationObserver(() => {
     cancelAnimationFrame(hoverBindFrame)
     hoverBindFrame = requestAnimationFrame(() => {
       bindCardHover()
       animateNewUi()
     })
-  }).observe(document.body, { childList: true, subtree: true })
+  })
+  uiObserver.observe(document.body, { childList: true, subtree: true })
+  styleObserver = new MutationObserver(() => {
+    activeStyle.value = document.documentElement.dataset.style || 'pixelium'
+  })
+  styleObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-style'] })
+})
+
+onUnmounted(() => {
+  styleObserver?.disconnect()
+  uiObserver?.disconnect()
+  cancelAnimationFrame(hoverBindFrame)
 })
 </script>
 
 <template>
-  <AuroraVideoBackdrop />
-  <ShuimoRippleLayer />
+  <AuroraVideoBackdrop v-if="activeStyle === 'aurora'" />
   <div class="app" v-if="auth.isLoggedIn">
     <DesktopTitlebar v-if="hasCustomTitlebar" />
     <SidebarNav />
-    <DesktopSkinLayer />
-    <main class="main">
+    <DesktopSkinLayer v-if="activeStyle === 'aurora'" />
+    <main ref="main" class="main">
       <div class="cyber-desktop-backdrop" aria-hidden="true"><i></i></div>
       <Topbar @open-config="app.toggleConfig()" @open-chat="app.toggleChat()" @open-help="app.toggleHelp()" />
       <router-view />

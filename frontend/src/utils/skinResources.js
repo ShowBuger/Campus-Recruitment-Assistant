@@ -1,9 +1,6 @@
 const DB_NAME = 'campus-skin-resources'
 const DB_VERSION = 1
 const STORE_NAME = 'resources'
-const SHUIMO_KEY = 'shuimo-font-20260802-3'
-const SHUIMO_MARKER = `skin_resource_${SHUIMO_KEY}`
-const SHUIMO_URL = '/static/themes/shuimo/fonts/zihun-longyin-shoushu.ttf?v=20260802-3'
 const ANIME_KEY = 'anime-font-20260802-2'
 const ANIME_MARKER = `skin_resource_${ANIME_KEY}`
 const ANIME_URL = '/static/themes/anime/fonts/zihun-buding.ttf?v=20260802-2'
@@ -22,11 +19,8 @@ const LEGACY_AURORA_MARKER = 'skin_resource_aurora-bundle-20260802-1'
 const LEGACY_AURORA_FONT_KEY = 'aurora-bundle-20260802-1-font'
 const LEGACY_ANIME_KEY = 'anime-font-20260802-1'
 const LEGACY_ANIME_MARKER = `skin_resource_${LEGACY_ANIME_KEY}`
-const LEGACY_SHUIMO_KEY = 'shuimo-font-20260802-1'
-const LEGACY_SHUIMO_MARKER = `skin_resource_${LEGACY_SHUIMO_KEY}`
 
 const resources = {
-  shuimo: { key: SHUIMO_KEY, marker: SHUIMO_MARKER, url: SHUIMO_URL, family: 'Zihun Longyin Shoushu' },
   anime: { key: ANIME_KEY, marker: ANIME_MARKER, url: ANIME_URL, family: 'Zihun Buding' },
   cyber: { key: CYBER_KEY, marker: CYBER_MARKER, url: CYBER_URL, family: 'Zihun Bionic' },
   auroraFont: { key: AURORA_FONT_KEY, marker: AURORA_MARKER, url: AURORA_FONT_URL, family: 'Zihun Haima' },
@@ -81,11 +75,6 @@ async function deleteResource(key) {
 async function clearLegacyAnimeResource() {
   try { localStorage.removeItem(LEGACY_ANIME_MARKER) } catch (_) {}
   try { await deleteResource(LEGACY_ANIME_KEY) } catch (_) {}
-}
-
-async function clearLegacyShuimoResource() {
-  try { localStorage.removeItem(LEGACY_SHUIMO_MARKER) } catch (_) {}
-  try { await deleteResource(LEGACY_SHUIMO_KEY) } catch (_) {}
 }
 
 async function clearLegacyAuroraFontResource() {
@@ -216,22 +205,12 @@ export async function downloadAuroraResource(onProgress) {
 export function hasAuroraResourceMarker() { return hasResourceMarker({ marker: AURORA_MARKER }) }
 export function getAuroraVideoUrl() { return auroraVideoUrl }
 
-export function hasShuimoResourceMarker() { return hasResourceMarker(resources.shuimo) }
 export function hasAnimeResourceMarker() { return hasResourceMarker(resources.anime) }
 export function hasCyberResourceMarker() { return hasResourceMarker(resources.cyber) }
-export async function restoreShuimoResource() {
-  await clearLegacyShuimoResource()
-  return restoreResource(resources.shuimo)
-}
 export function restoreCyberResource() { return restoreResource(resources.cyber) }
 export async function restoreAnimeResource() {
   await clearLegacyAnimeResource()
   return restoreResource(resources.anime)
-}
-export async function downloadShuimoResource(onProgress) {
-  const result = await downloadResource(resources.shuimo, onProgress)
-  await clearLegacyShuimoResource()
-  return result
 }
 export function downloadCyberResource(onProgress) { return downloadResource(resources.cyber, onProgress) }
 export async function downloadAnimeResource(onProgress) {
