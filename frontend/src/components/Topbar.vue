@@ -28,7 +28,7 @@ const desktopUpdatePercent = computed(() => {
   return Math.max(0, Math.min(100, value))
 })
 let removeDesktopUpdateListener = null
-const titleMap = { dashboard: '投递信息', board: '投递看板', records: '总表信息', resumes: '简历管理', analysis: '简历分析', notes: '校招笔记', admin: '管理页面' }
+const titleMap = { dashboard: '投递信息', board: '投递看板', records: '总表信息', resumes: '简历管理', analysis: '简历分析', notes: '校招笔记', salary: '薪资查询', 'offer-comparison': '岗位对比', admin: '管理页面' }
 const title = computed(() => titleMap[route.name] || '校招信息看板')
 
 const emit = defineEmits(['open-config', 'open-chat', 'open-help'])

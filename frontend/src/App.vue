@@ -31,7 +31,6 @@ const RecordDetailModal = defineAsyncComponent(() => import('@/components/Record
 const RecordManagerModal = defineAsyncComponent(() => import('@/components/RecordManagerModal.vue'))
 const HelpModal = defineAsyncComponent(() => import('@/components/HelpModal.vue'))
 const StatsModal = defineAsyncComponent(() => import('@/components/StatsModal.vue'))
-const OfferCompareModal = defineAsyncComponent(() => import('@/components/OfferCompareModal.vue'))
 const RecommendationModal = defineAsyncComponent(() => import('@/components/RecommendationModal.vue'))
 
 watch(() => auth.isLoggedIn, loggedIn => {
@@ -138,7 +137,6 @@ onUnmounted(() => {
     <RecordManagerModal v-if="app.showManager" @close="app.closeManager()" />
     <HelpModal v-if="app.showHelp" @close="app.showHelp = false" />
     <StatsModal v-if="app.showStats" @close="app.closeStats()" />
-    <OfferCompareModal v-if="app.showOffer" @close="app.closeOffer()" />
     <RecommendationModal v-if="app.showRecommendation" @close="app.closeRecommendation()" />
     <div v-if="showError" class="error-overlay" @mousedown.self="showError = false">
       <div class="error-modal"><h3>&#9888; {{ errorMsg }}</h3><pre>{{ errorDetail }}</pre><div class="btn-row"><button class="btn" @click="copyError">复制详情</button><button class="btn" style="background:var(--blue);color:#fff" @click="showError = false">关闭</button></div></div>

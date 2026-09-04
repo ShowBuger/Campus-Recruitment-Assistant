@@ -89,10 +89,7 @@ class TotalRecordUpdate(BaseModel):
     interview4: date | None = None
     warm: date | None = None
     result_date: date | None = None
-    offer_total: str = Field(default="", max_length=100)
-    offer_base: str = Field(default="", max_length=100)
-    offer_bonus: str = Field(default="", max_length=200)
-    offer_deadline: date | None = None
+    offer_details: dict = Field(default_factory=dict)
     resume_version: str = Field(default="", max_length=200)
 
 
@@ -178,10 +175,7 @@ def _total_record_fields(record: TotalRecordUpdate) -> dict:
         "四面": date_ms(record.interview4),
         "保温": date_ms(record.warm),
         "结果": date_ms(record.result_date),
-        "Offer总包": record.offer_total.strip(),
-        "Offerbase": record.offer_base.strip(),
-        "Offer奖金": record.offer_bonus.strip(),
-        "Offer决策截止": date_ms(record.offer_deadline),
+        "Offer详情": record.offer_details,
         "简历版本": record.resume_version.strip(),
     }
 
@@ -324,8 +318,8 @@ async def import_total_records(
 def get_feishu_sync_config(
     user: dict = Depends(auth_module.get_current_user),
 ):
-    if not user.get("is_root"):
-        raise HTTPException(status_code=403, detail="仅 root 用户可以同步飞书表格")
+    if not (user.get("is_admin") or user.get("is_root")):
+        raise HTTPException(status_code=403, detail="仅管理员可以同步飞书表格")
     cfg = database.get_user_config(user["user_id"])
     return {"url": str(cfg.get("feishu_sync_url") or "")}
 
@@ -335,8 +329,8 @@ def sync_feishu_records(
     body: FeishuSyncRequest,
     user: dict = Depends(auth_module.get_current_user),
 ):
-    if not user.get("is_root"):
-        raise HTTPException(status_code=403, detail="仅 root 用户可以同步飞书表格")
+    if not (user.get("is_admin") or user.get("is_root")):
+        raise HTTPException(status_code=403, detail="仅管理员可以同步飞书表格")
     try:
         cfg = database.get_user_config(user["user_id"])
         requested_url = body.url.strip() or str(cfg.get("feishu_sync_url") or "").strip()

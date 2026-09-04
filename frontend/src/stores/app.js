@@ -7,7 +7,6 @@ export const useAppStore = defineStore('app', () => {
   const showRecord = ref(false)
   const showHelp = ref(false)
   const showStats = ref(false)
-  const showOffer = ref(false)
   const showManager = ref(false)
   const showRecommendation = ref(false)
   const appliedRecommendation = ref(null)
@@ -25,8 +24,6 @@ export const useAppStore = defineStore('app', () => {
   function closeDetail() { detailId.value = '' }
   function openStats() { showStats.value = true }
   function closeStats() { showStats.value = false }
-  function openOffer() { showOffer.value = true }
-  function closeOffer() { showOffer.value = false }
   function openManager(scope = 'records') {
     managerShared.value = scope === true || scope === 'shared'
     managerScope.value = scope === 'applications' ? 'applications' : 'records'
@@ -47,8 +44,8 @@ export const useAppStore = defineStore('app', () => {
   function setTrackerPending(events) { trackerPending.value = events || [] }
   function clearTrackerPending() { trackerPending.value = [] }
 
-  return { showConfig, showChat, showRecord, showHelp, showStats, showOffer, showManager, showRecommendation, appliedRecommendation, detailId, recordShared, managerShared, managerScope,
+  return { showConfig, showChat, showRecord, showHelp, showStats, showManager, showRecommendation, appliedRecommendation, detailId, recordShared, managerShared, managerScope,
     toggleConfig, toggleChat, toggleHelp, openRecord, closeRecord, openDetail, closeDetail,
-    openStats, closeStats, openOffer, closeOffer, openManager, closeManager, openRecommendation, closeRecommendation, applyRecommendation, clearAppliedRecommendation,
+    openStats, closeStats, openManager, closeManager, openRecommendation, closeRecommendation, applyRecommendation, clearAppliedRecommendation,
     trackerPending, setTrackerPending, clearTrackerPending, chatUnread, setChatUnread }
 })

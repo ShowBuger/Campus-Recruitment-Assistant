@@ -11,6 +11,7 @@ import {
   PhKanban,
   PhNotebook,
   PhMoney,
+  PhScales,
   PhTable,
   PhUserGear,
 } from '@phosphor-icons/vue'
@@ -27,6 +28,7 @@ const navIcons = {
   analysis: PhChartBar,
   notes: PhNotebook,
   salary: PhMoney,
+  comparison: PhScales,
   admin: PhUserGear,
 }
 const navItems = computed(() => [
@@ -37,6 +39,7 @@ const navItems = computed(() => [
   { to: '/analysis', label: '简历分析', icon: 'analysis' },
   { to: '/notes', label: '校招笔记', icon: 'notes' },
   { to: '/salary', label: '薪资查询', icon: 'salary' },
+  { to: '/offer-comparison', label: '岗位对比', icon: 'comparison' },
   ...(auth.isAdmin ? [
     { to: '/admin', label: '管理页面', icon: 'admin' },
   ] : []),

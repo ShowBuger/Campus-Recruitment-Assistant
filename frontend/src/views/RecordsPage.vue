@@ -43,7 +43,7 @@ const givemeocBarWidth = ref('36%')
 const givemeocDetail = ref('正在查找 2027届 秋招岗位…')
 const givemeocError = ref(false)
 const givemeocIndeterminate = ref(false)
-const canFeishuSync = computed(() => Boolean(auth.user?.is_root))
+const canFeishuSync = computed(() => Boolean(auth.isAdmin))
 function isAdmin() { return auth.isAdmin }
 
 const displayRecords = computed(() => {

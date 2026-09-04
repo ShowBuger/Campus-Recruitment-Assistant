@@ -297,16 +297,16 @@ def _init_tables(conn: sqlite3.Connection) -> None:
     if "source_shared_id" not in record_columns:
         conn.execute("ALTER TABLE job_records ADD COLUMN source_shared_id TEXT")
     job_record_migrations = {
-        "offer_total": "TEXT NOT NULL DEFAULT ''",
-        "offer_base": "TEXT NOT NULL DEFAULT ''",
-        "offer_bonus": "TEXT NOT NULL DEFAULT ''",
-        "offer_deadline": "INTEGER",
+        "offer_details": "TEXT NOT NULL DEFAULT '{}'",
         "progress_updated_at": "INTEGER",
         "interview4": "INTEGER",
     }
     for column, declaration in job_record_migrations.items():
         if column not in record_columns:
             conn.execute(f"ALTER TABLE job_records ADD COLUMN {column} {declaration}")
+    for legacy_offer_column in ("offer_total", "offer_base", "offer_bonus", "offer_deadline"):
+        if legacy_offer_column in record_columns:
+            conn.execute(f"ALTER TABLE job_records DROP COLUMN {legacy_offer_column}")
     if "resume_version" not in record_columns:
         conn.execute("ALTER TABLE job_records ADD COLUMN resume_version TEXT NOT NULL DEFAULT ''")
     if "progress_updated_at" not in record_columns:

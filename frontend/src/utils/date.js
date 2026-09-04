@@ -88,5 +88,5 @@ export function boardDwellChina(ts) {
   const DAY_MS = 86400000
   const days = Math.floor((today - enteredDay) / DAY_MS)
   if (days < 0) return { text: '0 天', days: 0 }
-  return { text: days < 30 ? days + ' 天' : Math.floor(days / 30) + ' 个月', days }
+  return { text: days + ' 天', days }
 }

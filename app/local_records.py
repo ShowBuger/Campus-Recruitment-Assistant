@@ -38,13 +38,10 @@ FIELD_COLUMNS = {
     "四面": "interview4",
     "保温": "warm",
     "结果": "result",
-    "Offer总包": "offer_total",
-    "Offerbase": "offer_base",
-    "Offer奖金": "offer_bonus",
-    "Offer决策截止": "offer_deadline",
+    "Offer详情": "offer_details",
     "简历版本": "resume_version",
 }
-JSON_FIELDS = {"嵌入式方向", "进展"}
+JSON_FIELDS = {"嵌入式方向", "进展", "Offer详情"}
 
 _PROGRESS_RANK = {"未投递": 0, "已投递": 1, "机考": 2, "面试": 3,
                   "OC": 4, "已挂": 4, "放弃": 4}
@@ -136,6 +133,8 @@ def _url_value(value) -> str:
 
 
 def _db_value(field: str, value):
+    if field == "Offer详情":
+        return json.dumps(value if isinstance(value, dict) else {}, ensure_ascii=False)
     if field in JSON_FIELDS:
         if not isinstance(value, list):
             value = [value] if value else []
@@ -151,6 +150,14 @@ def _json_list(value: str | None) -> list:
         return parsed if isinstance(parsed, list) else []
     except (TypeError, json.JSONDecodeError):
         return []
+
+
+def _json_object(value: str | None) -> dict:
+    try:
+        parsed = json.loads(value or "{}")
+        return parsed if isinstance(parsed, dict) else {}
+    except (TypeError, json.JSONDecodeError):
+        return {}
 
 
 def _row_fields(row: dict) -> dict:
@@ -178,10 +185,7 @@ def _row_fields(row: dict) -> dict:
         "四面": row["interview4"] if "interview4" in row.keys() else None,
         "保温": row["warm"],
         "结果": result,
-        "Offer总包": row["offer_total"] if "offer_total" in row.keys() else "",
-        "Offerbase": row["offer_base"] if "offer_base" in row.keys() else "",
-        "Offer奖金": row["offer_bonus"] if "offer_bonus" in row.keys() else "",
-        "Offer决策截止": row["offer_deadline"] if "offer_deadline" in row.keys() else None,
+        "Offer详情": _json_object(row["offer_details"]) if "offer_details" in row.keys() else {},
         "简历版本": row["resume_version"] if "resume_version" in row.keys() else "",
         "progress_updated_at": row["progress_updated_at"] if "progress_updated_at" in row.keys() else None,
     }
@@ -731,10 +735,7 @@ def _serialize(record: dict) -> dict:
         "interview4": fields.get("四面"),
         "warm": fields.get("保温"),
         "result": fields.get("结果"),
-        "offer_total": fields.get("Offer总包") or "",
-        "offer_base": fields.get("Offerbase") or "",
-        "offer_bonus": fields.get("Offer奖金") or "",
-        "offer_deadline": fields.get("Offer决策截止"),
+        "offer_details": fields.get("Offer详情") or {},
         "resume_version": fields.get("简历版本") or "",
         "progress_updated_at": fields.get("progress_updated_at"),
     }

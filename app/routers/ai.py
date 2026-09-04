@@ -46,6 +46,11 @@ class AnalysisRequest(BaseModel):
     focus: str = Field(default="", max_length=1000)
 
 
+class OfferComparisonRequest(BaseModel):
+    record_ids: list[str] = Field(min_length=2, max_length=6)
+    weights: dict[str, float] = Field(default_factory=dict)
+
+
 ANALYSIS_MODES = {
     "match": {
         "label": "综合匹配分析",
@@ -542,6 +547,109 @@ def enrich_record(
         "provider": provider,
         "model": model,
         "dashboard": dashboard,
+    }
+
+
+@router.post("/offers/compare")
+def compare_offers_with_ai(
+    request: OfferComparisonRequest,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    record_ids = list(dict.fromkeys(request.record_ids))
+    if len(record_ids) < 2:
+        raise HTTPException(status_code=422, detail="请至少选择两份不同的 Offer")
+
+    offers = []
+    for record_id in record_ids:
+        if not record_id.startswith("rec"):
+            raise HTTPException(status_code=422, detail="包含无效的岗位记录 ID")
+        record = local_records.get_record(user["user_id"], record_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="所选岗位不存在或无权访问")
+        fields = record["fields"]
+        details = fields.get("Offer详情") or {}
+        if not isinstance(details, dict) or not any(
+            value not in (None, "", 0, [], {}) for value in details.values()
+        ):
+            raise HTTPException(status_code=422, detail="所选岗位尚未填写 Offer 信息")
+        offers.append({
+            "company": str(fields.get("公司名称") or "")[:200],
+            "job": str(fields.get("秋招岗位") or "")[:200],
+            "city": str(fields.get("城市") or "")[:100],
+            "priority": str(fields.get("优先级") or "")[:20],
+            "offer": details,
+        })
+
+    allowed_weights = {"compensation", "growth", "workLife", "culture", "location"}
+    weights = {
+        key: max(0, min(100, float(value)))
+        for key, value in request.weights.items()
+        if key in allowed_weights
+    }
+    if not weights:
+        weights = {"compensation": 25, "growth": 25, "workLife": 20, "culture": 20, "location": 10}
+
+    cfg = database.get_user_config(user["user_id"])
+    provider = cfg.get("ai_provider") or "deepseek"
+    if provider not in PROVIDER_NAMES:
+        provider = "deepseek"
+    api_key = cfg.get(f"{provider}_api_key", "")
+    if not api_key:
+        raise HTTPException(status_code=400, detail=f"请先在 AI 配置中填写 {PROVIDER_NAMES[provider]} API Key")
+    model_defaults = {
+        "deepseek": "deepseek-v4-flash", "openai": "gpt-5.4-mini",
+        "anthropic": "claude-sonnet-5", "kimi": "kimi-k3",
+    }
+    model = cfg.get(f"{provider}_model", "") or model_defaults[provider]
+    base_url = cfg.get(f"{provider}_base_url", "") or ai_provider_utils.DEFAULT_BASE_URLS[provider]
+    api_mode = cfg.get("openai_api_mode", "") or "responses"
+
+    system_prompt = """你是一名谨慎、务实的校招 Offer 决策顾问。基于用户提供的数据做比较，不补造公司事实，不替用户做不可逆决定。金额必须区分币种；币种不同时不得直接比较大小。股权按用户填写的风险折价理解。明确指出信息缺口和假设。输出简洁中文 Markdown，不使用表情符号。"""
+    user_content = f"""请按照完整 Offer Comparison Analyzer 框架，深度分析以下 Offer。
+
+【用户决策权重】
+{json.dumps(weights, ensure_ascii=False)}
+
+【Offer 数据】
+{json.dumps(offers, ensure_ascii=False)[:30000]}
+
+严格按以下结构输出：
+# AI 深度分析结论
+给出首选、备选和一句话判断；若信息不足或币种不同，明确说明结论置信度。
+## 关键差异
+比较首年现金、持续收入、股权风险、福利与隐性成本。
+## 加权决策解读
+结合用户权重解释薪酬、成长、工作生活、团队文化和地点通勤。
+## 每份 Offer 的优势与代价
+逐份列出，不得只写优点。
+## 风险与红旗
+区分 Offer 条款、公司和岗位风险；仅基于已有信息，缺失信息标记为待核实。
+## 决定前必须确认
+按公司列出可直接询问 HR 或主管的问题清单。
+## 谈判策略
+按预期价值排序谈判项，并给出克制、可直接使用的话术。
+## 最终建议
+说明什么偏好变化会导致推荐反转，并给出下一步行动清单。
+"""
+    try:
+        content = _call_ai_provider(
+            provider, api_key, model, system_prompt, user_content,
+            base_url=base_url, api_mode=api_mode, max_output_tokens=5000,
+            timeout_seconds=240,
+        )
+    except HTTPException:
+        raise
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"无法连接 {PROVIDER_NAMES[provider]} API：{exc}") from exc
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"{PROVIDER_NAMES[provider]} API 返回格式异常：{exc}") from exc
+
+    return {
+        "success": True,
+        "analysis": content,
+        "analysis_html": _render_markdown(content),
+        "provider": PROVIDER_NAMES[provider],
+        "model": model,
     }
 
 

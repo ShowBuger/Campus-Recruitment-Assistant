@@ -174,29 +174,47 @@
           </section>
 
           <section id="detail-page-offer" class="detail-form-section detail-page" :class="{ active: activePage === 'offer' }" role="tabpanel" aria-labelledby="detail-tab-offer">
-            <div class="detail-form-heading"><h3>Offer 信息</h3><p>用于 Offer 对比，可按需填写</p></div>
-            <div class="detail-form-grid">
+            <div class="detail-form-heading"><h3>Offer 信息</h3><p>填写金额与个人评分后，可在岗位对比页计算真实价值</p></div>
+            <div class="offer-form-block"><h4>现金与股权 <span>金额统一按年、税前填写</span></h4><div class="detail-form-grid offer-detail-grid">
+              <div class="form-group"><label>币种</label><select v-model="form.offer_details.currency"><option value="CNY">人民币 CNY</option><option value="USD">美元 USD</option><option value="HKD">港币 HKD</option><option value="EUR">欧元 EUR</option></select></div>
+              <div class="form-group"><label>决策截止</label><input v-model="form.offer_details.decision_deadline" type="date"></div>
+              <div class="form-group"><label>年基本工资</label><input v-model.number="form.offer_details.base_annual" type="number" min="0" step="1000" placeholder="240000"></div>
+              <div class="form-group"><label>签字费</label><input v-model.number="form.offer_details.signing_bonus" type="number" min="0" step="1000" placeholder="0"></div>
+              <div class="form-group"><label>年度奖金</label><input v-model.number="form.offer_details.annual_bonus" type="number" min="0" step="1000" placeholder="30000"></div>
+              <div class="form-group"><label>年度佣金</label><input v-model.number="form.offer_details.commission" type="number" min="0" step="1000" placeholder="0"></div>
+              <div class="form-group"><label>搬迁补助</label><input v-model.number="form.offer_details.relocation" type="number" min="0" step="1000" placeholder="0"></div>
+              <div class="form-group"><label>股权类型</label><select v-model="form.offer_details.equity_type"><option value="">无或未确认</option><option value="RSU">RSU</option><option value="Stock Options">股票期权</option><option value="Shares">股份</option></select></div>
+              <div class="form-group"><label>股权授予总价值</label><input v-model.number="form.offer_details.equity_total" type="number" min="0" step="1000" placeholder="0"></div>
+              <div class="form-group"><label>归属年限</label><input v-model.number="form.offer_details.equity_years" type="number" min="1" max="10" step="1"></div>
+              <div class="form-group"><label>股权风险折价 %</label><input v-model.number="form.offer_details.equity_discount" type="number" min="0" max="100" step="5"></div>
+              <div class="form-group"><label>估算税率 %</label><input v-model.number="form.offer_details.tax_rate" type="number" min="0" max="100" step="1" placeholder="0"></div>
+              <div class="form-group"><label>股权说明</label><input v-model="form.offer_details.equity_notes" maxlength="500" placeholder="行权价、悬崖期、流动性等"></div>
+            </div></div>
 
-            <div class="form-group">
-              <label for="total-edit-offer-total">总包</label>
-              <input id="total-edit-offer-total" maxlength="100" placeholder="如 30W / 25k×16" v-model="form.offer_total">
-            </div>
+            <div class="offer-form-block"><h4>福利与工作方式</h4><div class="detail-form-grid offer-detail-grid">
+              <div class="form-group"><label>年度福利价值</label><input v-model.number="form.offer_details.benefits_annual" type="number" min="0" step="1000" placeholder="保险、公积金等"></div>
+              <div class="form-group"><label>年度其他福利</label><input v-model.number="form.offer_details.perks_annual" type="number" min="0" step="1000" placeholder="餐补、健身等"></div>
+              <div class="form-group"><label>远程办公年节省</label><input v-model.number="form.offer_details.remote_savings" type="number" min="0" step="1000"></div>
+              <div class="form-group"><label>年度学习预算</label><input v-model.number="form.offer_details.learning_budget" type="number" min="0" step="500"></div>
+              <div class="form-group"><label>年假天数</label><input v-model.number="form.offer_details.vacation_days" type="number" min="0" max="365"></div>
+              <div class="form-group"><label>每周工时</label><input v-model.number="form.offer_details.weekly_hours" type="number" min="1" max="120"></div>
+              <div class="form-group"><label>单程通勤分钟</label><input v-model.number="form.offer_details.commute_minutes" type="number" min="0" max="600"></div>
+              <div class="form-group"><label>办公方式</label><select v-model="form.offer_details.remote_policy"><option value="">未确认</option><option value="现场办公">现场办公</option><option value="混合办公">混合办公</option><option value="全远程">全远程</option></select></div>
+              <div class="form-group offer-wide-field"><label>福利说明</label><input v-model="form.offer_details.benefits_notes" maxlength="1000" placeholder="保险、公积金比例、餐补、设备等"></div>
+            </div></div>
 
-            <div class="form-group">
-              <label for="total-edit-offer-base">base（月/年）</label>
-              <input id="total-edit-offer-base" maxlength="100" placeholder="如 20k/月" v-model="form.offer_base">
-            </div>
+            <div class="offer-form-block"><h4>个人评价 <span>1 分较弱，10 分优秀</span></h4><div class="offer-score-grid">
+              <label v-for="score in offerScoreFields" :key="score.key"><span>{{ score.label }}</span><input v-model.number="form.offer_details[score.key]" type="range" min="1" max="10"><b>{{ form.offer_details[score.key] }}</b></label>
+            </div></div>
 
-            <div class="form-group">
-              <label for="total-edit-offer-bonus">奖金/股票/补贴</label>
-              <input id="total-edit-offer-bonus" maxlength="200" placeholder="如 签字费 3W、房补 2k/月" v-model="form.offer_bonus">
-            </div>
-
-            <div class="form-group">
-              <label for="total-edit-offer-deadline">决策截止</label>
-              <input id="total-edit-offer-deadline" type="text" v-model="form.offer_deadline" @focus="activateOptionalDate" @blur="deactivateOptionalDate">
-            </div>
-            </div>
+            <div class="offer-form-block"><h4>决策备忘</h4><div class="detail-form-grid">
+              <div class="form-group record-detail-textarea"><label>岗位范围与成长机会</label><textarea v-model="form.offer_details.role_scope" maxlength="2000" placeholder="职责范围、学习机会、晋升路径"></textarea></div>
+              <div class="form-group record-detail-textarea"><label>风险与稳定性</label><textarea v-model="form.offer_details.risks" maxlength="2000" placeholder="公司阶段、业务前景、裁员或岗位风险"></textarea></div>
+              <div class="form-group record-detail-textarea"><label>风险信号</label><textarea v-model="form.offer_details.red_flags" maxlength="2000" placeholder="奖金表述模糊、口头承诺、竞业限制等，每行一项"></textarea></div>
+              <div class="form-group record-detail-textarea"><label>决定前待确认</label><textarea v-model="form.offer_details.questions" maxlength="2000" placeholder="需要向 HR 或直属主管确认的问题，每行一项"></textarea></div>
+              <div class="form-group record-detail-textarea"><label>可谈判项</label><textarea v-model="form.offer_details.negotiation" maxlength="2000" placeholder="base、签字费、股权、职级、入职时间等"></textarea></div>
+              <div class="form-group record-detail-textarea"><label>直觉判断</label><textarea v-model="form.offer_details.gut_feeling" maxlength="1000" placeholder="更期待哪份工作，五年目标和周一早晨测试"></textarea></div>
+            </div></div>
           </section>
 
           <section id="detail-page-materials" class="detail-form-section detail-page" :class="{ active: activePage === 'materials' }" role="tabpanel" aria-labelledby="detail-tab-materials">
@@ -286,6 +304,7 @@ import { useDialogStore } from '@/stores/dialog'
 import { get, post } from '@/utils/api'
 import { inputDateChina } from '@/utils/date'
 import { useRecordGroups } from '@/composables/useRecordGroups'
+import { normalizeOfferDetails } from '@/utils/offerComparison'
 
 const props = defineProps({
   recordId: { type: String, required: true }
@@ -312,6 +331,14 @@ const detailPages = [
   { id: 'process', label: '投递流程' },
   { id: 'offer', label: 'Offer 信息' },
   { id: 'materials', label: '岗位材料' },
+]
+const offerScoreFields = [
+  { key: 'growth_score', label: '职业成长' },
+  { key: 'work_life_score', label: '工作生活' },
+  { key: 'culture_score', label: '团队文化' },
+  { key: 'manager_score', label: '直属主管' },
+  { key: 'stability_score', label: '稳定性' },
+  { key: 'location_score', label: '地点通勤' },
 ]
 
 // ---------- helper functions (ported from original JS) ----------
@@ -452,10 +479,7 @@ const form = reactive({
   interview4: '',
   warm: '',
   result_date: '',
-  offer_total: '',
-  offer_base: '',
-  offer_bonus: '',
-  offer_deadline: '',
+  offer_details: normalizeOfferDetails(),
   job_jd: '',
   note: ''
 })
@@ -487,7 +511,7 @@ function currentFormSnapshot() {
 
 function rememberCurrentDraft() {
   if (!activeRecordId.value) return
-  recordDrafts.set(activeRecordId.value, { ...form })
+  recordDrafts.set(activeRecordId.value, { ...form, offer_details: { ...form.offer_details } })
 }
 
 const isDirty = computed(() => {
@@ -533,10 +557,7 @@ function recordPayload(job = form.job) {
     interview4: form.interview4 || null,
     warm: form.warm || null,
     result_date: form.result_date || null,
-    offer_total: form.offer_total.trim(),
-    offer_base: form.offer_base.trim(),
-    offer_bonus: form.offer_bonus.trim(),
-    offer_deadline: form.offer_deadline || null,
+    offer_details: { ...form.offer_details },
     resume_version: form.resume_version,
   }
 }
@@ -743,9 +764,6 @@ function loadRecordForm(r) {
   form.priority = r.priority || '⭐⭐⭐'
   form.job_jd = r.job_jd || ''
   form.note = r.note || ''
-  form.offer_total = r.offer_total || ''
-  form.offer_base = r.offer_base || ''
-  form.offer_bonus = r.offer_bonus || ''
   form.resume_version = r.resume_version || ''
   form.deadline = inputDate(r.deadline)
   form.apply_date = inputDate(r.apply_date)
@@ -756,7 +774,7 @@ function loadRecordForm(r) {
   form.interview4 = inputDate(r.interview4)
   form.warm = inputDate(r.warm)
   form.result_date = inputDate(r.result)
-  form.offer_deadline = inputDate(r.offer_deadline)
+  form.offer_details = normalizeOfferDetails(r.offer_details)
   initialAiState.value = computeAiState()
   const snapshot = currentFormSnapshot()
   if (!recordBaselines.has(r.record_id)) recordBaselines.set(r.record_id, snapshot)
@@ -801,7 +819,7 @@ onMounted(async () => {
     const TOTAL_DETAIL_DATE_IDS = [
       'total-edit-deadline', 'total-edit-apply-date', 'total-edit-exam-date',
       'total-edit-interview1', 'total-edit-interview2', 'total-edit-interview3', 'total-edit-interview4',
-      'total-edit-warm', 'total-edit-result-date', 'total-edit-offer-deadline'
+      'total-edit-warm', 'total-edit-result-date'
     ]
     TOTAL_DETAIL_DATE_IDS.forEach(id => {
       const el = document.getElementById(id)
@@ -816,5 +834,7 @@ onMounted(async () => {
 .record-detail-modal{display:flex;height:min(860px,92dvh);flex-direction:column;overflow:hidden}.record-detail-modal>.modal-hd,.detail-position-bar{flex:0 0 auto}.record-detail-modal>form{display:flex;min-height:0;flex:1;flex-direction:column}.record-detail-modal .modal-body{min-height:0;flex:1;padding-top:20px;overflow:auto;background:var(--bg)}.record-detail-modal :is(.detail-actions,.modal-ft){flex:0 0 auto}.position-add-btn{height:30px;padding:0 10px;white-space:nowrap}
 .detail-position-bar{display:grid;gap:10px;padding:12px 18px 14px;border-bottom:1px solid var(--line);background:var(--bg)}.detail-position-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}.detail-position-heading>div:first-child{display:grid;gap:3px}.detail-position-heading b{font-size:12px}.detail-position-heading span{color:var(--muted);font-size:9px}.detail-position-heading-actions{display:flex;min-width:0;align-items:center;gap:10px}.detail-position-heading strong{max-width:230px;overflow:hidden;color:var(--blue);font-size:10px;text-overflow:ellipsis;white-space:nowrap}.detail-position-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.detail-position-item{display:grid;grid-template-columns:minmax(0,1fr) 30px;overflow:hidden;border:1px solid var(--line);border-radius:9px;background:var(--panel);transition:border-color .15s ease,background .15s ease}.detail-position-item:hover{border-color:var(--line2)}.detail-position-item.active{border-color:var(--blue);background:var(--blueS);box-shadow:inset 3px 0 var(--blue)}.detail-position-item>button:first-child{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:9px 10px;border:0;color:var(--ink);text-align:left;background:transparent;font:inherit;cursor:pointer}.detail-position-title,.detail-position-meta{display:grid;min-width:0;gap:3px}.detail-position-title b,.detail-position-title small,.detail-position-meta small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.detail-position-title b{font-size:11px}.detail-position-title small,.detail-position-meta small{color:var(--muted);font-size:8px}.detail-position-meta{max-width:44%;justify-items:end}.detail-position-meta em{color:var(--blue);font-size:9px;font-style:normal;font-weight:800}.detail-position-delete{border:0;border-left:1px solid var(--line);color:var(--muted);background:transparent;font-size:15px;cursor:pointer}.detail-position-delete:hover{color:var(--red);background:var(--redS)}
 .detail-tabs{grid-template-columns:repeat(4,minmax(0,1fr));flex:0 0 auto;background:var(--bg)}.detail-page{display:none}.detail-page.active{display:grid}.detail-form-section{gap:14px}.detail-form-heading{display:flex;align-items:baseline;justify-content:space-between;gap:16px}.detail-form-heading h3{margin:0;color:var(--ink);font-size:13px}.detail-form-heading p{margin:0;color:var(--muted);font-size:9px}.detail-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;column-gap:18px;row-gap:16px}.detail-form-grid>.form-group{min-width:0;margin:0}.detail-form-grid>.form-group>label{display:block;margin-bottom:7px}.detail-form-grid :is(input,select,textarea){width:100%;box-sizing:border-box}.detail-field-wide,.record-detail-textarea{grid-column:1/-1}.record-detail-textarea textarea{min-height:126px;resize:vertical}
+.offer-form-block{display:grid;gap:12px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.offer-form-block h4{display:flex;align-items:baseline;justify-content:space-between;margin:0;color:var(--ink);font-size:11px}.offer-form-block h4 span{color:var(--muted);font-size:8px;font-weight:500}.offer-detail-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.offer-wide-field{grid-column:span 2}.offer-score-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 18px}.offer-score-grid label{display:grid;grid-template-columns:74px 1fr 22px;align-items:center;gap:8px;color:var(--sub);font-size:9px}.offer-score-grid input{width:100%;accent-color:var(--blue)}.offer-score-grid b{color:var(--blue);font-size:10px;text-align:right}
 @media(max-width:700px){.record-detail-modal{height:96dvh}.detail-tabs .btn{min-width:0;padding-inline:4px}.detail-position-heading{align-items:flex-start;flex-direction:column;gap:8px}.detail-position-heading-actions{width:100%;justify-content:space-between}.detail-position-heading strong{max-width:60%}.detail-position-list,.detail-form-grid{grid-template-columns:1fr}.detail-field-wide,.record-detail-textarea{grid-column:auto}.detail-form-heading{align-items:flex-start;flex-direction:column;gap:3px}}
+@media(max-width:700px){.offer-detail-grid,.offer-score-grid{grid-template-columns:1fr}.offer-wide-field{grid-column:auto}.offer-form-block h4{align-items:flex-start;flex-direction:column;gap:3px}}
 </style>

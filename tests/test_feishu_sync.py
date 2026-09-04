@@ -57,7 +57,7 @@ class FeishuSyncTests(unittest.TestCase):
         ):
             result = dashboard.sync_feishu_records(
                 dashboard.FeishuSyncRequest(),
-                user={"user_id": 1, "is_root": True},
+                user={"user_id": 1, "is_admin": True, "is_root": False},
             )
         save.assert_called_once_with(1, saved_url)
         self.assertEqual(result["url"], saved_url)

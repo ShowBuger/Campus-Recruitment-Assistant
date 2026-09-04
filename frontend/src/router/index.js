@@ -8,6 +8,7 @@ const routes = [
   { path: '/analysis', name: 'analysis', component: () => import('@/views/AnalysisPage.vue') },
   { path: '/notes', name: 'notes', component: () => import('@/views/NotesPage.vue') },
   { path: '/salary', name: 'salary', component: () => import('@/views/SalaryPage.vue') },
+  { path: '/offer-comparison', name: 'offer-comparison', component: () => import('@/views/OfferComparisonPage.vue') },
   { path: '/admin', name: 'admin', component: () => import('@/views/AdminPage.vue') },
 ]
 
