@@ -35,6 +35,12 @@ const sourceProgress = ref(null)
 const logLines = ref([])
 const backups = ref([])
 const backupLoading = ref(false)
+const publicSalaryTokenConfigured = ref(false)
+const publicSalaryTokenMasked = ref('')
+const publicSalaryTokenInput = ref('')
+const publicSalaryTokenLoading = ref(false)
+const publicSalaryTokenSaving = ref(false)
+const publicSalaryTokenError = ref('')
 let logStream = null
 let sourcePollTimer = null
 
@@ -307,6 +313,43 @@ function switchPanel(panel) {
   if (panel === 'notice') loadNotifications()
   if (panel === 'logs') startLogStream()
   if (panel === 'backups') loadBackups()
+  if (panel === 'salary-token') loadPublicSalaryToken()
+}
+
+async function loadPublicSalaryToken() {
+  publicSalaryTokenLoading.value = true
+  publicSalaryTokenError.value = ''
+  try {
+    const data = await apiReq('GET', '/api/salaries/offershow/public-config')
+    publicSalaryTokenConfigured.value = Boolean(data.configured)
+    publicSalaryTokenMasked.value = data.masked_token || ''
+  } catch (e) {
+    publicSalaryTokenError.value = e.message || '公共 Token 状态读取失败'
+  } finally {
+    publicSalaryTokenLoading.value = false
+  }
+}
+
+async function savePublicSalaryToken() {
+  const token = publicSalaryTokenInput.value.trim()
+  if (!token) {
+    toast.error('请输入 OfferShow 公共 Token')
+    return
+  }
+  publicSalaryTokenSaving.value = true
+  publicSalaryTokenError.value = ''
+  try {
+    const data = await apiReq('POST', '/api/salaries/offershow/public-config', { token })
+    publicSalaryTokenConfigured.value = Boolean(data.configured)
+    publicSalaryTokenMasked.value = data.masked_token || ''
+    publicSalaryTokenInput.value = ''
+    toast.success(data.message || '公共 Token 已保存')
+  } catch (e) {
+    publicSalaryTokenError.value = e.message || '公共 Token 保存失败'
+    toast.error(publicSalaryTokenError.value)
+  } finally {
+    publicSalaryTokenSaving.value = false
+  }
 }
 
 async function loadBackups() {
@@ -477,6 +520,7 @@ onUnmounted(() => {
         <button class="admin-nav-item" :class="{ active: activePanel === 'users' }" data-panel="users" id="admin-nav-users" @click="switchPanel('users')">用户账号</button>
         <button class="admin-nav-item" :class="{ active: activePanel === 'invite' }" data-panel="invite" @click="switchPanel('invite')">邀请码</button>
         <button class="admin-nav-item" :class="{ active: activePanel === 'sync' }" data-panel="sync" @click="switchPanel('sync')">自动同步</button>
+        <button class="admin-nav-item" :class="{ active: activePanel === 'salary-token' }" data-panel="salary-token" @click="switchPanel('salary-token')">薪资查询</button>
         <button class="admin-nav-item" :class="{ active: activePanel === 'notice' }" data-panel="notice" @click="switchPanel('notice')">发布通知</button>
         <button class="admin-nav-item" :class="{ active: activePanel === 'logs' }" data-panel="logs" @click="switchPanel('logs')">系统日志</button>
         <button v-if="isRoot" class="admin-nav-item" :class="{ active: activePanel === 'backups' }" data-panel="backups" @click="switchPanel('backups')">备份信息</button>
@@ -624,6 +668,27 @@ onUnmounted(() => {
             </div>
           </div></div>
         </div>
+        <!-- salary token -->
+        <div class="admin-panel" :class="{ active: activePanel === 'salary-token' }" id="admin-panel-salary-token">
+          <div class="card salary-token-admin-card">
+            <div class="card-hd"><span class="dot g"></span><div class="card-title">OfferShow 公共 Token</div><div class="card-sub">所有用户的默认薪资查询凭证</div></div>
+            <div class="card-body salary-token-admin-body">
+              <div class="salary-token-status" :class="{ configured: publicSalaryTokenConfigured, error: publicSalaryTokenError }">
+                <template v-if="publicSalaryTokenLoading"><b>正在读取配置</b><span>请稍候</span></template>
+                <template v-else-if="publicSalaryTokenError"><b>配置读取失败</b><span>{{ publicSalaryTokenError }}</span><button class="btn" type="button" @click="loadPublicSalaryToken">重试</button></template>
+                <template v-else><b>{{ publicSalaryTokenConfigured ? '公共 Token 已配置' : '公共 Token 未配置' }}</b><code v-if="publicSalaryTokenConfigured">{{ publicSalaryTokenMasked }}</code><span v-else>未设置个人 Token 的用户将无法查询 OfferShow 数据。</span></template>
+              </div>
+              <form class="salary-token-admin-form" @submit.prevent="savePublicSalaryToken">
+                <label for="public-salary-token"><span>新的 Access Token</span><small>保存后立即替换当前公共 Token，明文不会返回前端。</small></label>
+                <input id="public-salary-token" v-model="publicSalaryTokenInput" type="password" maxlength="4096" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="粘贴 OfferShow Local Storage 中的 usertoken">
+                <div class="salary-token-admin-actions">
+                  <p>请先登录 <a href="https://www.offershow.cn" target="_blank" rel="noopener noreferrer">OfferShow 官网</a>，再从浏览器 Local Storage 复制 usertoken。</p>
+                  <button class="btn btn-primary" type="submit" :disabled="publicSalaryTokenSaving || !publicSalaryTokenInput.trim()">{{ publicSalaryTokenSaving ? '保存中…' : '保存公共 Token' }}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
         <!-- notice -->
         <div class="admin-panel" :class="{ active: activePanel === 'notice' }" id="admin-panel-notice">
           <div class="card"><div class="card-hd"><span class="dot a"></span><div class="card-title">发布通知</div></div><div class="card-body">
@@ -645,7 +710,7 @@ onUnmounted(() => {
         </div>
         <!-- logs -->
         <div class="admin-panel" :class="{ active: activePanel === 'logs' }" id="admin-panel-logs">
-          <div class="card" id="log-viewer-card"><div class="card-hd"><span class="dot"></span><div class="card-title">系统日志</div><div class="card-sub" id="log-count">{{ logLines.length ? logLines.length + ' 条' : '—' }}</div></div>
+          <div class="card" id="log-viewer-card"><div class="card-hd"><span class="dot"></span><div class="card-title">系统日志</div><div class="card-sub" id="log-count">{{ logLines.length ? logLines.length + ' 条' : '-' }}</div></div>
             <div id="log-list" style="max-height:calc(100vh - 280px);overflow-y:auto;font:11px/1.6 var(--font-mono,monospace);background:var(--bg);border-radius:0 0 18px 18px;padding:6px 12px">
               <div v-if="!logLines.length" class="center muted">暂无日志</div>
               <div v-for="(l, i) in logLines.slice().reverse()" :key="i" style="display:flex;gap:8px;white-space:nowrap">
@@ -742,6 +807,15 @@ onUnmounted(() => {
 .source-sync-progress-head{display:flex;justify-content:space-between;gap:12px;font-size:12px}.source-sync-progress-head span{font-family:var(--mono)}
 .source-sync-progress-track{height:9px;overflow:hidden;background:var(--line)}.source-sync-progress-track i{display:block;height:100%;background:var(--blue);transition:width .25s ease}
 .source-sync-progress>span{color:var(--muted);font-size:10px}.source-sync-progress.error{border-color:var(--red)}.source-sync-progress.error i{background:var(--red)}
+.salary-token-admin-card{overflow:hidden}.salary-token-admin-body{display:grid;gap:18px}
+.salary-token-status{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 14px;padding:13px 14px;border:1px solid var(--line);background:var(--bg)}
+.salary-token-status b{font-size:12px}.salary-token-status span{grid-column:1/-1;color:var(--muted);font-size:10px}.salary-token-status code{padding:4px 7px;border-radius:6px;background:var(--panel);color:var(--sub);font:10px var(--mono,monospace)}
+.salary-token-status.configured{border-color:color-mix(in srgb,var(--green) 45%,var(--line))}.salary-token-status.configured b{color:var(--green)}.salary-token-status.error{border-color:color-mix(in srgb,var(--red) 45%,var(--line))}.salary-token-status.error b{color:var(--red)}.salary-token-status .btn{grid-column:2;grid-row:1/3}
+.salary-token-admin-form{display:grid;gap:9px}.salary-token-admin-form>label{display:grid;gap:3px}.salary-token-admin-form>label span{font-size:11px;font-weight:800}.salary-token-admin-form>label small{color:var(--muted);font-size:9px}
+.salary-token-admin-form input{width:100%;height:42px;padding:0 11px;border:1px solid var(--line2);border-radius:9px;outline:0;background:var(--bg);color:var(--ink);font:10px var(--mono,monospace)}
+.salary-token-admin-form input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueS)}
+.salary-token-admin-actions{display:flex;align-items:center;justify-content:space-between;gap:16px}.salary-token-admin-actions p{max-width:600px;color:var(--muted);font-size:9px;line-height:1.6}.salary-token-admin-actions a{color:var(--blue)}
+.salary-token-admin-actions .btn{flex-shrink:0;white-space:nowrap}
 .backup-panel{display:grid;gap:12px}.backup-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:12px;border-bottom:1px solid var(--line)}
 .backup-toolbar p{margin-top:3px;color:var(--muted);font-size:11px}.backup-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid var(--line);background:var(--bg)}
 .backup-row>div:first-child{display:grid;gap:3px;min-width:0}.backup-row b{overflow:hidden;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.backup-row span{color:var(--muted);font-size:10px}.backup-row>div:last-child{display:flex;gap:7px}
@@ -750,4 +824,5 @@ onUnmounted(() => {
 @media(max-width:760px){.admin-layout{grid-template-columns:1fr;max-height:none}.admin-nav-pane{flex-direction:row;flex-wrap:wrap}.admin-nav-item{width:auto;padding:8px 14px;font-size:12px}.admin-content-pane{max-height:none;overflow:visible}}
 @media(max-width:700px){.statistics-toolbar{align-items:stretch;flex-direction:column}.statistics-actions{display:grid;grid-template-columns:auto 1fr auto}.statistics-grid{grid-template-columns:1fr}.recent-users-table{overflow-x:auto}.recent-users-head,.recent-users-row{min-width:610px}#admin-user-list{gap:10px;padding:10px}.admin-user-card{grid-template-columns:minmax(0,1fr) auto;gap:9px 10px;padding:13px;border:1px solid var(--line);border-radius:12px}.admin-user-card:last-child{border-bottom:1px solid var(--line)}.admin-user-card .umeta{justify-self:end}.admin-user-card .urole,.admin-user-card .ubtns{grid-column:1/-1}.admin-user-card .ubtns{grid-template-columns:minmax(0,1fr) auto auto}}
 @media(max-width:620px){.ban-duration-options{grid-template-columns:1fr 1fr}.backup-toolbar,.backup-row{align-items:stretch;flex-direction:column}.backup-row>div:last-child{display:grid;grid-template-columns:1fr 1fr}.admin-user-card .ubtns{grid-template-columns:repeat(3,1fr)}.admin-user-card .ubtns input{grid-column:1/-1}.admin-user-card .ubtns .btn{width:100%}.notice-history-item{grid-template-columns:1fr}.notice-history-copy>div{align-items:flex-start;flex-direction:column;gap:3px}.notice-history-item>.btn{width:100%}}
+@media(max-width:620px){.salary-token-status{grid-template-columns:1fr}.salary-token-status .btn{grid-column:1;grid-row:auto;width:100%}.salary-token-admin-actions{align-items:stretch;flex-direction:column}.salary-token-admin-actions .btn{width:100%}}
 </style>

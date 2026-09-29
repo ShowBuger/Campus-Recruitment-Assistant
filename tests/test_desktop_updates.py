@@ -35,6 +35,26 @@ class DesktopUpdateAssetTests(unittest.TestCase):
             self.assertEqual(blockmap_response.headers["accept-ranges"], "bytes")
             self.assertEqual(blockmap_head.headers["content-length"], str(len(b"blockmap-data")))
 
+    def test_download_head_exposes_installer_name_and_total_size(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            release_dir = Path(temp_dir)
+            installer = release_dir / "CampusBoard-1.5.0.exe"
+            installer.write_bytes(bytes(range(100)))
+            (release_dir / "latest.yml").write_text(
+                "version: 1.5.0\npath: CampusBoard-1.5.0.exe\n",
+                encoding="utf-8",
+            )
+
+            with patch.object(desktop, "LOCAL_RELEASE_DIR", release_dir):
+                response = desktop.download_windows_desktop_head()
+
+            self.assertEqual(response.headers["content-length"], "100")
+            self.assertEqual(response.headers["accept-ranges"], "bytes")
+            self.assertEqual(
+                response.headers["content-disposition"],
+                'attachment; filename="CampusBoard-1.5.0.exe"',
+            )
+
 
 class DesktopReleaseRetentionTests(unittest.TestCase):
     def test_keeps_latest_three_versions_and_their_blockmaps(self):

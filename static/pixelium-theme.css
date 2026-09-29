@@ -101,7 +101,7 @@ body::after, .bg-orbits { display: none; }
 .pulse { border-radius: 0; box-shadow: 3px 3px 0 var(--greenS); animation: blink 1.5s steps(2,end) infinite; }
 @keyframes blink { 50% { opacity:.35; } }
 
-.main { max-width: 1540px; padding: 24px clamp(18px,3vw,40px) 64px; }
+.main { max-width: none; padding: 24px clamp(18px,3vw,40px) 64px; }
 .topbar {
   position: relative;
   min-height: 54px;

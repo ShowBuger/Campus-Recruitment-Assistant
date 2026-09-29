@@ -1,4 +1,5 @@
 """看板数据接口：per-user SQLite 职位记录与本地日程。"""
+import os
 import re
 import threading
 import time as _time_module
@@ -382,6 +383,7 @@ _sync_guard = threading.Lock()
 _SYNC_CONFIG_PREFIX = "givemeoc_sync_"
 _ACTIVE_SYNC_KEY = "givemeoc_sync_active_id"
 _ACTIVE_DEDUP_KEY = "shared_dedup_active_id"
+_SYNC_STALE_AFTER = timedelta(hours=2)
 
 
 def _sync_progress_get(sync_id: str) -> dict | None:
@@ -409,6 +411,62 @@ def _active_sync_set(sync_id: str | None) -> None:
         database.set_system_config(_ACTIVE_SYNC_KEY, sync_id)
     else:
         database.set_system_config(_ACTIVE_SYNC_KEY, "0")
+
+
+def _process_is_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def _recover_orphaned_active_sync(*, recover_legacy: bool = False) -> str | None:
+    """Clear a persisted sync lock whose worker no longer exists.
+
+    Sync work runs in a daemon thread, so it cannot survive a service restart.
+    New tasks record their process owner; the age limit also recovers tasks left
+    behind by older releases which did not record an owner PID.
+    """
+    active_id = _active_sync_get()
+    if not active_id or active_id == "0":
+        return None
+    progress = _sync_progress_get(active_id)
+    if progress and progress.get("finished"):
+        _active_sync_set(None)
+        return None
+
+    owner_pid = progress.get("owner_pid") if progress else None
+    owner_alive = isinstance(owner_pid, int) and _process_is_alive(owner_pid)
+    stale = False
+    if progress:
+        try:
+            started_at = datetime.fromisoformat(str(progress.get("started_at") or ""))
+            stale = datetime.now() - started_at >= _SYNC_STALE_AFTER
+        except (TypeError, ValueError):
+            stale = True
+
+    if owner_alive and not stale:
+        return active_id
+    if owner_pid is None and not stale and not recover_legacy:
+        return active_id
+
+    if progress is not None:
+        progress.update(
+            finished=True,
+            failed=True,
+            phase="failed",
+            finished_at=datetime.now().isoformat(timespec="seconds"),
+            message="同步进程已中断，系统已自动释放任务锁",
+        )
+        _sync_progress_set(active_id, progress)
+    _active_sync_set(None)
+    bus.log(
+        f"已恢复中断的岗位同步任务 {active_id}，任务锁已释放",
+        channel="sync",
+        level="warn",
+    )
+    return None
 
 
 def _new_existing_dedup(user_id: int) -> tuple[str, bool]:
@@ -577,6 +635,7 @@ def _to_shared_fields(givemeoc_detail: dict) -> dict:
 def _new_sync(user_id: int, automatic: bool = False) -> tuple[str, bool]:
     """Start one shared sync task, or return the currently running task."""
     with _sync_guard:
+        _recover_orphaned_active_sync()
         active_id = _active_sync_get()
         if active_id and active_id != "0":
             active = _sync_progress_get(active_id)
@@ -596,6 +655,7 @@ def _new_sync(user_id: int, automatic: bool = False) -> tuple[str, bool]:
         "errors": 0,
         "failed": False,
         "finished": False,
+        "owner_pid": os.getpid(),
         "started_at": datetime.now().isoformat(timespec="seconds"),
         "message": "正在扫描 GiveMeOC 岗位…",
     }
@@ -736,6 +796,7 @@ def _new_combined_sync(user_id: int, sources: list[str], automatic: bool = False
     if not sources:
         raise ValueError("请至少开启一个同步来源")
     with _sync_guard:
+        _recover_orphaned_active_sync()
         active_id = _active_sync_get()
         if active_id and active_id != "0":
             active = _sync_progress_get(active_id)
@@ -750,6 +811,7 @@ def _new_combined_sync(user_id: int, sources: list[str], automatic: bool = False
         "expired_removed": 0, "expired_skipped": 0, "errors": 0,
         "exact_duplicates": 0, "ai_duplicates": 0, "ai_reviewed": 0,
         "failed": False, "finished": False,
+        "owner_pid": os.getpid(),
         "started_at": datetime.now().isoformat(timespec="seconds"),
         "message": "正在准备统一同步任务…",
     }
@@ -985,6 +1047,8 @@ def start_sync_scheduler():
     global _scheduler_started
     if _scheduler_started:
         return
+    with _sync_guard:
+        _recover_orphaned_active_sync(recover_legacy=True)
     _scheduler_started = True
     import threading as _thr
     _thr.Thread(target=_sync_scheduler_loop, daemon=True).start()

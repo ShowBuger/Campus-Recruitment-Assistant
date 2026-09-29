@@ -48,6 +48,17 @@ class OfferShowTokenConfig(BaseModel):
         return value
 
 
+class PublicOfferShowTokenConfig(OfferShowTokenConfig):
+    token: str = Field(..., min_length=1, max_length=4096)
+
+    @field_validator("token")
+    @classmethod
+    def require_token(cls, value: str) -> str:
+        if not value:
+            raise ValueError("请输入公共 Token")
+        return value
+
+
 def require_admin(user: dict = Depends(auth_module.get_current_user)) -> dict:
     if not (user.get("is_root") or user.get("is_admin")):
         raise HTTPException(status_code=403, detail="仅管理员可以查询薪资数据")
@@ -290,6 +301,35 @@ def save_offershow_config(
         "configured": bool(effective),
         "using_personal": bool(payload.token),
         "masked_token": _mask_token(effective) if effective else "",
+    }
+
+
+@router.get("/offershow/public-config")
+def get_public_offershow_config(_: dict = Depends(require_admin)):
+    token = _read_offershow_token()
+    return {
+        "success": True,
+        "configured": bool(token),
+        "masked_token": _mask_token(token) if token else "",
+    }
+
+
+@router.post("/offershow/public-config")
+def save_public_offershow_config(
+    payload: PublicOfferShowTokenConfig,
+    _: dict = Depends(require_admin),
+):
+    try:
+        _write_offershow_token(payload.token)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="公共 Token 保存失败") from exc
+    with _cache_lock:
+        _offershow_cache.clear()
+    return {
+        "success": True,
+        "message": "薪资查询公共 Token 已保存",
+        "configured": True,
+        "masked_token": _mask_token(payload.token),
     }
 
 

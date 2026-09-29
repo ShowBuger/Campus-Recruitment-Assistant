@@ -50,6 +50,13 @@ function createMainWindow() {
     transparent: true,
     show: false,
     frame: false,
+    // Windows otherwise keeps WS_THICKFRAME around a frameless transparent
+    // window, producing a square native outline outside the rounded web UI.
+    thickFrame: false,
+    hasShadow: false,
+    // CSS clips the actual application surface. Disabling DWM's second corner
+    // treatment avoids a dotted rectangular edge on high-contrast skins.
+    roundedCorners: false,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

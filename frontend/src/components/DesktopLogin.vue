@@ -206,4 +206,7 @@ html[data-style="cyber"] .desktop-login-submit{border:3px solid #111923;border-r
 html[data-style="cyber"] .desktop-login-submit:hover{color:#111923;background:#00d9f5;box-shadow:8px 8px 0 #ff2a5f,-3px -3px 0 #f8e71c;transform:translate(-3px,-3px)}
 html[data-style="cyber"] .desktop-login-switch{color:#ff2a5f;text-shadow:1px 1px 0 rgba(0,217,245,.45)}
 html[data-style="cyber"] .desktop-login>footer{border-color:#111923;color:#8ed5da;background:#172c35;box-shadow:inset 10px 0 #ff2a5f}
+
+/* Electron 已用透明无框窗口提供轮廓，登录容器不再额外绘制主题外框。 */
+.desktop-login{border:0!important}
 </style>

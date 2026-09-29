@@ -52,7 +52,7 @@ a{color:var(--blue);text-decoration:none;font-weight:700}a:hover{color:var(--blu
 .sidebar-foot{margin-top:auto;padding:10px;font-size:11px;color:var(--sub)}
 .conn{display:inline-flex;align-items:center;gap:6px}.version-badge{margin-left:8px;padding:1px 8px;border:1px solid var(--line);border-radius:999px;font-size:10px;color:var(--sub);white-space:nowrap}.pulse{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px var(--greenS);animation:pulse 1.5s infinite}@keyframes pulse{50%{opacity:.45;transform:scale(.86)}}
 /* ---- main ---- */
-.main{padding:22px 26px 60px;max-width:1400px;width:100%;min-width:0}
+.main{padding:22px 26px 60px;max-width:none;width:100%;min-width:0}
 .page{min-width:0}.card{min-width:0}
 .topbar{display:flex;align-items:center;gap:14px;margin-bottom:22px}
 .topbar h1{font-size:clamp(22px,3vw,30px);letter-spacing:-.03em;font-weight:800}

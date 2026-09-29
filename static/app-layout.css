@@ -1,5 +1,5 @@
 /* Missing layout styles for Vue SPA — pixelium CSS doesn't define these */
-.main{padding:22px 26px 60px;max-width:1400px;width:100%;min-width:0}
+.main{padding:22px 26px 60px;max-width:none;width:100%;min-width:0}
 .page{min-width:0}.card{min-width:0}
 .kpi-label{font-size:11px;color:var(--sub);font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 .kpi-value{position:relative;margin-top:8px;font-size:34px;line-height:1;font-weight:800;letter-spacing:-.04em}

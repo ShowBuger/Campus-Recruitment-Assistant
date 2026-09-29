@@ -162,9 +162,10 @@
 .desktop-main-mode[data-style="aurora"] .liquid-dock-glass{position:absolute;z-index:2;bottom:12px;left:50%;padding:8px;transform:translateX(-50%);pointer-events:auto;border:1px solid rgba(255,255,255,.68);border-radius:28px;background:linear-gradient(135deg,rgba(255,255,255,.34),rgba(255,255,255,.11));box-shadow:0 18px 48px rgba(48,39,118,.2),inset 0 1px rgba(255,255,255,.9);backdrop-filter:blur(20px) saturate(155%)}
 .desktop-main-mode[data-style="aurora"][data-theme="dark"] .liquid-dock-glass{border-color:rgba(255,255,255,.24);background:linear-gradient(135deg,rgba(65,68,115,.38),rgba(14,17,39,.18));box-shadow:0 20px 48px rgba(0,0,0,.34),inset 0 1px rgba(255,255,255,.35)}
 .desktop-main-mode[data-style="aurora"] .liquid-dock{display:flex;position:relative;align-items:center;gap:7px;background:transparent;pointer-events:auto}
-.desktop-main-mode[data-style="aurora"] .liquid-dock a{position:relative;display:grid;width:60px;height:58px;place-items:center;padding:7px 5px 5px;border:0;border-radius:17px;background:transparent;color:var(--muted);box-shadow:none;font:700 10px var(--font);text-decoration:none;cursor:pointer;transition:transform .18s var(--spring),background .18s,color .18s}
-.desktop-main-mode[data-style="aurora"] .liquid-dock a svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.desktop-main-mode[data-style="aurora"] .liquid-dock a span{font-size:9px;letter-spacing:.04em}
-.desktop-main-mode[data-style="aurora"] .liquid-dock a:hover{transform:translateY(-5px);background:rgba(255,255,255,.32);color:var(--ink);box-shadow:0 10px 22px rgba(58,48,132,.16)}
+.desktop-main-mode[data-style="aurora"] .liquid-dock a{position:relative;display:grid;width:60px;height:58px;place-items:center;padding:7px 5px 5px;border:0;border-radius:17px;background:transparent;color:#344064;box-shadow:none;font:700 10px var(--font);text-decoration:none;cursor:pointer;transition:transform .18s var(--spring),background .18s,color .18s}
+.desktop-main-mode[data-style="aurora"][data-theme="dark"] .liquid-dock a{color:#e3e8ff;text-shadow:0 1px 3px rgba(3,8,30,.78)}
+.desktop-main-mode[data-style="aurora"] .liquid-dock a svg{width:23px;height:23px;fill:currentColor;stroke:none}.desktop-main-mode[data-style="aurora"] .liquid-dock a span{color:inherit;font-size:9px;letter-spacing:.04em}
+.desktop-main-mode[data-style="aurora"] .liquid-dock a:hover{transform:translateY(-5px);background:rgba(255,255,255,.32);color:#fff;box-shadow:0 10px 22px rgba(58,48,132,.16)}
 .desktop-main-mode[data-style="aurora"] .liquid-dock a.router-link-active{color:#fff;background:linear-gradient(135deg,rgba(117,89,255,.92),rgba(60,200,189,.82));box-shadow:0 9px 20px rgba(104,87,229,.32)}
 
 /* Desktop glass sits behind application overlays. Menus and modal portals
@@ -1388,3 +1389,10 @@
 /* Users can keep a visual skin while opting out of its bundled typeface. */
 :root[data-style-font="default"]{--font:-apple-system,BlinkMacSystemFont,"Segoe UI Variable","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;--mono:-apple-system,BlinkMacSystemFont,"Segoe UI Variable","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;--art-font:-apple-system,BlinkMacSystemFont,"Segoe UI Variable","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
 :root[data-style-font="default"] body,:root[data-style-font="default"] body *,:root[data-style-font="default"] body *:before,:root[data-style-font="default"] body *:after{font-family:var(--font)!important}
+
+/* Keep every Electron skin borderless at the window perimeter. Theme borders
+   inside the application remain intact for hierarchy and identity. */
+.desktop-main-mode .app{border:0!important;outline:0!important;box-shadow:none!important}
+.desktop-main-mode:not(.desktop-window-maximized) .app{clip-path:none!important}
+.desktop-main-mode,.desktop-main-mode body,.desktop-main-mode body>#app{border:0!important;outline:0!important;box-shadow:none!important}
+.desktop-main-mode body:before,.desktop-main-mode body:after{display:none!important;border:0!important;box-shadow:none!important}

@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from app.routers.salary import _compact, _effective_offershow_token, _format_offer_salary, _mask_contact, _mask_token, _matches_offershow_filters, _offershow_publish_year, _search, _write_offershow_token
+from app.routers.salary import PublicOfferShowTokenConfig, _compact, _effective_offershow_token, _format_offer_salary, _mask_contact, _mask_token, _matches_offershow_filters, _offershow_publish_year, _search, _write_offershow_token, get_public_offershow_config, save_public_offershow_config
 
 
 class SalarySearchTests(unittest.TestCase):
@@ -46,6 +46,26 @@ class SalarySearchTests(unittest.TestCase):
             token, personal = _effective_offershow_token(7)
         self.assertEqual(token, "personal.token.value")
         self.assertTrue(personal)
+
+    def test_admin_can_save_public_token_without_receiving_plaintext(self):
+        token = "public.payload.signature"
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "token"
+            with patch("app.routers.salary.OFFERSHOW_TOKEN_PATH", str(target)):
+                response = save_public_offershow_config(
+                    PublicOfferShowTokenConfig(token=token),
+                    {"is_admin": True},
+                )
+                status = get_public_offershow_config({"is_admin": True})
+            saved_token = target.read_text(encoding="utf-8").strip()
+        self.assertEqual(saved_token, token)
+        self.assertTrue(response["configured"])
+        self.assertTrue(status["configured"])
+        self.assertNotIn(token, response.values())
+        self.assertNotIn(token, status.values())
+
+        with self.assertRaises(ValueError):
+            PublicOfferShowTokenConfig(token="   ")
 
     def test_uses_offershow_actual_publish_year(self):
         self.assertEqual(_offershow_publish_year({"publish_time": "2023-05-16 13:53:20", "time": "2021-12"}), "2023")

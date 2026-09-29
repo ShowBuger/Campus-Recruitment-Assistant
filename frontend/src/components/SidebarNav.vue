@@ -15,6 +15,7 @@ import {
   PhTable,
   PhUserGear,
 } from '@phosphor-icons/vue'
+import { navigationItems } from '@/utils/navigation'
 const auth = useAuthStore()
 const version = ref('')
 const collapsed = ref(false)
@@ -31,19 +32,7 @@ const navIcons = {
   comparison: PhScales,
   admin: PhUserGear,
 }
-const navItems = computed(() => [
-  { to: '/', label: '投递信息', icon: 'home' },
-  { to: '/board', label: '投递看板', icon: 'board' },
-  { to: '/records', label: '总表信息', icon: 'table' },
-  { to: '/resumes', label: '简历管理', icon: 'resume' },
-  { to: '/analysis', label: '简历分析', icon: 'analysis' },
-  { to: '/notes', label: '校招笔记', icon: 'notes' },
-  { to: '/salary', label: '薪资查询', icon: 'salary' },
-  { to: '/offer-comparison', label: '岗位对比', icon: 'comparison' },
-  ...(auth.isAdmin ? [
-    { to: '/admin', label: '管理页面', icon: 'admin' },
-  ] : []),
-])
+const navItems = computed(() => navigationItems(auth.isAdmin))
 
 function syncCollapsedLayout() {
   const app = document.querySelector('.app')

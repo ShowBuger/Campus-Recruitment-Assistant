@@ -66,6 +66,23 @@ def download_windows_desktop():
     raise HTTPException(status_code=404, detail="Windows 桌面端安装包正在准备中")
 
 
+@router.head("/download/windows", include_in_schema=False)
+def download_windows_desktop_head():
+    """让浏览器和下载管理器在开始下载前获取安装包总大小。"""
+    local_installer = _local_installer()
+    if not local_installer:
+        raise HTTPException(status_code=404, detail="Windows 桌面端安装包正在准备中")
+    return Response(
+        headers={
+            "Content-Length": str(local_installer.stat().st_size),
+            "Content-Type": "application/vnd.microsoft.portable-executable",
+            "Accept-Ranges": "bytes",
+            "Content-Disposition": f'attachment; filename="{local_installer.name}"',
+            "Cache-Control": "no-cache",
+        },
+    )
+
+
 @router.get("/updates/windows/latest.yml")
 def windows_update_metadata():
     metadata = LOCAL_RELEASE_DIR / "latest.yml"
