@@ -344,10 +344,14 @@ def list_salaries(
     page_size: int = Query(default=50, ge=10, le=200),
     _: dict = Depends(auth_module.get_current_user),
 ):
+    warning = ""
     try:
         records, sheet_name, updated_at = _salary_records()
     except feishu_sync.FeishuSyncError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        # 飞书失败时返回空结果但不阻断请求
+        records, sheet_name, updated_at = [], "飞书薪资表", ""
+        warning = f"飞书薪资表暂时不可用：{exc}"
+
     filtered = _search(records, keyword, company, city, education, job)
     start = (page - 1) * page_size
     visible_items = [
@@ -358,6 +362,7 @@ def list_salaries(
         "success": True, "items": visible_items,
         "total": len(filtered), "source_total": len(records), "page": page,
         "page_size": page_size, "sheet_name": sheet_name, "updated_at": updated_at,
+        "warning": warning,
     }
 
 
@@ -375,15 +380,21 @@ def search_offershow_salaries(
     keyword = keyword.strip() or company or job or city
     if not keyword:
         raise HTTPException(status_code=422, detail="请至少输入公司、岗位或城市中的一项")
+
+    # 尝试获取飞书薪资表数据
+    sheet_name = "飞书薪资表"
+    warning = ""
     try:
         sheet_records, sheet_name, _ = _salary_records()
+        local_records = [
+            {**{key: value for key, value in record.items() if key != "note"}, "source": "sheet", "year": "2025"}
+            for record in _search(sheet_records, "", company, city, "", job)
+        ]
     except feishu_sync.FeishuSyncError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    local_records = [
-        {**{key: value for key, value in record.items() if key != "note"}, "source": "sheet", "year": "2025"}
-        for record in _search(sheet_records, "", company, city, "", job)
-    ]
-    warning = ""
+        local_records = []
+        warning = f"飞书薪资表暂时不可用：{exc}"
+
+    # 尝试获取 OfferShow 数据
     try:
         token, _ = _effective_offershow_token(user["user_id"])
         if not token:
@@ -395,7 +406,27 @@ def search_offershow_salaries(
         ]
     except OfferShowError as exc:
         remote_records = []
-        warning = f"OfferShow 暂时不可用，当前仅显示总表结果：{exc}"
+        offershow_warning = f"OfferShow 暂时不可用：{exc}"
+        warning = f"{warning}；{offershow_warning}" if warning else offershow_warning
+
+    # 如果两个数据源都失败，返回友好提示
+    if not local_records and not remote_records:
+        if not warning:
+            warning = "暂无可用的薪资数据源"
+        return {
+            "success": True,
+            "items": [],
+            "total": 0,
+            "source_total": 0,
+            "page": page,
+            "page_size": page_size,
+            "sheet_name": sheet_name,
+            "source": "combined",
+            "local_total": 0,
+            "offershow_total": 0,
+            "warning": warning,
+            "attribution": "总表与 OfferShow 薪资爆料联合查询；OfferShow 数据仅供个人查询与企业内部使用",
+        }
 
     records = []
     seen = set()
@@ -432,3 +463,129 @@ def refresh_salaries(_: dict = Depends(require_admin)):
         "success": True, "message": f"已同步 {len(records)} 条薪资记录",
         "total": len(records), "sheet_name": sheet_name, "updated_at": updated_at,
     }
+
+
+@router.get("/feishu/auth-status")
+def get_feishu_auth_status(_: dict = Depends(require_admin)):
+    """获取飞书授权状态"""
+    import json
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["lark-cli", "auth", "status", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return {
+                "authorized": False,
+                "user": None,
+                "error": result.stderr.strip() or "飞书授权状态读取失败",
+            }
+
+        data = json.loads(result.stdout)
+        identities = data.get("identities", {})
+        user_identity = identities.get("user", {})
+        status = user_identity.get("status", "")
+
+        return {
+            "authorized": status == "ready",
+            "user": user_identity.get("userName") if status == "ready" else None,
+            "error": None if status == "ready" else "飞书授权已失效或未授权",
+        }
+    except subprocess.TimeoutExpired:
+        return {"authorized": False, "user": None, "error": "飞书授权状态读取超时"}
+    except Exception as exc:
+        return {"authorized": False, "user": None, "error": f"飞书授权状态读取失败：{exc}"}
+
+
+@router.post("/feishu/auth-init")
+def init_feishu_auth(_: dict = Depends(require_admin)):
+    """初始化飞书授权流程，返回二维码URL"""
+    import base64
+    import json
+    import subprocess
+    import tempfile
+
+    try:
+        # 生成设备授权码
+        result = subprocess.run(
+            ["lark-cli", "auth", "login", "--domain", "sheets,base", "--no-wait", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"飞书授权初始化失败：{result.stderr.strip()}")
+
+        data = json.loads(result.stdout)
+        verification_url = data.get("verification_url", "")
+        device_code = data.get("device_code", "")
+        user_code = data.get("user_code", "")
+
+        if not verification_url or not device_code:
+            raise HTTPException(status_code=500, detail=f"飞书授权初始化失败：未获取到授权URL（返回数据：{data}）")
+
+        # 生成二维码 PNG 图片
+        qr_image_base64 = ""
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+                qr_path = tmp_file.name
+
+            qr_result = subprocess.run(
+                ["lark-cli", "auth", "qrcode", verification_url, "--output", qr_path],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            if qr_result.returncode == 0 and Path(qr_path).exists():
+                with open(qr_path, "rb") as f:
+                    qr_image_base64 = base64.b64encode(f.read()).decode("utf-8")
+                Path(qr_path).unlink()  # 删除临时文件
+        except Exception as e:
+            # 二维码生成失败不影响整体流程
+            pass
+
+        return {
+            "success": True,
+            "url": verification_url,
+            "device_code": device_code,
+            "user_code": user_code,
+            "qr_image": qr_image_base64,
+        }
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="飞书授权初始化超时")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"飞书授权初始化失败：{exc}") from exc
+
+
+@router.post("/feishu/auth-complete")
+def complete_feishu_auth(device_code: str = Query(...), _: dict = Depends(require_admin)):
+    """完成飞书授权"""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["lark-cli", "auth", "login", "--device-code", device_code],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            error_msg = result.stderr.strip()
+            if "pending" in error_msg.lower():
+                return {"success": False, "pending": True, "message": "等待用户扫码授权"}
+            raise HTTPException(status_code=500, detail=f"飞书授权失败：{error_msg}")
+
+        return {"success": True, "message": "飞书授权成功"}
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="飞书授权超时")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"飞书授权失败：{exc}") from exc
