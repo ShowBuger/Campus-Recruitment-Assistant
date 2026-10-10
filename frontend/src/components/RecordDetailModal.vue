@@ -101,6 +101,7 @@
                 <option value="已投递">已投递</option>
                 <option value="机考">机考</option>
                 <option value="面试">面试</option>
+                <option value="泡池子">泡池子</option>
                 <option value="OC">OC</option>
                 <option value="已挂">已挂</option>
                 <option value="放弃">放弃</option>
@@ -354,7 +355,7 @@ function selectAdjacentPage(currentId, offset) {
   nextTick(() => document.getElementById(`detail-tab-${activePage.value}`)?.focus())
 }
 
-const PROGRESS_RANK = { '未投递': 0, '已投递': 1, '机考': 2, '面试': 3, OC: 4, '已挂': 4, '放弃': 4 }
+const PROGRESS_RANK = { '未投递': 0, '已投递': 1, '机考': 2, '面试': 3, '泡池子': 3.5, OC: 4, '已挂': 4, '放弃': 4 }
 const PROGRESS_TIME_FIELDS = [
   { rank: 1, key: 'apply_date', label: '投递时间' },
   { rank: 2, key: 'exam_date', label: '机考时间' },
@@ -362,7 +363,7 @@ const PROGRESS_TIME_FIELDS = [
   { rank: 3, key: 'interview2', label: '二面' },
   { rank: 3, key: 'interview3', label: '三面' },
   { rank: 3, key: 'interview4', label: '四面' },
-  { rank: 3, key: 'warm', label: '泡池子时间' },
+  { rank: 3.5, key: 'warm', label: '泡池子时间' },
   { rank: 4, key: 'result_date', label: '结果时间' },
 ]
 

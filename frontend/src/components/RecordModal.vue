@@ -125,7 +125,7 @@ defineExpose({ editId, company, job, jobs, city, batch, progress, url, applyDate
               <div class="form-group"><label for="record-result">结果时间</label><input id="record-result" v-model="resultDate" type="text" @focus="onFocus" @blur="onBlur"></div>
             </template>
             <div class="form-group"><label for="record-deadline">截止</label><input id="record-deadline" v-model="deadline" type="text" @focus="onBlur"></div>
-            <div v-if="!isShared" class="form-group"><label for="record-progress">进展</label><select id="record-progress" v-model="progress"><option value="已投递">已投递</option><option value="机考">机考</option><option value="面试">面试</option><option value="OC">OC</option><option value="已挂">已挂</option><option value="放弃">放弃</option></select></div>
+            <div v-if="!isShared" class="form-group"><label for="record-progress">进展</label><select id="record-progress" v-model="progress"><option value="已投递">已投递</option><option value="机考">机考</option><option value="面试">面试</option><option value="泡池子">泡池子</option><option value="OC">OC</option><option value="已挂">已挂</option><option value="放弃">放弃</option></select></div>
             <div class="form-group"><label for="record-url">入口网址</label><input id="record-url" v-model="url" placeholder="https://..."></div>
           </div>
         </div>
