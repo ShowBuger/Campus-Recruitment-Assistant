@@ -36,7 +36,7 @@ FIELD_COLUMNS = {
     "二面": "interview2",
     "三面": "interview3",
     "四面": "interview4",
-    "保温": "warm",
+    "泡池子": "warm",
     "结果": "result",
     "Offer详情": "offer_details",
     "简历版本": "resume_version",
@@ -44,7 +44,7 @@ FIELD_COLUMNS = {
 JSON_FIELDS = {"嵌入式方向", "进展", "Offer详情"}
 
 _PROGRESS_RANK = {"未投递": 0, "已投递": 1, "机考": 2, "面试": 3,
-                  "OC": 4, "已挂": 4, "放弃": 4}
+                  "泡池子": 3.5, "OC": 4, "已挂": 4, "放弃": 4}
 _DATE_PROGRESS = {
     "投递时间": "已投递",
     "机考时间": "机考",
@@ -52,13 +52,14 @@ _DATE_PROGRESS = {
     "二面": "面试",
     "三面": "面试",
     "四面": "面试",
-    "保温": "面试",
+    "泡池子": "泡池子",
 }
 
 _PROGRESS_DATE_FIELDS = {
     "已投递": ("投递时间",),
     "机考": ("机考时间",),
-    "面试": ("一面", "二面", "三面", "四面", "保温"),
+    "面试": ("一面", "二面", "三面", "四面"),
+    "泡池子": ("泡池子",),
     "OC": ("结果",),
     "已挂": ("结果",),
     "放弃": ("结果",),
@@ -71,7 +72,7 @@ _STAGE_DATE_RANK = {
     "二面": 3,
     "三面": 3,
     "四面": 3,
-    "保温": 3,
+    "泡池子": 3.5,
     "结果": 4,
 }
 
@@ -183,7 +184,7 @@ def _row_fields(row: dict) -> dict:
         "二面": row["interview2"],
         "三面": row["interview3"],
         "四面": row["interview4"] if "interview4" in row.keys() else None,
-        "保温": row["warm"],
+        "泡池子": row["warm"],
         "结果": result,
         "Offer详情": _json_object(row["offer_details"]) if "offer_details" in row.keys() else {},
         "简历版本": row["resume_version"] if "resume_version" in row.keys() else "",
@@ -733,7 +734,7 @@ def _serialize(record: dict) -> dict:
         "interview2": fields.get("二面"),
         "interview3": fields.get("三面"),
         "interview4": fields.get("四面"),
-        "warm": fields.get("保温"),
+        "warm": fields.get("泡池子"),
         "result": fields.get("结果"),
         "offer_details": fields.get("Offer详情") or {},
         "resume_version": fields.get("简历版本") or "",
@@ -750,7 +751,7 @@ def _is_applied(fields: dict) -> bool:
         return True
     return any(
         fields.get(field)
-        for field in ("投递时间", "机考时间", "一面", "二面", "三面", "四面", "保温", "结果")
+        for field in ("投递时间", "机考时间", "一面", "二面", "三面", "四面", "泡池子", "结果")
     )
 
 

@@ -91,3 +91,4 @@ Thumbs.db
 
 # Frontend build output (generated during local startup and deployment)
 static/dist/
+data/

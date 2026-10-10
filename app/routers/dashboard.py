@@ -28,7 +28,7 @@ EVENT_TYPE_FIELD_MAP = {
     "interview2": "二面",
     "interview3": "三面",
     "interview4": "四面",
-    "warm": "保温",
+    "warm": "泡池子",
     "result": "结果",
     "deadline": "投递截止时间",
 }
@@ -74,7 +74,7 @@ class TotalRecordUpdate(BaseModel):
     job: str = ""
     city: str = ""
     batch: Literal["秋招", "提前批"]
-    progress: Literal["未投递", "已投递", "机考", "面试", "OC", "已挂", "放弃"]
+    progress: Literal["未投递", "已投递", "机考", "面试", "泡池子", "OC", "已挂", "放弃"]
     directions: list[str] = []
     company_type: str = ""
     deadline: date | None = None
@@ -134,7 +134,7 @@ def _application_fields(record: ApplicationRecord) -> dict:
         "二面": date_ms(record.interview2),
         "三面": date_ms(record.interview3),
         "四面": date_ms(record.interview4),
-        "保温": date_ms(record.warm),
+        "泡池子": date_ms(record.warm),
         "结果": record.result_date.isoformat() if record.result_date else None,
         "投递截止时间": date_ms(record.deadline),
         "进展": [record.progress],
@@ -174,7 +174,7 @@ def _total_record_fields(record: TotalRecordUpdate) -> dict:
         "二面": date_ms(record.interview2),
         "三面": date_ms(record.interview3),
         "四面": date_ms(record.interview4),
-        "保温": date_ms(record.warm),
+        "泡池子": date_ms(record.warm),
         "结果": date_ms(record.result_date),
         "Offer详情": record.offer_details,
         "简历版本": record.resume_version.strip(),
@@ -1260,7 +1260,7 @@ def remove_application(
     try:
         updated = local_records.update_record(user["user_id"], record_id, {
             "进展": ["未投递"], "投递时间": None, "机考时间": None,
-            "一面": None, "二面": None, "三面": None, "四面": None, "保温": None, "结果": None,
+            "一面": None, "二面": None, "三面": None, "四面": None, "泡池子": None, "结果": None,
         })
         if not updated:
             raise HTTPException(status_code=404, detail="未找到对应的本地记录")
@@ -1319,13 +1319,13 @@ def edit_total_record(
 
 
 class ProgressUpdate(BaseModel):
-    progress: Literal["未投递", "已投递", "机考", "面试", "OC", "已挂", "放弃"]
+    progress: Literal["未投递", "已投递", "机考", "面试", "泡池子", "OC", "已挂", "放弃"]
     date_field: str = Field(default="", max_length=50)
     date_value: int | None = None
     old_progress: str = Field(default="")
 
 
-_PROGRESS_ORDER = ["未投递", "已投递", "机考", "面试", "OC", "已挂", "放弃"]
+_PROGRESS_ORDER = ["未投递", "已投递", "机考", "面试", "泡池子", "OC", "已挂", "放弃"]
 # Date fields that should be cleared when rolling back past each stage
 _PROGRESS_CLEAR_FIELDS: dict[str, list[str]] = {
     "已投递": ["投递时间"],
@@ -1457,7 +1457,7 @@ def create_calendar_event(
             record = local_records.get_record(user["user_id"], event.record_id)
             if record:
                 current_progress = (record.get("fields") or {}).get("进展") or []
-                progress_order = ["未投递", "已投递", "机考", "面试", "OC", "已挂", "放弃"]
+                progress_order = ["未投递", "已投递", "机考", "面试", "泡池子", "OC", "已挂", "放弃"]
                 current_idx = max(
                     (progress_order.index(p) for p in current_progress if p in progress_order),
                     default=-1,

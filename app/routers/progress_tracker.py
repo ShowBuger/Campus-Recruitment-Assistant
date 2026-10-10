@@ -79,8 +79,8 @@ IGNORE_PATTERNS = (
     "欢迎投递", "推荐投递", "邀请投递", "期待您的投递",
 )
 
-DATE_FIELDS = {"已投递": "投递时间", "机考": "机考时间", "面试": "一面", "OC": "结果", "已挂": "结果"}
-PROGRESS_RANK = {"未投递": 0, "已投递": 1, "机考": 2, "面试": 3, "OC": 4}
+DATE_FIELDS = {"已投递": "投递时间", "机考": "机考时间", "面试": "一面", "泡池子": "泡池子", "OC": "结果", "已挂": "结果"}
+PROGRESS_RANK = {"未投递": 0, "已投递": 1, "机考": 2, "面试": 3, "泡池子": 3, "OC": 4}
 TERMINAL_PROGRESS = {"已挂", "放弃"}
 CHINA_TZ = timezone(timedelta(hours=8))
 
@@ -1233,7 +1233,7 @@ def get_record_timeline(
         ("一面", "面试", 1),
         ("二面", "面试", 2),
         ("三面", "面试", 3),
-        ("保温", "保温", None),
+        ("泡池子", "泡池子", None),
         ("结果", "结果", None),
     )
     for field, progress, round_number in date_nodes:
