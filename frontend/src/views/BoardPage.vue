@@ -15,14 +15,15 @@ const dialog = useDialogStore()
 const dragRid = ref('')
 
 /* ---------- 常量 ---------- */
-var BOARD_COLUMNS = ['已投递', '机考', '面试', 'OC', '已挂', '放弃']
-var _PROGRESS_ORDER_BOARD = ['未投递', '已投递', '机考', '面试', 'OC', '已挂', '放弃']
+var BOARD_COLUMNS = ['已投递', '机考', '面试', '泡池子', 'OC', '已挂']
+var _PROGRESS_ORDER_BOARD = ['未投递', '已投递', '机考', '面试', '泡池子', 'OC', '已挂', '放弃']
 
 /* 进展→时间线字段映射：用于计算停留 & 拖拽时写日期 */
 var BOARD_DATE_FIELD = {
   '已投递': { get: r => r.apply_date, set: '投递时间', label: '投递时间' },
   '机考': { get: r => r.exam_date, set: '机考时间', label: '机考时间' },
   '面试': { get: r => Math.max(r.interview1 || 0, r.interview2 || 0, r.interview3 || 0, r.interview4 || 0) || null, set: '一面', label: '面试时间' },
+  '泡池子': { get: r => r.warm, set: '泡池子', label: '泡池子时间' },
   'OC': { get: r => r.result, set: '结果', label: '结果时间' },
   '已挂': { get: r => r.result, set: '结果', label: '结果时间' },
   '放弃': { get: r => r.result, set: '结果', label: '结果时间' },
