@@ -41,8 +41,15 @@ const publicSalaryTokenInput = ref('')
 const publicSalaryTokenLoading = ref(false)
 const publicSalaryTokenSaving = ref(false)
 const publicSalaryTokenError = ref('')
+const feishuAuthStatus = ref({ authorized: false, user: null, error: null })
+const feishuAuthLoading = ref(false)
+const feishuAuthInitializing = ref(false)
+const feishuAuthQrCode = ref(null)
+const feishuAuthDeviceCode = ref('')
+const feishuAuthPolling = ref(false)
 let logStream = null
 let sourcePollTimer = null
+let feishuAuthPollTimer = null
 
 const aiDedupRunning = ref(false)
 async function runAiDedup() {
@@ -313,7 +320,85 @@ function switchPanel(panel) {
   if (panel === 'notice') loadNotifications()
   if (panel === 'logs') startLogStream()
   if (panel === 'backups') loadBackups()
-  if (panel === 'salary-token') loadPublicSalaryToken()
+  if (panel === 'salary-token') {
+    loadPublicSalaryToken()
+    loadFeishuAuthStatus()
+  }
+}
+
+async function loadFeishuAuthStatus() {
+  feishuAuthLoading.value = true
+  try {
+    const data = await apiReq('GET', '/api/salaries/feishu/auth-status')
+    feishuAuthStatus.value = data
+  } catch (e) {
+    feishuAuthStatus.value = { authorized: false, user: null, error: e.message || '飞书授权状态读取失败' }
+  } finally {
+    feishuAuthLoading.value = false
+  }
+}
+
+async function initFeishuAuth() {
+  feishuAuthInitializing.value = true
+  try {
+    const data = await apiReq('POST', '/api/salaries/feishu/auth-init')
+    feishuAuthQrCode.value = {
+      url: data.url,
+      qr_image: data.qr_image,
+      user_code: data.user_code,
+    }
+    feishuAuthDeviceCode.value = data.device_code
+    // 开始轮询检查授权状态
+    startFeishuAuthPolling()
+  } catch (e) {
+    toast.error('飞书授权初始化失败：' + e.message)
+  } finally {
+    feishuAuthInitializing.value = false
+  }
+}
+
+function startFeishuAuthPolling() {
+  if (feishuAuthPollTimer) clearInterval(feishuAuthPollTimer)
+  feishuAuthPolling.value = true
+
+  const poll = async () => {
+    try {
+      const data = await apiReq('POST', '/api/salaries/feishu/auth-complete?device_code=' + encodeURIComponent(feishuAuthDeviceCode.value))
+      if (data.success) {
+        stopFeishuAuthPolling()
+        feishuAuthQrCode.value = null
+        toast.success('飞书授权成功')
+        await loadFeishuAuthStatus()
+      }
+    } catch (e) {
+      // 继续轮询
+    }
+  }
+
+  poll()
+  feishuAuthPollTimer = setInterval(poll, 3000)
+
+  // 5分钟后自动停止轮询
+  setTimeout(() => {
+    if (feishuAuthPolling.value) {
+      stopFeishuAuthPolling()
+      toast.error('授权超时，请重新开始授权')
+    }
+  }, 5 * 60 * 1000)
+}
+
+function stopFeishuAuthPolling() {
+  if (feishuAuthPollTimer) {
+    clearInterval(feishuAuthPollTimer)
+    feishuAuthPollTimer = null
+  }
+  feishuAuthPolling.value = false
+}
+
+function cancelFeishuAuth() {
+  stopFeishuAuthPolling()
+  feishuAuthQrCode.value = null
+  feishuAuthDeviceCode.value = ''
 }
 
 async function loadPublicSalaryToken() {
@@ -688,6 +773,52 @@ onUnmounted(() => {
               </form>
             </div>
           </div>
+
+          <div class="card salary-token-admin-card">
+            <div class="card-hd"><span class="dot" :class="{ g: feishuAuthStatus.authorized }"></span><div class="card-title">飞书薪资表授权</div><div class="card-sub">读取飞书在线表格中的薪资数据</div></div>
+            <div class="card-body salary-token-admin-body">
+              <div class="salary-token-status" :class="{ configured: feishuAuthStatus.authorized, error: feishuAuthStatus.error && !feishuAuthStatus.authorized }">
+                <template v-if="feishuAuthLoading"><b>正在读取授权状态</b><span>请稍候</span></template>
+                <template v-else-if="feishuAuthStatus.authorized"><b>飞书授权已完成</b><span>授权用户：{{ feishuAuthStatus.user }}</span></template>
+                <template v-else><b>飞书未授权</b><span>{{ feishuAuthStatus.error || '未授权表格只读权限，薪资查询功能将无法读取飞书数据' }}</span></template>
+              </div>
+
+              <div v-if="!feishuAuthQrCode" class="salary-token-admin-actions" style="padding-top: 12px">
+                <p>授权后可以从飞书在线表格读取薪资数据。需要授权表格只读权限（sheets:spreadsheet:read）。</p>
+                <button class="btn btn-primary" type="button" :disabled="feishuAuthInitializing || feishuAuthPolling" @click="initFeishuAuth">
+                  {{ feishuAuthInitializing ? '初始化中…' : (feishuAuthStatus.authorized ? '重新授权' : '开始授权') }}
+                </button>
+                <button v-if="!feishuAuthStatus.authorized" class="btn" type="button" :disabled="feishuAuthLoading" @click="loadFeishuAuthStatus">刷新状态</button>
+              </div>
+
+              <div v-else class="feishu-auth-qrcode-container">
+                <div class="feishu-auth-qrcode-header">
+                  <b>请使用飞书扫码授权</b>
+                  <button class="btn btn-sm" type="button" @click="cancelFeishuAuth">取消</button>
+                </div>
+                <div class="feishu-auth-qrcode-body">
+                  <div class="feishu-auth-instructions">
+                    <p><strong>方式一：</strong>使用飞书 App 扫描下方二维码</p>
+                    <div v-if="feishuAuthQrCode.qr_image" class="feishu-auth-qrcode-image-wrapper">
+                      <img :src="'data:image/png;base64,' + feishuAuthQrCode.qr_image" alt="飞书授权二维码" class="feishu-auth-qrcode-image">
+                    </div>
+                    <div v-else class="feishu-auth-qrcode-fallback">
+                      <p style="color: var(--muted); font-size: 11px">二维码生成失败，请使用下方链接授权</p>
+                    </div>
+                    <p style="margin-top: 16px"><strong>方式二：</strong>手动访问授权链接</p>
+                    <a :href="feishuAuthQrCode.url" target="_blank" rel="noopener noreferrer" class="feishu-auth-link-button">
+                      点击打开飞书授权页面
+                    </a>
+                    <p class="feishu-auth-url-display">{{ feishuAuthQrCode.url }}</p>
+                  </div>
+                  <p class="feishu-auth-qrcode-code">授权码：<code>{{ feishuAuthQrCode.user_code }}</code></p>
+                  <p v-if="feishuAuthPolling" class="feishu-auth-polling">
+                    <span class="spinner"></span>等待授权中…
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <!-- notice -->
         <div class="admin-panel" :class="{ active: activePanel === 'notice' }" id="admin-panel-notice">
@@ -816,6 +947,27 @@ onUnmounted(() => {
 .salary-token-admin-form input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueS)}
 .salary-token-admin-actions{display:flex;align-items:center;justify-content:space-between;gap:16px}.salary-token-admin-actions p{max-width:600px;color:var(--muted);font-size:9px;line-height:1.6}.salary-token-admin-actions a{color:var(--blue)}
 .salary-token-admin-actions .btn{flex-shrink:0;white-space:nowrap}
+.feishu-auth-qrcode-container{display:grid;gap:12px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.feishu-auth-qrcode-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.feishu-auth-qrcode-header b{font-size:13px}
+.feishu-auth-qrcode-body{display:grid;gap:12px;padding:16px;text-align:center}
+.feishu-auth-instructions{display:grid;gap:12px;text-align:left}
+.feishu-auth-instructions p{color:var(--ink);font-size:12px;line-height:1.6}
+.feishu-auth-instructions strong{color:var(--blue);font-weight:800}
+.feishu-auth-qrcode-image-wrapper{display:flex;justify-content:center;padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.feishu-auth-qrcode-image{max-width:280px;width:100%;height:auto;image-rendering:crisp-edges}
+.feishu-auth-qrcode-fallback{padding:24px;background:var(--panel);border:1px dashed var(--line);border-radius:8px;text-align:center}
+.feishu-auth-link-button{display:inline-block;padding:10px 16px;border:1px solid var(--blue);border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:800;text-decoration:none;transition:all 0.2s}
+.feishu-auth-link-button:hover{background:color-mix(in srgb,var(--blue) 85%,#000);transform:translateY(-1px)}
+.feishu-auth-url-display{margin-top:8px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--muted);font:9px var(--mono,monospace);word-break:break-all;text-align:left}
+.feishu-auth-qrcode-link{display:grid;gap:8px}
+.feishu-auth-qrcode-link p{color:var(--sub);font-size:11px}
+.feishu-auth-qrcode-link a{color:var(--blue);font-size:10px;word-break:break-all}
+.feishu-auth-qrcode-code{color:var(--muted);font-size:11px}
+.feishu-auth-qrcode-code code{padding:4px 8px;border-radius:6px;background:var(--panel);color:var(--blue);font:12px var(--mono,monospace);font-weight:800}
+.feishu-auth-polling{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px;color:var(--blue);font-size:11px}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 .backup-panel{display:grid;gap:12px}.backup-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:12px;border-bottom:1px solid var(--line)}
 .backup-toolbar p{margin-top:3px;color:var(--muted);font-size:11px}.backup-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid var(--line);background:var(--bg)}
 .backup-row>div:first-child{display:grid;gap:3px;min-width:0}.backup-row b{overflow:hidden;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.backup-row span{color:var(--muted);font-size:10px}.backup-row>div:last-child{display:flex;gap:7px}
