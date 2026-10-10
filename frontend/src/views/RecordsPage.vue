@@ -72,53 +72,64 @@ const displayRecords = computed(() => {
   if (!showShared.value && hideApplied.value) {
     items = items.filter(r => !r.apply_date)
   }
-  if (!showShared.value && sortValue.value !== 'default') {
-    const sorted = items.map((r, i) => ({ r, i }))
-    sorted.sort((a, b) => {
-      const fallback = a.i - b.i
-      const latestDiff = latestActivity(b.r) - latestActivity(a.r)
-      if (sortValue.value === 'company-asc') {
-        return String(a.r.company || '').localeCompare(String(b.r.company || ''), 'zh-CN') || fallback
-      }
-      if (sortValue.value === 'priority-desc') {
-        return priorityScore(b.r) - priorityScore(a.r) || latestDiff || fallback
-      }
-      if (sortValue.value === 'priority-asc') {
-        return priorityScore(a.r) - priorityScore(b.r) || latestDiff || fallback
-      }
-      if (sortValue.value === 'progress-desc') {
-        return progressScore(b.r) - progressScore(a.r) || latestDiff || fallback
-      }
-      if (sortValue.value === 'apply-desc') {
-        return timestamp(b.r, 'apply_date') - timestamp(a.r, 'apply_date') || fallback
-      }
-      if (sortValue.value === 'apply-asc') {
-        return timestamp(a.r, 'apply_date') - timestamp(b.r, 'apply_date') || fallback
-      }
-      if (sortValue.value === 'deadline-asc') {
-        const aDeadline = timestamp(a.r, 'deadline') || Number.MAX_SAFE_INTEGER
-        const bDeadline = timestamp(b.r, 'deadline') || Number.MAX_SAFE_INTEGER
-        return aDeadline - bDeadline || fallback
-      }
-      return latestDiff || fallback
-    })
-    return sorted.map(s => s.r)
-  }
+  // 不在这里排序了，排序移到分组之后
   return items
 })
 
 const groupSource = computed(() => showShared.value ? [] : displayRecords.value)
 const { groupedRecords, selectPosition, toggleExpanded, isExpanded } = useRecordGroups(groupSource)
+
+// 对分组后的记录进行排序
+const sortedGroupedRecords = computed(() => {
+  if (showShared.value || sortValue.value === 'default') {
+    return groupedRecords.value
+  }
+
+  const items = [...groupedRecords.value]
+  items.sort((a, b) => {
+    const fallback = 0
+    const latestDiff = latestActivity(b) - latestActivity(a)
+    if (sortValue.value === 'company-asc') {
+      return String(a.company || '').localeCompare(String(b.company || ''), 'zh-CN') || fallback
+    }
+    if (sortValue.value === 'priority-desc') {
+      return priorityScore(b) - priorityScore(a) || latestDiff || fallback
+    }
+    if (sortValue.value === 'priority-asc') {
+      return priorityScore(a) - priorityScore(b) || latestDiff || fallback
+    }
+    if (sortValue.value === 'progress-desc') {
+      // 进展从快到慢：先按进度降序，再按进度对应的时间降序
+      const progressDiff = progressScore(b) - progressScore(a)
+      if (progressDiff !== 0) return progressDiff
+      return progressTime(b) - progressTime(a) || fallback
+    }
+    if (sortValue.value === 'apply-desc') {
+      return timestamp(b, 'apply_date') - timestamp(a, 'apply_date') || fallback
+    }
+    if (sortValue.value === 'apply-asc') {
+      return timestamp(a, 'apply_date') - timestamp(b, 'apply_date') || fallback
+    }
+    if (sortValue.value === 'deadline-asc') {
+      const aDeadline = timestamp(a, 'deadline') || Number.MAX_SAFE_INTEGER
+      const bDeadline = timestamp(b, 'deadline') || Number.MAX_SAFE_INTEGER
+      return aDeadline - bDeadline || fallback
+    }
+    return latestDiff || fallback
+  })
+  return items
+})
+
 const sharedVisibleRecords = computed(() => displayRecords.value.slice(0, sharedVisibleCount.value))
-const personalVisibleRecords = computed(() => groupedRecords.value.slice(0, personalVisibleCount.value))
+const personalVisibleRecords = computed(() => sortedGroupedRecords.value.slice(0, personalVisibleCount.value))
 const hasMoreSharedRecords = computed(() => sharedVisibleRecords.value.length < displayRecords.value.length)
-const hasMorePersonalRecords = computed(() => personalVisibleRecords.value.length < groupedRecords.value.length)
+const hasMorePersonalRecords = computed(() => personalVisibleRecords.value.length < sortedGroupedRecords.value.length)
 const hasMoreTableRecords = computed(() => showShared.value ? hasMoreSharedRecords.value : hasMorePersonalRecords.value)
 const tableRecords = computed(() => showShared.value ? sharedVisibleRecords.value : personalVisibleRecords.value)
 
 const recordCountText = computed(() => {
   const total = showShared.value ? sharedRecords.value.length : store.records.length
-  const filtered = showShared.value ? displayRecords.value.length : groupedRecords.value.length
+  const filtered = showShared.value ? displayRecords.value.length : sortedGroupedRecords.value.length
   const prefix = showShared.value ? '共享' : '个人'
   if (showShared.value && activeRecommendation.value) {
     return `智能筛选 · ${filtered} / ${activeRecommendation.value.result?.items?.length || 0} 条推荐`
@@ -146,20 +157,50 @@ function latestActivity(record) {
     timestamp(record, 'interview2'),
     timestamp(record, 'interview3'),
     timestamp(record, 'interview4'),
+    timestamp(record, 'warm'),
   )
 }
 
 function progressScore(record) {
   const progress = (record?.progress || [])[0] || '未投递'
-  if (progress === '已挂' || progress === '放弃') return 0
-  if (progress === 'OC') return 8
-  if (record?.result || record?.warm) return 7
-  if (record?.interview4) return 6
-  if (record?.interview3) return 5
-  if (record?.interview2) return 4
-  if (record?.interview1 || progress === '面试') return 3
-  if (record?.exam_date || progress === '机考') return 2
-  if (record?.apply_date || progress === '已投递') return 1
+  const progressRank = {
+    '未投递': 0,
+    '放弃': 0.5,
+    '已挂': 1,
+    '已投递': 2,
+    '机考': 3,
+    '面试': 4,
+    '泡池子': 4.5,
+    'OC': 5
+  }
+  return progressRank[progress] || 0
+}
+
+function progressTime(record) {
+  const progress = (record?.progress || [])[0] || '未投递'
+
+  if (progress === '已投递') {
+    return timestamp(record, 'apply_date')
+  }
+  if (progress === '机考') {
+    return timestamp(record, 'exam_date')
+  }
+  if (progress === '面试') {
+    // 面试阶段：返回最后一次面试时间
+    return Math.max(
+      timestamp(record, 'interview1'),
+      timestamp(record, 'interview2'),
+      timestamp(record, 'interview3'),
+      timestamp(record, 'interview4')
+    )
+  }
+  if (progress === '泡池子') {
+    return timestamp(record, 'warm')
+  }
+  if (progress === 'OC' || progress === '已挂') {
+    return timestamp(record, 'result')
+  }
+
   return 0
 }
 

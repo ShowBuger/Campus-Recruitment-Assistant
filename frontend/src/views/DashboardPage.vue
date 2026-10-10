@@ -46,7 +46,7 @@ const FILTER_COLUMNS = [
   { value: 'warm', label: '泡池子时间', type: 'date' },
   { value: 'result', label: '结果时间', type: 'date' },
   { value: 'deadline', label: '截止时间', type: 'date' },
-  { value: 'progress', label: '进展', type: 'select', options: ['未投递', '已投递', '机考', '面试', 'OC', '已挂', '放弃'] },
+  { value: 'progress', label: '进展', type: 'select', options: ['未投递', '已投递', '机考', '面试', '泡池子', 'OC', '已挂', '放弃'] },
 ]
 let filterConditionId = 0
 const RECORD_SORT_VALUES = new Set(['updated-desc', 'progress-desc', 'priority-desc', 'apply-desc', 'apply-asc', 'deadline-asc', 'company-asc'])
@@ -301,26 +301,55 @@ const { groupedRecords, selectPosition, toggleExpanded, isExpanded } = useRecord
 const visibleRecordGroups = computed(() => {
   const items = [...groupedRecords.value]
   const timestamp = (record, field) => Number(record?.[field] || 0)
-  const latestActivity = record => Math.max(timestamp(record, 'progress_updated_at'), timestamp(record, 'apply_date'), timestamp(record, 'exam_date'), timestamp(record, 'interview1'), timestamp(record, 'interview2'), timestamp(record, 'interview3'), timestamp(record, 'interview4'))
+  const latestActivity = record => Math.max(
+    timestamp(record, 'progress_updated_at'),
+    timestamp(record, 'apply_date'),
+    timestamp(record, 'exam_date'),
+    timestamp(record, 'interview1'),
+    timestamp(record, 'interview2'),
+    timestamp(record, 'interview3'),
+    timestamp(record, 'interview4'),
+    timestamp(record, 'warm')
+  )
   const priorityScore = record => (String(record?.priority || '').match(/⭐/g) || []).length
   const progressScore = record => {
     const progress = (record?.progress || [])[0] || '未投递'
-    if (progress === '已挂' || progress === '放弃') return 0
-    if (progress === 'OC') return 8
-    if (record?.result) return 7
-    if (record?.warm) return 7
-    if (record?.interview4) return 6
-    if (record?.interview3) return 5
-    if (record?.interview2) return 4
-    if (record?.interview1 || progress === '面试') return 3
-    if (record?.exam_date || progress === '机考') return 2
-    if (record?.apply_date || progress === '已投递') return 1
+    const progressRank = {
+      '未投递': 0,
+      '放弃': 0.5,
+      '已挂': 1,
+      '已投递': 2,
+      '机考': 3,
+      '面试': 4,
+      '泡池子': 4.5,
+      'OC': 5
+    }
+    return progressRank[progress] || 0
+  }
+  const progressTime = record => {
+    const progress = (record?.progress || [])[0] || '未投递'
+    if (progress === '已投递') return timestamp(record, 'apply_date')
+    if (progress === '机考') return timestamp(record, 'exam_date')
+    if (progress === '面试') {
+      return Math.max(
+        timestamp(record, 'interview1'),
+        timestamp(record, 'interview2'),
+        timestamp(record, 'interview3'),
+        timestamp(record, 'interview4')
+      )
+    }
+    if (progress === '泡池子') return timestamp(record, 'warm')
+    if (progress === 'OC' || progress === '已挂') return timestamp(record, 'result')
     return 0
   }
   items.sort((a, b) => {
     if (recordSort.value === 'company-asc') return String(a.company || '').localeCompare(String(b.company || ''), 'zh-CN')
     if (recordSort.value === 'priority-desc') return priorityScore(b) - priorityScore(a) || latestActivity(b) - latestActivity(a)
-    if (recordSort.value === 'progress-desc') return progressScore(b) - progressScore(a) || latestActivity(b) - latestActivity(a)
+    if (recordSort.value === 'progress-desc') {
+      const progressDiff = progressScore(b) - progressScore(a)
+      if (progressDiff !== 0) return progressDiff
+      return progressTime(b) - progressTime(a)
+    }
     if (recordSort.value === 'apply-desc') return timestamp(b, 'apply_date') - timestamp(a, 'apply_date')
     if (recordSort.value === 'apply-asc') return timestamp(a, 'apply_date') - timestamp(b, 'apply_date')
     if (recordSort.value === 'deadline-asc') return (timestamp(a, 'deadline') || Number.MAX_SAFE_INTEGER) - (timestamp(b, 'deadline') || Number.MAX_SAFE_INTEGER)
