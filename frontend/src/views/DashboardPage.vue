@@ -28,6 +28,7 @@ const recordsTableScroll = ref(null)
 const RECORD_LOAD_SIZE = 40
 const visibleRecordCount = ref(RECORD_LOAD_SIZE)
 const draftFilter = ref(null)
+let recordsLoadingMore = false
 const FILTER_OPERATORS = [
   { value: 'equals', label: '等于' }, { value: 'not_equals', label: '不等于' },
   { value: 'contains', label: '包含' }, { value: 'not_contains', label: '不包含' },
@@ -297,7 +298,20 @@ const searchedGroupSource = computed(() => {
   ].join(' ').toLocaleLowerCase('zh-CN').includes(query)).map(item => String(item.company || '').trim().toLocaleLowerCase('zh-CN')))
   return recordGroupSource.value.filter(item => matchingCompanies.has(String(item.company || '').trim().toLocaleLowerCase('zh-CN')))
 })
-const { groupedRecords, selectPosition, toggleExpanded, isExpanded } = useRecordGroups(searchedGroupSource)
+const { groupedRecords, selectPosition, toggleExpanded: _toggleExpanded, isExpanded } = useRecordGroups(searchedGroupSource)
+
+function toggleExpanded(group) {
+  _toggleExpanded(group)
+  // Check if we need to load more after expanding
+  nextTick(() => {
+    if (recordsTableScroll.value) {
+      const target = recordsTableScroll.value
+      if (target.scrollHeight - target.scrollTop - target.clientHeight <= 160) {
+        loadMoreRecordGroups()
+      }
+    }
+  })
+}
 const visibleRecordGroups = computed(() => {
   const items = [...groupedRecords.value]
   const timestamp = (record, field) => Number(record?.[field] || 0)
@@ -367,11 +381,15 @@ watch([recordSearch, recordSort, activeFilter], async () => {
 }, { deep: true })
 
 function loadMoreRecordGroups() {
-  if (!hasMoreRecordGroups.value) return
+  if (!hasMoreRecordGroups.value || recordsLoadingMore) return
+  recordsLoadingMore = true
   visibleRecordCount.value = Math.min(
     visibleRecordGroups.value.length,
     visibleRecordCount.value + RECORD_LOAD_SIZE,
   )
+  nextTick(() => {
+    recordsLoadingMore = false
+  })
 }
 
 function onRecordsTableScroll(event) {
@@ -381,7 +399,7 @@ function onRecordsTableScroll(event) {
 }
 
 function onPageScroll() {
-  if (!calendarCollapsed.value || !hasMoreRecordGroups.value || !recordsTableScroll.value) return
+  if (!calendarCollapsed.value || !hasMoreRecordGroups.value || !recordsTableScroll.value || recordsLoadingMore) return
   const tableBottom = recordsTableScroll.value.getBoundingClientRect().bottom
   if (tableBottom - window.innerHeight <= 160) loadMoreRecordGroups()
 }

@@ -77,7 +77,34 @@ const displayRecords = computed(() => {
 })
 
 const groupSource = computed(() => showShared.value ? [] : displayRecords.value)
-const { groupedRecords, selectPosition, toggleExpanded, isExpanded } = useRecordGroups(groupSource)
+const { groupedRecords, selectPosition, toggleExpanded: _toggleExpanded, isExpanded } = useRecordGroups(groupSource)
+
+function toggleExpanded(group) {
+  _toggleExpanded(group)
+  // Check if we need to load more after expanding
+  nextTick(() => {
+    if (sharedTableScroll.value) {
+      const target = sharedTableScroll.value
+      if (target.scrollHeight - target.scrollTop - target.clientHeight <= 160) {
+        if (showShared.value) {
+          if (sharedVisibleCount.value < displayRecords.value.length) {
+            sharedVisibleCount.value = Math.min(
+              displayRecords.value.length,
+              sharedVisibleCount.value + TABLE_LOAD_SIZE,
+            )
+          }
+        } else {
+          if (personalVisibleCount.value < groupedRecords.value.length) {
+            personalVisibleCount.value = Math.min(
+              groupedRecords.value.length,
+              personalVisibleCount.value + TABLE_LOAD_SIZE,
+            )
+          }
+        }
+      }
+    }
+  })
+}
 
 // 对分组后的记录进行排序
 const sortedGroupedRecords = computed(() => {
