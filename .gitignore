@@ -31,6 +31,11 @@ __pycache__/
 .venv/
 venv/
 
+# Node.js (root directory only)
+/package.json
+/package-lock.json
+/node_modules/
+
 # 临时文件 / 调试产物
 tmp/
 *.orig
