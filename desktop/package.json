@@ -1,0 +1,79 @@
+{
+  "name": "campus-recruitment",
+  "version": "1.5.4",
+  "description": "校招信息看板桌面应用 — 校园招聘岗位管理与进度追踪",
+  "author": "Campus Recruitment Assistant",
+  "license": "UNLICENSED",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron .",
+    "build:win": "electron-builder --win nsis --publish never",
+    "release:win": "electron-builder --win nsis --publish always",
+    "build:linux": "electron-builder --linux",
+    "build:mac": "electron-builder --mac"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.campus.recruitment",
+    "productName": "校招信息看板",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "url-routing.js",
+      "assets/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "executableName": "CampusBoard",
+      "artifactName": "CampusBoard-${version}.exe"
+    },
+    "nsis": {
+      "include": "installer.nsh",
+      "oneClick": true,
+      "perMachine": false,
+      "differentialPackage": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "校招信息看板",
+      "runAfterFinish": true
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "https://www.toudimianban.cloud/api/desktop/updates/windows",
+      "useMultipleRangeRequest": false
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Office"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.productivity"
+    }
+  }
+}

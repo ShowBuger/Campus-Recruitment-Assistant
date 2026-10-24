@@ -1,0 +1,212 @@
+<script setup>
+import { onMounted, ref, watch } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import LoginStyleSwitcher from '@/components/LoginStyleSwitcher.vue'
+
+const auth = useAuthStore()
+const REMEMBER_KEY = 'rb_remember_password'
+const AUTO_LOGIN_KEY = 'rb_auto_login'
+const USERNAME_KEY = 'rb_saved_username'
+const PASSWORD_KEY = 'rb_saved_password'
+
+const username = ref('')
+const password = ref('')
+const inviteCode = ref('')
+const error = ref('')
+const loading = ref(false)
+const isRegister = ref(false)
+const rememberPassword = ref(localStorage.getItem(REMEMBER_KEY) === '1')
+const autoLogin = ref(localStorage.getItem(AUTO_LOGIN_KEY) === '1')
+
+if (rememberPassword.value) {
+  username.value = localStorage.getItem(USERNAME_KEY) || ''
+  password.value = localStorage.getItem(PASSWORD_KEY) || ''
+}
+
+watch(rememberPassword, enabled => {
+  localStorage.setItem(REMEMBER_KEY, enabled ? '1' : '0')
+  if (!enabled) {
+    autoLogin.value = false
+    localStorage.removeItem(USERNAME_KEY)
+    localStorage.removeItem(PASSWORD_KEY)
+  }
+})
+
+watch(autoLogin, enabled => {
+  localStorage.setItem(AUTO_LOGIN_KEY, enabled ? '1' : '0')
+  if (enabled) rememberPassword.value = true
+})
+
+function toggleMode() {
+  isRegister.value = !isRegister.value
+  error.value = ''
+}
+
+async function submit(isAutomatic = false) {
+  error.value = ''
+  loading.value = true
+  try {
+    if (isRegister.value) {
+      await auth.register(username.value, password.value, inviteCode.value)
+    } else {
+      await auth.login(username.value, password.value)
+      if (rememberPassword.value) {
+        localStorage.setItem(USERNAME_KEY, username.value)
+        localStorage.setItem(PASSWORD_KEY, password.value)
+      }
+    }
+  } catch (e) {
+    error.value = e?.message || '操作失败，请重试'
+    if (isAutomatic) autoLogin.value = false
+  } finally {
+    loading.value = false
+  }
+}
+
+function control(action) {
+  window.electronAPI?.windowControl?.(action)
+}
+
+onMounted(() => {
+  control('login-size')
+  if (!auth.token && autoLogin.value && username.value && password.value) submit(true)
+})
+</script>
+
+<template>
+  <main class="desktop-login">
+    <header class="desktop-login-titlebar">
+      <div><span></span><b>CAMPUS_BOARD</b></div>
+      <nav>
+        <button type="button" title="最小化" @click="control('minimize')">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 11h10v2H3z"/></svg>
+        </button>
+        <button type="button" title="关闭到托盘" @click="control('close')">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h2v2h2v2h2V4h2V2h2v2h-2v2H9v2h2v2h2v2h-2v-2H9V8H7v2H5v2H3v-2h2V8h2V6H5V4H3V2Z"/></svg>
+        </button>
+      </nav>
+    </header>
+
+    <section class="desktop-login-content">
+      <div class="desktop-login-avatar"><span></span></div>
+      <div class="desktop-login-copy">
+        <small>{{ isRegister ? 'NEW / ACCOUNT' : 'WELCOME / BACK' }}</small>
+        <h1>{{ isRegister ? '注册账号' : '校招信息看板' }}</h1>
+        <p>{{ isRegister ? '使用管理员提供的一次性邀请码' : '登录后继续管理你的校招投递' }}</p>
+      </div>
+
+      <LoginStyleSwitcher class="desktop-login-style" />
+
+      <form @submit.prevent="submit(false)">
+        <label>
+          <span>用户名</span>
+          <input v-model.trim="username" required minlength="2" maxlength="50" autocomplete="username" placeholder="请输入用户名">
+        </label>
+        <label>
+          <span>密码</span>
+          <input v-model="password" required minlength="4" maxlength="100" type="password" :autocomplete="isRegister ? 'new-password' : 'current-password'" placeholder="请输入密码">
+        </label>
+        <label v-if="isRegister">
+          <span>邀请码</span>
+          <input v-model.trim="inviteCode" required maxlength="32" autocomplete="off" placeholder="CRA-XXXX-XXXX">
+        </label>
+
+        <div v-if="!isRegister" class="desktop-login-options">
+          <label><input v-model="rememberPassword" type="checkbox"><span>记住密码</span></label>
+          <label><input v-model="autoLogin" type="checkbox"><span>自动登录</span></label>
+        </div>
+
+        <div class="desktop-login-error" aria-live="polite">{{ error }}</div>
+        <button class="desktop-login-submit" type="submit" :disabled="loading">
+          {{ loading ? '连接中…' : (isRegister ? '注册并进入' : '登录') }}
+        </button>
+      </form>
+
+      <button class="desktop-login-switch" type="button" @click="toggleMode">
+        {{ isRegister ? '已有账号？返回登录' : '没有账号？使用邀请码注册' }}
+      </button>
+    </section>
+    <footer><span>CRA / DESKTOP</span><span>SECURE SESSION</span></footer>
+  </main>
+</template>
+
+<style>
+.desktop-login{display:flex;width:100vw;height:100vh;flex-direction:column;overflow:hidden;border:3px solid var(--ink);border-radius:14px;background-color:var(--bg);background-image:linear-gradient(rgba(56,106,87,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(56,106,87,.07) 1px,transparent 1px);background-size:12px 12px;color:var(--ink);font-family:var(--font);box-shadow:0 12px 36px rgba(15,23,42,.28)}
+.desktop-login-titlebar{-webkit-app-region:drag;display:flex;min-height:38px;align-items:center;justify-content:space-between;border-bottom:3px solid var(--ink);background:repeating-linear-gradient(135deg,var(--blue) 0 8px,color-mix(in srgb,var(--blue) 82%,#fff) 8px 16px);color:#fff}
+.desktop-login-titlebar>div{display:flex;align-items:center;gap:8px;padding-left:11px;text-shadow:2px 2px 0 var(--ink)}.desktop-login-titlebar>div span{width:10px;height:10px;border:2px solid #fff;background:var(--amber);box-shadow:2px 2px 0 var(--ink)}.desktop-login-titlebar b{font:900 9px var(--mono);letter-spacing:.12em}
+.desktop-login-titlebar nav{-webkit-app-region:no-drag;align-self:stretch;display:flex}.desktop-login-titlebar nav button{display:grid;width:38px;height:100%;place-items:center;border:0;background:transparent;color:#fff;cursor:pointer}.desktop-login-titlebar nav button:hover{background:rgba(255,255,255,.16)}.desktop-login-titlebar nav button:last-child:hover{background:var(--red)}.desktop-login-titlebar svg{width:13px;height:13px;fill:currentColor;shape-rendering:crispEdges}
+.desktop-login-content{display:flex;min-height:0;flex:1;flex-direction:column;align-items:center;padding:24px 38px 14px}.desktop-login-avatar{display:grid;width:72px;height:72px;place-items:center;border:3px solid var(--ink);background:var(--panel);box-shadow:6px 6px 0 var(--ink)}.desktop-login-avatar span{width:30px;height:30px;border:5px solid var(--ink);background:var(--blue);box-shadow:5px 5px 0 var(--amber)}
+.desktop-login-copy{margin:18px 0 15px;text-align:center}.desktop-login-copy small{color:var(--blue);font:900 9px var(--mono);letter-spacing:.14em}.desktop-login-copy h1{margin:5px 0 4px;font-size:20px;letter-spacing:.04em}.desktop-login-copy p{margin:0;color:var(--muted);font-size:11px}
+.desktop-login-style{position:fixed;top:48px;right:12px}
+form{width:100%}form>label{display:block;margin-bottom:10px}form>label>span{display:block;margin-bottom:5px;font-size:10px;font-weight:900}input{width:100%;height:38px;padding:0 11px;border:2px solid var(--ink);border-radius:0;background:var(--panel);color:var(--ink);font:12px var(--font);outline:none;box-shadow:2px 2px 0 var(--line2)}input:focus{background:var(--blueS);box-shadow:3px 3px 0 var(--ink)}
+.desktop-login-options{display:flex;justify-content:space-between;margin:3px 0 0}.desktop-login-options label{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:10px;cursor:pointer}.desktop-login-options input{width:14px;height:14px;margin:0;padding:0;box-shadow:none;accent-color:var(--blue)}
+.desktop-login-error{min-height:25px;padding-top:7px;color:var(--red);font-size:10px;text-align:center}.desktop-login-submit{width:100%;height:39px;border:2px solid var(--ink);border-radius:0;background:var(--blue);color:#fff;box-shadow:3px 3px 0 var(--ink);font:900 12px var(--font);cursor:pointer}.desktop-login-submit:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink)}.desktop-login-submit:disabled{cursor:wait;opacity:.65}
+.desktop-login-switch{margin-top:15px;border:0;background:transparent;color:var(--blue);font:900 10px var(--font);cursor:pointer}.desktop-login-switch:hover{text-decoration:underline}
+.desktop-login>footer{display:flex;justify-content:space-between;padding:7px 10px;border-top:2px solid var(--ink);background:var(--panel);color:var(--muted);font:900 8px var(--mono);letter-spacing:.08em}
+
+html[data-style="aurora"] .desktop-login{border:1px solid rgba(255,255,255,.42);background-color:rgba(239,242,255,.18);background-image:radial-gradient(circle at 15% 5%,rgba(117,89,255,.32),transparent 43%),radial-gradient(circle at 90% 80%,rgba(60,200,189,.28),transparent 46%);box-shadow:0 32px 80px rgba(39,31,105,.24),inset 0 1px rgba(255,255,255,.55);backdrop-filter:blur(28px) saturate(165%)}
+html[data-style="aurora"] .desktop-login-titlebar{border-bottom:1px solid rgba(255,255,255,.3);background:linear-gradient(100deg,rgba(101,81,216,.45),rgba(59,141,173,.28) 60%,rgba(58,169,143,.25));backdrop-filter:blur(24px) saturate(170%)}
+html[data-style="aurora"] .desktop-login-titlebar>div{text-shadow:none}
+html[data-style="aurora"] .desktop-login-avatar{border:1px solid rgba(255,255,255,.7);border-radius:22px;background:rgba(255,255,255,.18);box-shadow:0 18px 42px rgba(74,56,161,.2),inset 0 1px rgba(255,255,255,.75);backdrop-filter:blur(24px) saturate(160%)}
+html[data-style="aurora"] .desktop-login-avatar span{border:0;border-radius:12px;background:linear-gradient(135deg,#7559ff,#3cc8bd);box-shadow:0 8px 18px rgba(104,87,229,.32)}
+html[data-style="aurora"] input{border:1px solid var(--line2);border-radius:11px;box-shadow:inset 0 1px 0 rgba(255,255,255,.6)}
+html[data-style="aurora"] input:focus{box-shadow:0 0 0 3px var(--blueS)}
+html[data-style="aurora"] .desktop-login-submit{border:0;border-radius:11px;background:linear-gradient(135deg,#7559ff,#537ee9);box-shadow:0 9px 22px rgba(104,87,229,.28)}
+html[data-style="aurora"] .desktop-login>footer{border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.09);backdrop-filter:blur(18px)}
+
+
+html[data-style="anime"] .desktop-login{border:3px solid var(--ink);background-color:var(--bg);background-image:radial-gradient(circle at 1px 1px,var(--redS) 1px,transparent 1.3px);background-size:18px 18px}
+html[data-style="anime"] .desktop-login-titlebar{border-bottom:2px solid var(--ink);background:linear-gradient(100deg,#354f9e 0 68%,#df6279 68%)}
+html[data-style="anime"] .desktop-login-titlebar>div{text-shadow:none}
+html[data-style="anime"] .desktop-login-titlebar>div span{border-radius:50%;background:#ffd071}
+html[data-style="anime"] .desktop-login-avatar{border:3px solid var(--ink);border-radius:50% 50% 44% 56%;background:linear-gradient(135deg,#fff,#ffe5ea);box-shadow:5px 6px 0 var(--ink);transform:rotate(-3deg)}
+html[data-style="anime"] .desktop-login-avatar span{border:0;background:#526dc7;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 56%,80% 94%,50% 71%,20% 94%,32% 56%,2% 35%,39% 35%);box-shadow:none}
+html[data-style="anime"] input{border:2px solid var(--line2);border-radius:9px 14px 9px 14px;box-shadow:inset 0 -3px 0 var(--blueS)}
+html[data-style="anime"] .desktop-login-submit{border:2px solid var(--ink);border-radius:9px 14px 9px 14px;background:var(--blue);box-shadow:3px 4px 0 var(--ink)}
+html[data-style="anime"] .desktop-login>footer{border-color:var(--ink);background:var(--sidebar)}
+
+html[data-style="journal"] .desktop-login{border:1px solid #5a392e;border-radius:14px;background-color:#f4ead7;background-image:linear-gradient(90deg,rgba(123,49,64,.12) 0 34px,transparent 34px),repeating-linear-gradient(0deg,transparent 0 27px,rgba(117,85,53,.07) 28px);box-shadow:0 28px 70px rgba(38,23,16,.4),inset 0 0 0 1px rgba(255,255,255,.55);color:#392d28;font-family:"Noto Sans SC","Microsoft YaHei",sans-serif}
+html[data-style="journal"] .desktop-login-titlebar{border-bottom:1px solid #431721;background:linear-gradient(90deg,#4d1c27,#7b3140 72%,#9a6f44);color:#f7ead3}
+html[data-style="journal"] .desktop-login-titlebar>div{text-shadow:none}html[data-style="journal"] .desktop-login-titlebar>div span{border:1px solid #e1c08d;border-radius:2px;background:#efe0bd;box-shadow:2px 2px 0 #3d1820}
+html[data-style="journal"] .desktop-login-avatar{border:1px solid #9c805c;border-radius:4px 12px 12px 4px;background:#f9f0de;box-shadow:6px 8px 0 rgba(82,54,36,.18),inset 8px 0 rgba(123,49,64,.1)}
+html[data-style="journal"] .desktop-login-avatar span{border:0;background:#7b3140;box-shadow:none;clip-path:polygon(0 0,100% 0,100% 100%,50% 76%,0 100%)}
+html[data-style="journal"] .desktop-login-copy small{color:#7b3140;font-family:Georgia,serif}html[data-style="journal"] .desktop-login-copy h1{font-family:"Songti SC","STSong",serif;letter-spacing:.08em}
+html[data-style="journal"] input{border:0;border-bottom:1px solid #aa9270;border-radius:0;background:rgba(255,255,255,.2);box-shadow:none;color:#392d28}
+html[data-style="journal"] input:focus{background:rgba(255,255,255,.42);box-shadow:0 2px 0 #7b3140}
+html[data-style="journal"] .desktop-login-submit{border:1px solid #4b1c26;border-radius:4px;background:linear-gradient(#8b3c4b,#6e2937);box-shadow:2px 3px 0 #4b1c26}
+html[data-style="journal"] .desktop-login>footer{border-color:#aa9270;background:rgba(123,49,64,.06);font-family:Georgia,serif}
+html[data-style="journal"][data-theme="dark"] .desktop-login{border-color:#130d0b;background-color:#2f2622;background-image:linear-gradient(90deg,rgba(202,120,135,.12) 0 34px,transparent 34px),repeating-linear-gradient(0deg,transparent 0 27px,rgba(215,190,153,.045) 28px);color:#efe2cb;box-shadow:0 28px 70px rgba(0,0,0,.58),inset 0 0 0 1px rgba(255,255,255,.06)}
+html[data-style="journal"][data-theme="dark"] .desktop-login-avatar{border-color:#6c5648;background:#382d28;box-shadow:6px 8px 0 rgba(0,0,0,.28),inset 8px 0 rgba(202,120,135,.1)}
+html[data-style="journal"][data-theme="dark"] .desktop-login-copy p,html[data-style="journal"][data-theme="dark"] .desktop-login-options label{color:#c2b29f}html[data-style="journal"][data-theme="dark"] input{border-color:#6c5648;background:rgba(255,255,255,.025);color:#efe2cb}html[data-style="journal"][data-theme="dark"] input:focus{background:rgba(255,255,255,.06)}
+
+/* Paperbound archive login edition. */
+html[data-style="journal"] .desktop-login{border:1px solid #244d41;border-left:10px solid #244d41;border-radius:4px 15px 15px 4px;background-color:#f8f6ed;background-image:linear-gradient(90deg,transparent 0 35px,rgba(185,87,70,.14) 35px 36px,transparent 36px),repeating-linear-gradient(0deg,transparent 0 29px,rgba(47,103,86,.07) 29px 30px);box-shadow:12px 16px 0 rgba(24,52,43,.18),0 28px 70px rgba(24,52,43,.32);color:#202b27}
+html[data-style="journal"] .desktop-login-titlebar{border-bottom:1px solid #102820;background:linear-gradient(90deg,#173b30,#2f6756 74%,#b95746);color:#f5f1e5}
+html[data-style="journal"] .desktop-login-titlebar>div span{border-color:#d9cfad;background:#f2edda;box-shadow:inset 4px 0 #b95746,2px 2px 0 #102820}
+html[data-style="journal"] .desktop-login-avatar{border-color:#76877c;border-radius:3px 12px 12px 3px;background:#f8f6ed;box-shadow:6px 8px 0 rgba(40,58,50,.16),inset 8px 0 rgba(47,103,86,.12)}
+html[data-style="journal"] .desktop-login-avatar span{background:#2f6756}
+html[data-style="journal"] .desktop-login-copy small{color:#2f6756}html[data-style="journal"] input{border-color:#76877c;background:rgba(255,255,255,.24);color:#202b27}html[data-style="journal"] input:focus{background:rgba(255,255,255,.58);box-shadow:0 2px 0 #2f6756}
+html[data-style="journal"] .desktop-login-submit{border-color:#214c3f;background:#2f6756;box-shadow:2px 3px 0 #214c3f}
+html[data-style="journal"] .desktop-login>footer{border-color:#c2c8bc;background:rgba(47,103,86,.07)}
+html[data-style="journal"][data-theme="dark"] .desktop-login{border-color:#0d211b;background-color:#252e2a;background-image:linear-gradient(90deg,transparent 0 35px,rgba(220,124,105,.13) 35px 36px,transparent 36px),repeating-linear-gradient(0deg,transparent 0 29px,rgba(114,179,157,.06) 29px 30px);color:#f1eee3;box-shadow:12px 16px 0 rgba(0,0,0,.28),0 28px 70px rgba(0,0,0,.58)}
+html[data-style="journal"][data-theme="dark"] .desktop-login-avatar{border-color:#728178;background:#2d3732;box-shadow:6px 8px 0 rgba(0,0,0,.28),inset 8px 0 rgba(114,179,157,.12)}html[data-style="journal"][data-theme="dark"] input{border-color:#728178;background:rgba(255,255,255,.025);color:#f1eee3}
+
+
+html[data-style="cyber"] .desktop-login{border:3px solid #111923;border-radius:8px;color:#111923;background-color:#cfd3c4;background-image:linear-gradient(118deg,rgba(248,231,28,.48) 0 32%,transparent 32.2%),linear-gradient(rgba(17,25,35,.11) 1px,transparent 1px),linear-gradient(90deg,rgba(17,25,35,.11) 1px,transparent 1px);background-size:100% 100%,28px 28px,28px 28px;box-shadow:inset 0 0 0 2px #00d9f5}
+html[data-style="cyber"] .desktop-login-titlebar{border-bottom:3px solid #111923;color:#111923;background:#f8e71c;box-shadow:inset 0 -5px #ff2a5f}
+html[data-style="cyber"] .desktop-login-titlebar>div{text-shadow:2px 1px 0 #fff,4px 2px 0 rgba(0,217,245,.62)}
+html[data-style="cyber"] .desktop-login-titlebar>div span{border:2px solid #111923;border-radius:0;background:#ff2a5f;box-shadow:4px 0 #00d9f5;transform:skew(-10deg)}
+html[data-style="cyber"] .desktop-login-titlebar nav button{border-left:2px solid #111923;color:#111923}html[data-style="cyber"] .desktop-login-titlebar nav button:hover{color:#f8e71c;background:#111923}html[data-style="cyber"] .desktop-login-titlebar nav button:last-child:hover{color:#fff;background:#ff2a5f}
+html[data-style="cyber"] .desktop-login-content{position:relative}
+html[data-style="cyber"] .desktop-login-content:before{content:"";position:absolute;left:0;right:0;top:18px;height:8px;background:repeating-linear-gradient(135deg,#111923 0 7px,#f8e71c 7px 14px);opacity:.85}
+html[data-style="cyber"] .desktop-login-avatar{border:3px solid #111923;border-radius:0;background:#eef0d9;box-shadow:8px 8px 0 #ff2a5f,-5px -5px 0 #00d9f5;clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,10px 100%,0 calc(100% - 10px))}
+html[data-style="cyber"] .desktop-login-avatar span{border:5px solid #111923;background:#00d9f5;box-shadow:6px 6px 0 #f8e71c,-4px -4px 0 #ff2a5f}
+html[data-style="cyber"] .desktop-login-copy small{color:#ff2a5f;text-shadow:2px 1px 0 #00d9f5}html[data-style="cyber"] .desktop-login-copy h1{text-shadow:3px 2px 0 rgba(255,255,255,.65),6px 3px 0 rgba(0,217,245,.42)}
+html[data-style="cyber"] .desktop-login-submit{border:3px solid #111923;border-radius:0;color:#111923;background:#f8e71c;box-shadow:6px 6px 0 #ff2a5f;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,7px 100%,0 calc(100% - 7px))}
+html[data-style="cyber"] .desktop-login-submit:hover{color:#111923;background:#00d9f5;box-shadow:8px 8px 0 #ff2a5f,-3px -3px 0 #f8e71c;transform:translate(-3px,-3px)}
+html[data-style="cyber"] .desktop-login-switch{color:#ff2a5f;text-shadow:1px 1px 0 rgba(0,217,245,.45)}
+html[data-style="cyber"] .desktop-login>footer{border-color:#111923;color:#8ed5da;background:#172c35;box-shadow:inset 10px 0 #ff2a5f}
+
+/* Electron 已用透明无框窗口提供轮廓，登录容器不再额外绘制主题外框。 */
+.desktop-login{border:0!important}
+</style>

@@ -1,0 +1,652 @@
+"""Administrator-only salary lookup sourced from a Feishu spreadsheet."""
+
+from __future__ import annotations
+
+import csv
+import hashlib
+import io
+import os
+import re
+import threading
+import time
+import unicodedata
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field, field_validator
+
+from app import auth as auth_module, database, feishu_sync
+from tools.offershow_scraper import OfferShowError, OfferShowScraper
+
+
+router = APIRouter(prefix="/api/salaries", tags=["salary"])
+# 飞书薪资表基础URL
+FEISHU_BASE_URL = "https://kcn2brthfhqd.feishu.cn/wiki/VyUrwEUqginb3MkhpTxcStKXnmB?from=from_copylink"
+# 要查询的工作表列表：27届秋招 + 24-26届汇总
+SALARY_SHEETS = [
+    {"sheet_id": "8DrWvH", "name": "27届秋招", "year": "2027"},
+    {"sheet_id": "E55I66", "name": "24-26届汇总", "year": "2024-2026"},
+]
+CACHE_SECONDS = 30 * 60
+_cache_lock = threading.Lock()
+_cache: dict = {"loaded_at": 0.0, "records": [], "sheet_name": ""}
+_offershow_cache: dict[str, dict] = {}
+OFFERSHOW_CACHE_SECONDS = 10 * 60
+ENV_PATH = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+OFFERSHOW_TOKEN_PATH = os.path.join(os.path.dirname(__file__), "..", "..", ".offershow-token")
+
+
+class OfferShowTokenConfig(BaseModel):
+    token: str = Field(default="", max_length=4096)
+
+    @field_validator("token")
+    @classmethod
+    def validate_token(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            return ""
+        if value.count(".") != 2 or any(char.isspace() for char in value):
+            raise ValueError("Token 格式不正确")
+        return value
+
+
+class PublicOfferShowTokenConfig(OfferShowTokenConfig):
+    token: str = Field(..., min_length=1, max_length=4096)
+
+    @field_validator("token")
+    @classmethod
+    def require_token(cls, value: str) -> str:
+        if not value:
+            raise ValueError("请输入公共 Token")
+        return value
+
+
+def require_admin(user: dict = Depends(auth_module.get_current_user)) -> dict:
+    if not (user.get("is_root") or user.get("is_admin")):
+        raise HTTPException(status_code=403, detail="仅管理员可以查询薪资数据")
+    return user
+
+
+def _compact(value: str) -> str:
+    text = unicodedata.normalize("NFKC", value or "").casefold()
+    return re.sub(r"[^0-9a-z\u4e00-\u9fff]+", "", text)
+
+
+def _mask_contact(value: str) -> str:
+    text = str(value or "").strip()
+    text = re.sub(r"(?<!\d)1\d{10}(?!\d)", "[联系方式已隐藏]", text)
+    return re.sub(r"(?i)(vx|v信|微信)\s*[:：]?\s*[a-z0-9_-]{5,}", "微信：[已隐藏]", text)
+
+
+def _read_salary_sheet() -> tuple[list[dict], str]:
+    """从多个飞书工作表读取薪资数据并合并"""
+    all_records = []
+    sheet_names = []
+
+    for sheet_config in SALARY_SHEETS:
+        sheet_id = sheet_config["sheet_id"]
+        sheet_name = sheet_config["name"]
+        default_year = sheet_config["year"]
+
+        try:
+            # 构建当前工作表的URL
+            url = f"{FEISHU_BASE_URL}&sheet={sheet_id}"
+            url = feishu_sync.validate_url(url)
+
+            # 获取工作表信息
+            workbook = feishu_sync._run_cli(
+                "sheets", "+workbook-info", "--url", url, "--as", "user", "--json"
+            )
+            sheets = feishu_sync._find_value(workbook, "sheets")
+            visible = [item for item in sheets or [] if isinstance(item, dict) and not item.get("is_hidden")]
+
+            # 查找目标工作表
+            selected = next(
+                (item for item in visible if str(item.get("sheet_id") or "") == sheet_id),
+                None,
+            )
+            if not selected:
+                continue  # 跳过不存在的工作表
+
+            row_count = min(max(int(selected.get("row_count") or 1), 1), feishu_sync.MAX_RECORDS)
+            column_count = min(max(int(selected.get("column_count") or 1), 1), 100)
+
+            # 读取工作表数据
+            payload = feishu_sync._run_cli(
+                "sheets", "+csv-get", "--url", url, "--sheet-id", sheet_id,
+                "--range", f"A1:{feishu_sync._column_name(column_count)}{row_count}",
+                "--max-chars", "1000000", "--as", "user", "--json", timeout=120,
+            )
+            annotated = feishu_sync._find_value(payload, "annotated_csv")
+            if not isinstance(annotated, str):
+                continue  # 跳过无法解析的工作表
+
+            # 解析CSV数据
+            clean = re.sub(r"^\[row=\d+\] ", "", annotated, flags=re.MULTILINE)
+            matrix = list(csv.reader(io.StringIO(clean)))
+
+            # 查找表头行
+            header_index = next(
+                (
+                    index for index, row in enumerate(matrix[:30])
+                    if (
+                        any(name in {_compact(cell) for cell in row} for name in ["公司名称", "公司名称统一"])
+                        and "offer薪资" in {_compact(cell) for cell in row}
+                    )
+                ),
+                None,
+            )
+            if header_index is None:
+                continue  # 跳过没有标准表头的工作表
+
+            headers = [_compact(cell) for cell in matrix[header_index]]
+
+            # 检测是否有"届别"列（24-26届汇总表有此列）
+            has_year_column = "届别" in headers
+
+            aliases = {
+                "year_col": ("届别",),
+                "company": ("公司名称统一", "公司名称", "公司"),
+                "salary": ("offer薪资", "薪资", "总包"),
+                "city": ("城市", "工作地点"),
+                "education": ("个人学历", "学历"),
+                "job": ("岗位名称公司信息", "岗位名称", "岗位"),
+                "note": ("备注大家可在此处交流", "备注"),
+            }
+            indexes = {}
+            for field, names in aliases.items():
+                normalized_names = {_compact(name) for name in names}
+                indexes[field] = next((i for i, name in enumerate(headers) if name in normalized_names), None)
+
+            # 使用固定列索引作为后备方案
+            # 注意：24-26届汇总表的列结构是：届别、公司名称、薪资、城市、学历、岗位
+            # 而27届表的列结构是：公司名称、薪资、城市、学历、岗位、备注
+            if has_year_column:
+                # 24-26届汇总表：第一列是届别
+                fallback_indexes = {"year_col": 0, "company": 1, "salary": 2, "city": 3, "education": 4, "job": 5}
+            else:
+                # 27届表：没有届别列
+                fallback_indexes = {"company": 0, "salary": 1, "city": 2, "education": 3, "job": 4, "note": 5}
+
+            for field, fallback in fallback_indexes.items():
+                if indexes[field] is None:
+                    indexes[field] = fallback
+
+            # 解析数据行
+            for source_row in matrix[header_index + 1:]:
+                def cell(field: str) -> str:
+                    index = indexes.get(field)
+                    return str(source_row[index]).strip() if index is not None and index < len(source_row) else ""
+
+                company = cell("company")
+                salary = cell("salary")
+                if not company or not salary or company in {"公司名称", "公司", "公司名称（统一）"}:
+                    continue
+                if "微信公众号" in company or "嵌入式校招菌" in company:
+                    continue
+
+                # 获取年份：如果表中有届别列就使用，否则使用配置的默认年份
+                if has_year_column:
+                    year_text = cell("year_col")
+                    # 提取年份数字，如"2024届" -> "2024"
+                    year_match = re.search(r"(202[4-9]|203[0-9])", year_text)
+                    record_year = year_match.group(1) if year_match else default_year
+                else:
+                    record_year = default_year
+
+                all_records.append({
+                    "id": len(all_records) + 1,
+                    "company": company,
+                    "salary": salary,
+                    "city": cell("city"),
+                    "education": cell("education"),
+                    "job": cell("job"),
+                    "note": _mask_contact(cell("note")),
+                    "year": record_year,
+                    "sheet_name": sheet_name,
+                })
+
+            sheet_names.append(sheet_name)
+
+        except Exception:
+            # 单个工作表失败不影响其他工作表
+            continue
+
+    if not all_records:
+        raise feishu_sync.FeishuSyncError("所有薪资工作表均无法读取")
+
+    combined_sheet_name = " + ".join(sheet_names) if sheet_names else "飞书薪资表"
+    return all_records, combined_sheet_name
+
+
+def _salary_records(force: bool = False) -> tuple[list[dict], str, int]:
+    with _cache_lock:
+        if force or not _cache["records"] or time.time() - _cache["loaded_at"] >= CACHE_SECONDS:
+            records, sheet_name = _read_salary_sheet()
+            _cache.update(loaded_at=time.time(), records=records, sheet_name=sheet_name)
+        return list(_cache["records"]), str(_cache["sheet_name"]), int(_cache["loaded_at"] * 1000)
+
+
+def _search(records: list[dict], keyword: str, company: str, city: str, education: str, job: str) -> list[dict]:
+    filters = {
+        "company": company.strip().casefold(), "city": city.strip().casefold(),
+        "education": education.strip().casefold(), "job": job.strip().casefold(),
+    }
+    keyword = keyword.strip().casefold()
+    output = []
+    for record in records:
+        if any(value and value not in str(record[field]).casefold() for field, value in filters.items()):
+            continue
+        if keyword and keyword not in " ".join(str(record[field]) for field in ("company", "salary", "city", "education", "job")).casefold():
+            continue
+        output.append(record)
+    return output
+
+
+def _format_offer_salary(position: dict) -> str:
+    labels = (("普通", "normal"), ("SP", "sp"), ("SSP", "ssp"))
+    values = [f"{label}：{position.get(field)}" for label, field in labels if position.get(field)]
+    return " / ".join(values) or "暂未披露"
+
+
+def _offershow_publish_year(row: dict) -> str:
+    for field in ("publish_time", "time"):
+        match = re.search(r"(?:19|20)\d{2}", str(row.get(field) or ""))
+        if match:
+            return match.group(0)
+    return ""
+
+
+def _matches_offershow_filters(record: dict, company: str, job: str, city: str) -> bool:
+    filters = {"company": company.casefold(), "job": job.casefold(), "city": city.casefold()}
+    return all(
+        not value or value in str(record.get(field) or "").casefold()
+        for field, value in filters.items()
+    )
+
+
+def _read_offershow_token() -> str:
+    token = ""
+    if os.path.isfile(OFFERSHOW_TOKEN_PATH):
+        with open(OFFERSHOW_TOKEN_PATH, encoding="utf-8") as handle:
+            token = handle.read().strip()
+    if not token:
+        token = os.getenv("OFFERSHOW_ACCESS_TOKEN", "").strip()
+    if not token and os.path.isfile(ENV_PATH):
+        with open(ENV_PATH, encoding="utf-8") as handle:
+            token = next(
+                (line.split("=", 1)[1].strip() for line in handle if line.startswith("OFFERSHOW_ACCESS_TOKEN=")),
+                "",
+            )
+    return token
+
+
+def _effective_offershow_token(user_id: int) -> tuple[str, bool]:
+    personal = str(database.get_user_config(user_id).get("offershow_access_token") or "").strip()
+    return (personal, True) if personal else (_read_offershow_token(), False)
+
+
+def _mask_token(token: str) -> str:
+    return f"{token[:8]}…{token[-6:]}" if len(token) > 16 else "***"
+
+
+def _write_offershow_token(token: str) -> None:
+    target = Path(OFFERSHOW_TOKEN_PATH).resolve()
+    temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(token + "\n", encoding="utf-8")
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, target)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _fetch_offershow_records(keyword: str, token: str | None = None) -> list[dict]:
+    """Fetch OfferShow user-submitted salary disclosures for one query."""
+    token = (token or _read_offershow_token()).strip()
+    if not token:
+        raise OfferShowError("未配置 OFFERSHOW_ACCESS_TOKEN")
+    with OfferShowScraper(interval=1.0, timeout=20.0) as scraper:
+        rows = scraper.search_salary_disclosures(token=token, keyword=keyword)
+    return [{
+        "id": f"offershow:{row.get('id') or index}",
+        "company": str(row.get("company") or "-").strip(),
+        "salary": str(row.get("salary") or "暂未披露").strip(),
+        "city": str(row.get("city") or row.get("region") or "").strip(),
+        "education": str(row.get("xueli") or "").strip(),
+        "job": str(row.get("position") or "-").strip(),
+        "year": _offershow_publish_year(row),
+        "publish_time": str(row.get("publish_time") or "").strip(),
+        "source": "offershow",
+    } for index, row in enumerate(rows)]
+
+
+def _cached_offershow_records(keyword: str, token: str) -> list[dict]:
+    key = f"{hashlib.sha256(token.encode()).hexdigest()[:16]}:{_compact(keyword)}"
+    now = time.time()
+    with _cache_lock:
+        cached = _offershow_cache.get(key)
+        if cached and now - cached["loaded_at"] < OFFERSHOW_CACHE_SECONDS:
+            return list(cached["records"])
+    records = _fetch_offershow_records(keyword, token)
+    with _cache_lock:
+        _offershow_cache[key] = {"loaded_at": now, "records": records}
+    return list(records)
+
+
+@router.get("/offershow/config")
+def get_offershow_config(user: dict = Depends(auth_module.get_current_user)):
+    token, using_personal = _effective_offershow_token(user["user_id"])
+    return {
+        "success": True, "configured": bool(token),
+        "masked_token": _mask_token(token) if token else "",
+        "using_personal": using_personal,
+        "public_configured": bool(_read_offershow_token()),
+    }
+
+
+@router.post("/offershow/config")
+def save_offershow_config(
+    payload: OfferShowTokenConfig,
+    user: dict = Depends(auth_module.get_current_user),
+):
+    database.save_offershow_token(user["user_id"], payload.token)
+    with _cache_lock:
+        _offershow_cache.clear()
+    effective = payload.token or _read_offershow_token()
+    return {
+        "success": True,
+        "message": "个人 OfferShow Token 已保存" if payload.token else "已恢复使用公共 Token",
+        "configured": bool(effective),
+        "using_personal": bool(payload.token),
+        "masked_token": _mask_token(effective) if effective else "",
+    }
+
+
+@router.get("/offershow/public-config")
+def get_public_offershow_config(_: dict = Depends(require_admin)):
+    token = _read_offershow_token()
+    return {
+        "success": True,
+        "configured": bool(token),
+        "masked_token": _mask_token(token) if token else "",
+    }
+
+
+@router.post("/offershow/public-config")
+def save_public_offershow_config(
+    payload: PublicOfferShowTokenConfig,
+    _: dict = Depends(require_admin),
+):
+    try:
+        _write_offershow_token(payload.token)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="公共 Token 保存失败") from exc
+    with _cache_lock:
+        _offershow_cache.clear()
+    return {
+        "success": True,
+        "message": "薪资查询公共 Token 已保存",
+        "configured": True,
+        "masked_token": _mask_token(payload.token),
+    }
+
+
+@router.get("")
+def list_salaries(
+    keyword: str = Query(default="", max_length=100),
+    company: str = Query(default="", max_length=100),
+    city: str = Query(default="", max_length=100),
+    education: str = Query(default="", max_length=100),
+    job: str = Query(default="", max_length=100),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=10, le=200),
+    _: dict = Depends(auth_module.get_current_user),
+):
+    warning = ""
+    try:
+        records, sheet_name, updated_at = _salary_records()
+    except feishu_sync.FeishuSyncError as exc:
+        # 飞书失败时返回空结果但不阻断请求
+        records, sheet_name, updated_at = [], "飞书薪资表", ""
+        warning = f"飞书薪资表暂时不可用：{exc}"
+
+    filtered = _search(records, keyword, company, city, education, job)
+    start = (page - 1) * page_size
+    visible_items = [
+        {**{key: value for key, value in record.items() if key != "note"}, "source": "sheet"}
+        for record in filtered[start:start + page_size]
+    ]
+    return {
+        "success": True, "items": visible_items,
+        "total": len(filtered), "source_total": len(records), "page": page,
+        "page_size": page_size, "sheet_name": sheet_name, "updated_at": updated_at,
+        "warning": warning,
+    }
+
+
+@router.get("/offershow")
+def search_offershow_salaries(
+    keyword: str = Query(default="", max_length=50),
+    company: str = Query(default="", max_length=50),
+    job: str = Query(default="", max_length=50),
+    city: str = Query(default="", max_length=50),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=10, le=200),
+    user: dict = Depends(auth_module.get_current_user),
+):
+    company, job, city = company.strip(), job.strip(), city.strip()
+    keyword = keyword.strip() or company or job or city
+    if not keyword:
+        raise HTTPException(status_code=422, detail="请至少输入公司、岗位或城市中的一项")
+
+    # 尝试获取飞书薪资表数据
+    sheet_name = "飞书薪资表"
+    warning = ""
+    try:
+        sheet_records, sheet_name, _ = _salary_records()
+        local_records = [
+            {**{key: value for key, value in record.items() if key != "note"}, "source": "sheet"}
+            for record in _search(sheet_records, "", company, city, "", job)
+        ]
+    except feishu_sync.FeishuSyncError as exc:
+        local_records = []
+        warning = f"飞书薪资表暂时不可用：{exc}"
+
+    # 尝试获取 OfferShow 数据
+    try:
+        token, _ = _effective_offershow_token(user["user_id"])
+        if not token:
+            raise OfferShowError("公共 Token 和个人 Token 均未配置")
+        remote_records = _cached_offershow_records(keyword, token)
+        remote_records = [
+            record for record in remote_records
+            if _matches_offershow_filters(record, company, job, city)
+        ]
+    except OfferShowError as exc:
+        remote_records = []
+        offershow_warning = f"OfferShow 暂时不可用：{exc}"
+        warning = f"{warning}；{offershow_warning}" if warning else offershow_warning
+
+    # 如果两个数据源都失败，返回友好提示
+    if not local_records and not remote_records:
+        if not warning:
+            warning = "暂无可用的薪资数据源"
+        return {
+            "success": True,
+            "items": [],
+            "total": 0,
+            "source_total": 0,
+            "page": page,
+            "page_size": page_size,
+            "sheet_name": sheet_name,
+            "source": "combined",
+            "local_total": 0,
+            "offershow_total": 0,
+            "warning": warning,
+            "attribution": "总表与 OfferShow 薪资爆料联合查询；OfferShow 数据仅供个人查询与企业内部使用",
+        }
+
+    records = []
+    seen = set()
+    for record in [*local_records, *remote_records]:
+        identity = tuple(_compact(str(record.get(field) or "")) for field in ("company", "salary", "job", "city", "education"))
+        if identity in seen:
+            continue
+        seen.add(identity)
+        records.append(record)
+    start = (page - 1) * page_size
+    return {
+        "success": True,
+        "items": records[start:start + page_size],
+        "total": len(records),
+        "source_total": len(records),
+        "page": page,
+        "page_size": page_size,
+        "sheet_name": f"{sheet_name} + OfferShow",
+        "source": "combined",
+        "local_total": len(local_records),
+        "offershow_total": len(remote_records),
+        "warning": warning,
+        "attribution": "总表与 OfferShow 薪资爆料联合查询；OfferShow 数据仅供个人查询与企业内部使用",
+    }
+
+
+@router.post("/refresh")
+def refresh_salaries(_: dict = Depends(require_admin)):
+    try:
+        records, sheet_name, updated_at = _salary_records(force=True)
+    except feishu_sync.FeishuSyncError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "success": True, "message": f"已同步 {len(records)} 条薪资记录",
+        "total": len(records), "sheet_name": sheet_name, "updated_at": updated_at,
+    }
+
+
+@router.get("/feishu/auth-status")
+def get_feishu_auth_status(_: dict = Depends(require_admin)):
+    """获取飞书授权状态"""
+    import json
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["lark-cli", "auth", "status", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return {
+                "authorized": False,
+                "user": None,
+                "error": result.stderr.strip() or "飞书授权状态读取失败",
+            }
+
+        data = json.loads(result.stdout)
+        identities = data.get("identities", {})
+        user_identity = identities.get("user", {})
+        status = user_identity.get("status", "")
+
+        return {
+            "authorized": status == "ready",
+            "user": user_identity.get("userName") if status == "ready" else None,
+            "error": None if status == "ready" else "飞书授权已失效或未授权",
+        }
+    except subprocess.TimeoutExpired:
+        return {"authorized": False, "user": None, "error": "飞书授权状态读取超时"}
+    except Exception as exc:
+        return {"authorized": False, "user": None, "error": f"飞书授权状态读取失败：{exc}"}
+
+
+@router.post("/feishu/auth-init")
+def init_feishu_auth(_: dict = Depends(require_admin)):
+    """初始化飞书授权流程，返回二维码URL"""
+    import base64
+    import json
+    import subprocess
+    import tempfile
+
+    try:
+        # 生成设备授权码
+        result = subprocess.run(
+            ["lark-cli", "auth", "login", "--domain", "sheets,base", "--no-wait", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"飞书授权初始化失败：{result.stderr.strip()}")
+
+        data = json.loads(result.stdout)
+        verification_url = data.get("verification_url", "")
+        device_code = data.get("device_code", "")
+        user_code = data.get("user_code", "")
+
+        if not verification_url or not device_code:
+            raise HTTPException(status_code=500, detail=f"飞书授权初始化失败：未获取到授权URL（返回数据：{data}）")
+
+        # 生成二维码 PNG 图片
+        qr_image_base64 = ""
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+                qr_path = tmp_file.name
+
+            qr_result = subprocess.run(
+                ["lark-cli", "auth", "qrcode", verification_url, "--output", qr_path],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            if qr_result.returncode == 0 and Path(qr_path).exists():
+                with open(qr_path, "rb") as f:
+                    qr_image_base64 = base64.b64encode(f.read()).decode("utf-8")
+                Path(qr_path).unlink()  # 删除临时文件
+        except Exception as e:
+            # 二维码生成失败不影响整体流程
+            pass
+
+        return {
+            "success": True,
+            "url": verification_url,
+            "device_code": device_code,
+            "user_code": user_code,
+            "qr_image": qr_image_base64,
+        }
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="飞书授权初始化超时")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"飞书授权初始化失败：{exc}") from exc
+
+
+@router.post("/feishu/auth-complete")
+def complete_feishu_auth(device_code: str = Query(...), _: dict = Depends(require_admin)):
+    """完成飞书授权"""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["lark-cli", "auth", "login", "--device-code", device_code],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            error_msg = result.stderr.strip()
+            if "pending" in error_msg.lower():
+                return {"success": False, "pending": True, "message": "等待用户扫码授权"}
+            raise HTTPException(status_code=500, detail=f"飞书授权失败：{error_msg}")
+
+        return {"success": True, "message": "飞书授权成功"}
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="飞书授权超时")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"飞书授权失败：{exc}") from exc

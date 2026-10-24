@@ -1,0 +1,214 @@
+/*
+ * 响应式布局优化
+ * 确保应用在不同屏幕尺寸下都能正常显示
+ */
+
+/* 基础响应式设置 - 强制应用 */
+html {
+  width: 100% !important;
+  height: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+body {
+  width: 100% !important;
+  min-width: 320px !important;
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box !important;
+}
+
+/* 应用容器响应式 - 强制应用 */
+.app {
+  width: 100% !important;
+  max-width: 100vw !important;
+  min-height: 100vh !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* 主内容区域 - 强制应用 */
+.main {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* 页面容器 - 强制应用 */
+.page {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* 表格响应式滚动 - 强制应用 */
+.tbl {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  box-sizing: border-box !important;
+}
+
+/* 卡片响应式 - 强制应用 */
+.card {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* KPI 网格响应式 - 强制应用 */
+.kpis {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* 所有直接子元素也需要响应式 */
+.app > * {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.main > * {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.page > * {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* 移动端优化 (小于 768px) */
+@media (max-width: 767px) {
+  .app {
+    display: block;
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+    max-height: 60vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .main {
+    padding: 16px 12px 40px;
+  }
+
+  /* KPI 改为单列 */
+  .kpis {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* 顶部栏响应式 */
+  .topbar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .topbar h1 {
+    font-size: 20px;
+  }
+
+  /* 表格工具栏 */
+  .total-tools {
+    flex-wrap: wrap;
+  }
+
+  .total-search {
+    max-width: 100%;
+    flex: 1 1 100%;
+  }
+}
+
+/* 平板优化 (768px - 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .app {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .sidebar {
+    padding: 16px 10px;
+  }
+
+  .main {
+    padding: 18px 20px 50px;
+  }
+
+  /* KPI 改为两列 */
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+
+/* 大屏幕优化 (大于 1440px) */
+@media (min-width: 1441px) {
+  .main {
+    max-width: none !important;
+    margin: 0 !important;
+  }
+}
+
+/* 桌面模式特殊处理 */
+.desktop-main-mode .app {
+  width: 100%;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+.desktop-main-mode .main {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 侧边栏折叠状态 */
+@media (min-width: 1081px) {
+  .sidebar-collapsed .app {
+    grid-template-columns: 72px minmax(0, 1fr) !important;
+  }
+}
+
+/* 超小屏幕 (小于 480px) */
+@media (max-width: 479px) {
+  .topbar h1 {
+    font-size: 18px;
+  }
+
+  .btn, .icon-btn {
+    height: 34px;
+    font-size: 12px;
+  }
+
+  .card {
+    border-radius: 14px;
+  }
+
+  .card-hd {
+    padding: 12px 14px;
+  }
+
+  .card-body {
+    padding: 12px 14px;
+  }
+}

@@ -1,0 +1,679 @@
+<script setup>
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { useDashboardStore } from '@/stores/dashboard'
+import { useAuthStore } from '@/stores/auth'
+import ProgressBadge from '@/components/ProgressBadge.vue'
+import { fmtDateChina, fmtDateFullChina } from '@/utils/date'
+import { externalHttpUrl } from '@/utils/externalUrl'
+import TooltipCell from '@/components/TooltipCell.vue'
+import RecordPositionPicker from '@/components/RecordPositionPicker.vue'
+import { get, post } from '@/utils/api'
+import { useAppStore } from '@/stores/app'
+import { useDialogStore } from '@/stores/dialog'
+import { useRecordGroups } from '@/composables/useRecordGroups'
+import { applyRecommendationResult } from '@/utils/recommendationSelection'
+const app = useAppStore()
+const store = useDashboardStore()
+const auth = useAuthStore()
+const dialog = useDialogStore()
+const showShared = ref(false)
+const hideApplied = ref(false)
+const sharedRecords = ref([])
+const sharedCanDelete = ref(false)
+const sharedVisibleCount = ref(30)
+const personalVisibleCount = ref(30)
+const sharedTableScroll = ref(null)
+const TABLE_LOAD_SIZE = 30
+let tableLoadingMore = false
+const searchQuery = ref('')
+const sortValue = ref('default')
+const activeRecommendation = computed(() => app.appliedRecommendation)
+const recommendationDetail = ref(null)
+const importLoading = ref(false)
+const feishuSyncing = ref(false)
+const givemeocSyncing = ref(false)
+const qiuzhiSyncing = ref(false)
+const positionPickerGroup = ref(null)
+const givemeocProgress = ref('')
+const givemeocShow = ref(false)
+const givemeocPhase = ref('scanning')
+const givemeocLabel = ref('扫描岗位')
+const givemeocPercent = ref('检索中')
+const givemeocBarWidth = ref('36%')
+const givemeocDetail = ref('正在查找 2027届 秋招岗位…')
+const givemeocError = ref(false)
+const givemeocIndeterminate = ref(false)
+const canFeishuSync = computed(() => Boolean(auth.isAdmin))
+function isAdmin() { return auth.isAdmin }
+
+const displayRecords = computed(() => {
+  const records = showShared.value ? sharedRecords.value : store.records
+  const query = searchQuery.value.trim().toLowerCase()
+  let items = records
+  if (showShared.value && activeRecommendation.value) {
+    items = applyRecommendationResult(records, activeRecommendation.value.result?.items)
+  }
+  if (query) {
+    items = items.filter(r => {
+      const haystack = [
+        r.company,
+        r.job,
+        r.city,
+        r.batch,
+        r.type,
+        r.priority,
+        r.contributor,
+        ...(r.dir || []),
+        ...(r.progress || []),
+      ].join(' ').toLowerCase()
+      return haystack.indexOf(query) >= 0
+    })
+  }
+  if (!showShared.value && hideApplied.value) {
+    items = items.filter(r => !r.apply_date)
+  }
+  // 不在这里排序了，排序移到分组之后
+  return items
+})
+
+const groupSource = computed(() => showShared.value ? [] : displayRecords.value)
+const { groupedRecords, selectPosition, toggleExpanded, isExpanded } = useRecordGroups(groupSource)
+
+// 对分组后的记录进行排序
+const sortedGroupedRecords = computed(() => {
+  if (showShared.value || sortValue.value === 'default') {
+    return groupedRecords.value
+  }
+
+  const items = [...groupedRecords.value]
+  items.sort((a, b) => {
+    const fallback = 0
+    const latestDiff = latestActivity(b) - latestActivity(a)
+    if (sortValue.value === 'company-asc') {
+      return String(a.company || '').localeCompare(String(b.company || ''), 'zh-CN') || fallback
+    }
+    if (sortValue.value === 'priority-desc') {
+      return priorityScore(b) - priorityScore(a) || latestDiff || fallback
+    }
+    if (sortValue.value === 'priority-asc') {
+      return priorityScore(a) - priorityScore(b) || latestDiff || fallback
+    }
+    if (sortValue.value === 'progress-desc') {
+      // 进展从快到慢：先按进度降序，再按进度对应的时间降序
+      const progressDiff = progressScore(b) - progressScore(a)
+      if (progressDiff !== 0) return progressDiff
+      return progressTime(b) - progressTime(a) || fallback
+    }
+    if (sortValue.value === 'apply-desc') {
+      return timestamp(b, 'apply_date') - timestamp(a, 'apply_date') || fallback
+    }
+    if (sortValue.value === 'apply-asc') {
+      return timestamp(a, 'apply_date') - timestamp(b, 'apply_date') || fallback
+    }
+    if (sortValue.value === 'deadline-asc') {
+      const aDeadline = timestamp(a, 'deadline') || Number.MAX_SAFE_INTEGER
+      const bDeadline = timestamp(b, 'deadline') || Number.MAX_SAFE_INTEGER
+      return aDeadline - bDeadline || fallback
+    }
+    return latestDiff || fallback
+  })
+  return items
+})
+
+const sharedVisibleRecords = computed(() => displayRecords.value.slice(0, sharedVisibleCount.value))
+const personalVisibleRecords = computed(() => sortedGroupedRecords.value.slice(0, personalVisibleCount.value))
+const hasMoreSharedRecords = computed(() => sharedVisibleRecords.value.length < displayRecords.value.length)
+const hasMorePersonalRecords = computed(() => personalVisibleRecords.value.length < sortedGroupedRecords.value.length)
+const hasMoreTableRecords = computed(() => showShared.value ? hasMoreSharedRecords.value : hasMorePersonalRecords.value)
+const tableRecords = computed(() => showShared.value ? sharedVisibleRecords.value : personalVisibleRecords.value)
+
+const recordCountText = computed(() => {
+  const total = showShared.value ? sharedRecords.value.length : store.records.length
+  const filtered = showShared.value ? displayRecords.value.length : sortedGroupedRecords.value.length
+  const prefix = showShared.value ? '共享' : '个人'
+  if (showShared.value && activeRecommendation.value) {
+    return `智能筛选 · ${filtered} / ${activeRecommendation.value.result?.items?.length || 0} 条推荐`
+  }
+  if (searchQuery.value.trim()) {
+    return prefix + ' · ' + filtered + ' / ' + total + ' 条记录'
+  }
+  return prefix + ' · ' + total + ' 条记录'
+})
+
+function priorityScore(r) {
+  return (String(r.priority || '').match(/⭐/g) || []).length
+}
+
+function timestamp(record, field) {
+  return Number(record?.[field] || 0)
+}
+
+function latestActivity(record) {
+  return Math.max(
+    timestamp(record, 'progress_updated_at'),
+    timestamp(record, 'apply_date'),
+    timestamp(record, 'exam_date'),
+    timestamp(record, 'interview1'),
+    timestamp(record, 'interview2'),
+    timestamp(record, 'interview3'),
+    timestamp(record, 'interview4'),
+    timestamp(record, 'warm'),
+  )
+}
+
+function progressScore(record) {
+  const progress = (record?.progress || [])[0] || '未投递'
+  const progressRank = {
+    '未投递': 0,
+    '放弃': 0.5,
+    '已挂': 1,
+    '已投递': 2,
+    '机考': 3,
+    '面试': 4,
+    '泡池子': 4.5,
+    'OC': 5
+  }
+  return progressRank[progress] || 0
+}
+
+function progressTime(record) {
+  const progress = (record?.progress || [])[0] || '未投递'
+
+  if (progress === '已投递') {
+    return timestamp(record, 'apply_date')
+  }
+  if (progress === '机考') {
+    return timestamp(record, 'exam_date')
+  }
+  if (progress === '面试') {
+    // 面试阶段：返回最后一次面试时间
+    return Math.max(
+      timestamp(record, 'interview1'),
+      timestamp(record, 'interview2'),
+      timestamp(record, 'interview3'),
+      timestamp(record, 'interview4')
+    )
+  }
+  if (progress === '泡池子') {
+    return timestamp(record, 'warm')
+  }
+  if (progress === 'OC' || progress === '已挂') {
+    return timestamp(record, 'result')
+  }
+
+  return 0
+}
+
+function isApplied(r) {
+  const progress = ((r && r.progress) || [])[0] || '未投递'
+  return progress !== '未投递' || !!(r && (r.apply_date || r.exam_date || r.interview1 || r.interview2 || r.interview3 || r.interview4 || r.warm || r.result))
+}
+
+function dirText(dir) {
+  if (!dir) return '-'
+  if (Array.isArray(dir)) return dir.filter(Boolean).join('、') || '-'
+  return String(dir).trim() || '-'
+}
+
+function fmtDate(ts) {
+  return fmtDateChina(ts)
+}
+function fmtDateFull(ts) {
+  return fmtDateFullChina(ts)
+}
+
+onMounted(async () => {
+  if (!store.data) await store.fetch()
+})
+
+watch(showShared, async (v) => {
+  if (v) {
+    searchQuery.value = ''
+    sortValue.value = 'default'
+    await loadShared()
+  }
+})
+
+watch([searchQuery, activeRecommendation, hideApplied, sortValue], async () => {
+  sharedVisibleCount.value = TABLE_LOAD_SIZE
+  personalVisibleCount.value = TABLE_LOAD_SIZE
+  await nextTick()
+  if (sharedTableScroll.value) sharedTableScroll.value.scrollTop = 0
+})
+
+async function onTableScroll(event) {
+  if (!hasMoreTableRecords.value || tableLoadingMore) return
+  const target = event.currentTarget
+  if (target.scrollHeight - target.scrollTop - target.clientHeight > 120) return
+  tableLoadingMore = true
+  if (showShared.value) {
+    sharedVisibleCount.value = Math.min(
+      displayRecords.value.length,
+      sharedVisibleCount.value + TABLE_LOAD_SIZE,
+    )
+  } else {
+    personalVisibleCount.value = Math.min(
+      groupedRecords.value.length,
+      personalVisibleCount.value + TABLE_LOAD_SIZE,
+    )
+  }
+  await nextTick()
+  tableLoadingMore = false
+}
+
+function openRecommendationDetail(record) {
+  if (record?.recommendation_score == null) return
+  recommendationDetail.value = record
+}
+
+async function switchTab(shared) {
+  showShared.value = shared
+}
+
+async function loadShared() {
+  try {
+    const d = await get('/api/dashboard/shared/records')
+    sharedRecords.value = d.records || []
+    sharedCanDelete.value = !!d.can_delete
+    sharedVisibleCount.value = TABLE_LOAD_SIZE
+  } catch {
+    sharedRecords.value = []
+  }
+}
+
+function openDetail(r) {
+  app.openDetail(r.record_id)
+}
+
+function openPositionPicker(group) { positionPickerGroup.value = group }
+function choosePosition(position) {
+  if (positionPickerGroup.value) selectPosition(positionPickerGroup.value, position)
+  positionPickerGroup.value = null
+}
+
+/* ---- Personal tab actions ---- */
+function newRecord() { app.openRecord() }
+function manageRecords() { app.openManager('records') }
+
+function downloadTemplate() {
+  downloadBlob('/api/dashboard/records/template', '总表导入模板.xlsx')
+}
+
+function exportExcel() {
+  downloadBlob('/api/dashboard/records/export', '总表信息.xlsx')
+}
+
+async function downloadBlob(url, fallbackName) {
+  try {
+    const headers = {}
+    if (auth.token) headers['Authorization'] = `Bearer ${auth.token}`
+    const res = await fetch(url, { headers })
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const blob = await res.blob()
+    const disposition = res.headers.get('Content-Disposition') || ''
+    const match = disposition.match(/filename="?([^";]+)"?/i)
+    const name = match ? match[1] : fallbackName
+    const objectUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = objectUrl; a.download = name
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+  } catch (e) {
+    await dialog.alert('下载失败：' + e.message, { title: '下载失败', tone: 'danger' })
+  }
+}
+
+function triggerImport() {
+  const el = document.getElementById('total-import-file')
+  if (el) el.click()
+}
+
+async function handleImport(event) {
+  const file = event.target.files?.[0]; if (!file) return
+  const ext = (file.name || '').toLowerCase().split('.').pop()
+  if (ext !== 'xlsx') {
+    await dialog.alert('仅支持 .xlsx 格式的 Excel 文件。', { title: '文件格式不支持', tone: 'warning' })
+    event.target.value = ''
+    return
+  }
+  importLoading.value = true
+  try {
+    const fd = new FormData(); fd.append('file', file)
+    const r = await fetch('/api/dashboard/records/import', { method: 'POST', headers: { Authorization: `Bearer ${auth.token}` }, body: fd })
+    const data = await r.json()
+    if (!r.ok) throw new Error(data.detail || '导入失败')
+    await store.refresh()
+    await dialog.alert(
+      data.message || `成功导入 ${data.imported_count || 0} 条记录`,
+      { title: '导入完成', tone: 'success' },
+    )
+  } catch (e) {
+    await dialog.alert('导入失败：' + e.message, { title: '导入失败', tone: 'danger' })
+  }
+  finally { importLoading.value = false; event.target.value = '' }
+}
+
+async function feishuSync() {
+  let savedUrl = ''
+  try {
+    const config = await get('/api/dashboard/records/feishu-sync')
+    savedUrl = String(config?.url || '').trim()
+  } catch (e) {
+    await dialog.alert('无法读取飞书同步配置：' + e.message, { title: '读取配置失败', tone: 'danger' })
+    return
+  }
+  const url = await dialog.prompt(
+    savedUrl
+      ? '已填入上次同步链接，直接确认即可同步；修改后会覆盖原链接。'
+      : '粘贴需要同步的飞书电子表格链接，成功校验后会自动保存。',
+    {
+      title: '同步飞书表格',
+      inputLabel: '飞书表格链接',
+      initialValue: savedUrl,
+      placeholder: 'https://example.feishu.cn/sheets/...',
+      confirmText: '开始同步',
+      required: true,
+      tone: 'info',
+    },
+  )
+  if (!url || !url.trim()) return
+  feishuSyncing.value = true
+  try {
+    await post('/api/dashboard/records/feishu-sync', { url: url.trim() })
+    await store.refresh()
+  } catch (e) {
+    await dialog.alert('飞书同步失败：' + e.message, { title: '同步失败', tone: 'danger' })
+  }
+  finally { feishuSyncing.value = false }
+}
+
+async function givemeocSync() {
+  const confirmed = await dialog.confirm(
+    '即将从 GiveMeOC 同步 2027 届岗位到共享总表。',
+    { title: '同步招聘岗位', tone: 'info', confirmText: '开始同步' },
+  )
+  if (!confirmed) return
+  givemeocSyncing.value = true; givemeocShow.value = true; givemeocError.value = false
+  givemeocIndeterminate.value = true; givemeocLabel.value = '扫描岗位'
+  givemeocPercent.value = '检索中'; givemeocBarWidth.value = '36%'
+  givemeocDetail.value = '正在查找 2027届 秋招岗位…'
+  let pollTimer = null
+  const done = (msg, ok) => {
+    clearInterval(pollTimer)
+    givemeocIndeterminate.value = false; givemeocError.value = !ok
+    givemeocLabel.value = ok ? '同步完成' : '同步失败'
+    givemeocPercent.value = ok ? '100%' : '-'
+    givemeocBarWidth.value = ok ? '100%' : '0'
+    givemeocDetail.value = msg || '同步完成'
+    givemeocSyncing.value = false
+    if (msg) void dialog.alert(msg, {
+      title: ok ? '同步完成' : '同步失败',
+      tone: ok ? 'success' : 'danger',
+    })
+    loadShared()
+    if (ok) givemeocShow.value = false
+  }
+  try {
+    const start = await post('/api/dashboard/sync-from-givemeoc')
+    pollTimer = setInterval(async () => {
+      try {
+        const p = await get('/api/dashboard/sync-from-givemeoc/progress?sync_id=' + encodeURIComponent(start.sync_id), { silent: true })
+        const ratio = p.total ? Math.round((Number(p.done || 0) / p.total) * 100) : 0
+        if (p.phase === 'scanning') {
+          givemeocIndeterminate.value = true; givemeocLabel.value = '扫描岗位'
+          givemeocPercent.value = (Number(p.found || 0)) + ' 条'; givemeocDetail.value = '正在筛选符合条件的招聘信息'
+        } else if (p.phase === 'writing') {
+          givemeocIndeterminate.value = false; givemeocLabel.value = '批量写入'
+          givemeocPercent.value = '95%'; givemeocBarWidth.value = '95%'
+          givemeocDetail.value = p.message || '正在去重并保存'
+        } else {
+          givemeocIndeterminate.value = false; givemeocLabel.value = '同步详情'
+          givemeocPercent.value = ratio + '%'; givemeocBarWidth.value = Math.max(4, ratio) + '%'
+          givemeocDetail.value = '已处理 ' + Number(p.done || 0) + ' / ' + Number(p.total || 0) + ' 条'
+        }
+        if (p.finished) { done(p.message, !p.failed) }
+      } catch (e) { done('同步异常：' + e.message, false) }
+    }, 800)
+  } catch (err) {
+    if (pollTimer) clearInterval(pollTimer)
+    done('GiveMeOC 同步启动失败：' + err.message, false)
+  }
+}
+
+function sharedNewRecord() { app.openRecord(true) }
+function sharedManageRecords() { app.openManager(true) }
+
+/* ---- Row actions ---- */
+async function addToApplications(r) {
+  if (!r || !r.record_id) return
+  try {
+    const result = await post('/api/dashboard/records/' + encodeURIComponent(r.record_id) + '/apply')
+    if (result.dashboard) {
+      store.data = result.dashboard
+    } else {
+      await store.refresh()
+    }
+  } catch (e) {
+    await dialog.alert('加入投递失败：' + e.message, { title: '操作失败', tone: 'danger' })
+  }
+}
+
+async function addToPersonal(r) {
+  if (!r || !r.record_id || r.is_added) return
+  try {
+    const result = await post('/api/dashboard/shared/records/' + encodeURIComponent(r.record_id) + '/copy')
+    r.is_added = true
+    const shared = sharedRecords.value.find(item => item.record_id === r.record_id)
+    if (shared) shared.is_added = true
+    if (result.dashboard) {
+      store.data = result.dashboard
+    }
+  } catch (e) {
+    r.is_added = false
+    await dialog.alert('添加失败：' + e.message, { title: '操作失败', tone: 'danger' })
+  }
+}
+
+async function qiuzhiSync() {
+  const confirmed = await dialog.confirm(
+    '将同步求职方舟近 90 天的 2027 届秋招及提前批岗位到共享总表；其他届别和已过期岗位不会保留。',
+    { title: '同步求职方舟岗位', tone: 'info', confirmText: '开始同步' },
+  )
+  if (!confirmed) return
+  qiuzhiSyncing.value = true
+  try {
+    const data = await post('/api/dashboard/sync-from-qiuzhifangzhou')
+    await dialog.alert(data.message || '求职方舟同步完成', { title: '同步完成', tone: 'success' })
+    await loadShared()
+  } catch (error) {
+    await dialog.alert('求职方舟同步失败：' + error.message, { title: '同步失败', tone: 'danger' })
+  } finally { qiuzhiSyncing.value = false }
+}
+</script>
+
+<template>
+  <section class="page active records-page" id="page-total">
+    <div class="card data-table-card records-shell">
+      <div class="total-tools">
+        <div class="total-view-switch" role="tablist" aria-label="总表范围">
+          <button
+            :class="{ active: !showShared }"
+            role="tab"
+            :aria-selected="!showShared"
+            @click="switchTab(false)"
+          >个人总表</button>
+          <button
+            :class="{ active: showShared }"
+            role="tab"
+            :aria-selected="showShared"
+            @click="switchTab(true)"
+          >共享总表</button>
+        </div>
+        <div class="total-search">
+          <input
+            v-model="searchQuery"
+            type="search"
+            placeholder="查找公司、岗位、城市、方向或类型"
+            aria-label="查找总表记录"
+          >
+        </div>
+        <div v-if="showShared" class="recommendation-toolbar-actions">
+          <button class="btn btn-primary" :class="{ active: activeRecommendation }" @click="app.openRecommendation()">{{ activeRecommendation ? '智能筛选 · 已应用' : '智能筛选' }}</button>
+        </div>
+        <select
+          v-if="!showShared"
+          v-model="sortValue"
+          aria-label="总表排序方式"
+        >
+          <option value="default">默认排序</option>
+          <option value="updated-desc">最近更新</option>
+          <option value="progress-desc">进展从快到慢</option>
+          <option value="priority-desc">优先级从高到低</option>
+          <option value="priority-asc">优先级从低到高</option>
+          <option value="apply-desc">投递时间从新到旧</option>
+          <option value="apply-asc">投递时间从旧到新</option>
+          <option value="deadline-asc">截止时间临近优先</option>
+          <option value="company-asc">公司名称</option>
+        </select>
+        <button v-if="!showShared" class="btn hide-applied-btn" :class="{ active: hideApplied }" @click="hideApplied = !hideApplied">{{ hideApplied ? '已隐藏' : '隐藏已投递' }}</button>
+        <span class="records-inline-count">{{ recordCountText }}</span>
+      </div>
+      <div ref="sharedTableScroll" class="tbl" style="max-height:calc(100vh - 160px)" @scroll.passive="onTableScroll">
+        <table class="data-table master-table">
+          <colgroup>
+            <col style="width:14%">
+            <col style="width:18%">
+            <col style="width:13%">
+            <col style="width:11%">
+            <col style="width:9%">
+            <col style="width:8%">
+            <col style="width:10%">
+            <col style="width:7%">
+            <col style="width:10%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>公司</th>
+              <th>目标岗位</th>
+              <th>方向</th>
+              <th>公司类型</th>
+              <th>截止</th>
+              <th>批次</th>
+              <th id="total-status-head">{{ showShared ? (activeRecommendation ? '评分' : '贡献者') : '进展' }}</th>
+              <th>入口</th>
+              <th class="total-action">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="store.loading"><td colspan="9" class="center">加载中…</td></tr>
+            <tr v-else-if="!tableRecords.length"><td colspan="9" class="center">没有匹配的记录</td></tr>
+            <template v-for="r in tableRecords" :key="r.record_id">
+            <tr :class="{ 'group-parent-row': !showShared && r._positions?.length > 1 }">
+              <td class="company">
+                <button v-if="!showShared" class="company-link" @click="openDetail(r)">{{ r.company || '-' }}</button>
+                <button v-else-if="r.recommendation_score != null" class="company-link recommendation-company-link" @click="openRecommendationDetail(r)">{{ r.company || '-' }}</button>
+                <span v-else>{{ r.company || '-' }}</span>
+              </td>
+              <td class="job">
+                <div v-if="!showShared && r._positions?.length > 1" class="position-cell-actions">
+                  <button class="position-picker-trigger" type="button" title="选择要展示的岗位记录" @click="openPositionPicker(r)"><span>{{ r.job || '未命名岗位' }}</span><b aria-hidden="true">▾</b></button>
+                  <button class="position-expand-btn" type="button" :aria-expanded="isExpanded(r)" @click="toggleExpanded(r)">{{ isExpanded(r) ? '收起' : '展开' }}</button>
+                </div>
+                <TooltipCell v-else :text="r.job || '-'" />
+              </td>
+              <td><TooltipCell :text="dirText(r.dir)" /></td>
+              <td><TooltipCell :text="r.type || '-'" /></td>
+              <td><span class="table-date" :title="fmtDateFull(r.deadline)">{{ fmtDate(r.deadline) }}</span></td>
+              <td><span class="badge bdg-b">{{ r.batch || '-' }}</span></td>
+              <td v-if="showShared"><span v-if="r.recommendation_score != null" class="recommendation-table-score"><b>{{ r.recommendation_grade }}</b>{{ r.recommendation_score }} 分</span><template v-else>{{ r.contributor || '-' }}</template></td>
+              <td v-else><ProgressBadge :progress="(r.progress||[])[0]||'未投递'" /></td>
+              <td>
+                <a v-if="externalHttpUrl(r.url)" :href="externalHttpUrl(r.url)" target="_blank" rel="noopener noreferrer">查看</a><span v-else class="table-date">-</span>
+              </td>
+              <td class="total-action">
+                <button
+                  v-if="!showShared"
+                  class="btn"
+                  :disabled="isApplied(r)"
+                  @click="addToApplications(r)"
+                >{{ isApplied(r) ? '已投递' : '加入投递' }}</button>
+                <button
+                  v-else
+                  class="btn"
+                  :disabled="r.is_added"
+                  @click="addToPersonal(r)"
+                >{{ r.is_added ? '已添加' : '添加个人' }}</button>
+              </td>
+            </tr>
+            <tr v-for="position in (!showShared && isExpanded(r) ? r._positions.filter(item => item.record_id !== r.record_id) : [])" :key="'child-' + position.record_id" class="position-child-row">
+              <td class="company"><button class="company-link child-company" @click="openDetail(position)">↳ {{ position.company || '-' }}</button></td>
+              <td class="job"><button class="position-child-job" type="button" @click="selectPosition(r, position)">{{ position.job || '-' }}</button></td>
+              <td><TooltipCell :text="dirText(position.dir)" /></td><td><TooltipCell :text="position.type || '-'" /></td>
+              <td><span class="table-date" :title="fmtDateFull(position.deadline)">{{ fmtDate(position.deadline) }}</span></td>
+              <td><span class="badge bdg-b">{{ position.batch || '-' }}</span></td>
+              <td><ProgressBadge :progress="(position.progress||[])[0]||'未投递'" /></td>
+              <td><a v-if="externalHttpUrl(position.url)" :href="externalHttpUrl(position.url)" target="_blank" rel="noopener noreferrer">查看</a><span v-else class="table-date">-</span></td>
+              <td class="total-action"><button class="btn" @click="openDetail(position)">打开详情</button></td>
+            </tr>
+            </template>
+            <tr v-if="hasMoreTableRecords" class="shared-load-more-row"><td colspan="9" class="center">继续向下滚动，加载更多记录</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-actions" v-if="!showShared">
+        <button class="btn btn-primary" @click="newRecord">新增记录</button>
+        <button class="btn" @click="manageRecords">管理记录</button>
+        <button class="btn" @click="downloadTemplate">下载模板</button>
+        <button class="btn" @click="exportExcel">导出 Excel</button>
+        <input id="total-import-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden @change="handleImport">
+        <button class="btn" @click="triggerImport" :disabled="importLoading">{{ importLoading ? '导入中...' : '导入 Excel' }}</button>
+        <button v-if="canFeishuSync" class="btn" @click="feishuSync" :disabled="feishuSyncing">{{ feishuSyncing ? '同步中...' : '飞书同步' }}</button>
+        <span class="muted table-render-count">已显示 {{ personalVisibleRecords.length }} / {{ groupedRecords.length }} 组；向下滚动自动加载更多。</span>
+      </div>
+      <div class="table-actions" v-else>
+        <div
+          id="shared-admin-actions"
+          :style="{ display: 'flex', gap: '9px', flexWrap: 'wrap' }"
+        >
+          <button v-if="sharedCanDelete" class="btn btn-primary" @click="sharedNewRecord">新建记录</button>
+          <button v-if="sharedCanDelete" class="btn" @click="sharedManageRecords">管理记录</button>
+        </div>
+        <span class="muted">已显示 {{ sharedVisibleRecords.length }} / {{ displayRecords.length }} 条；向下滚动自动加载更多。</span>
+      </div>
+    </div>
+    <RecordPositionPicker v-if="positionPickerGroup" :group="positionPickerGroup" @close="positionPickerGroup = null" @select="choosePosition" />
+    <Teleport to="body">
+      <div v-if="recommendationDetail" class="modal-mask show recommendation-detail-mask" @mousedown.self="recommendationDetail = null">
+        <div class="modal recommendation-detail-modal" role="dialog" aria-modal="true" aria-labelledby="recommendation-detail-title">
+          <div class="modal-hd"><div><h2 id="recommendation-detail-title">{{ recommendationDetail.company || '岗位' }} · 推荐详情</h2><p>{{ recommendationDetail.job || '-' }}</p></div><button class="icon-btn" @click="recommendationDetail = null" title="关闭">&times;</button></div>
+          <div class="modal-body recommendation-detail-body">
+            <div class="recommendation-detail-score" :class="'grade-' + recommendationDetail.recommendation_grade"><b>{{ recommendationDetail.recommendation_grade }}</b><span>{{ recommendationDetail.recommendation_score }} 分</span></div>
+            <section class="recommendation-detail-lead"><h3>推荐原因</h3><p>{{ recommendationDetail.recommendation_reason || '模型未给出理由' }}</p><p v-if="recommendationDetail.ai_role_profile?.summary" class="recommendation-detail-summary">{{ recommendationDetail.ai_role_profile.summary }}</p></section>
+            <section v-if="recommendationDetail.match_strengths?.length"><h3>匹配优势</h3><ul><li v-for="item in recommendationDetail.match_strengths" :key="'strength-' + item">{{ item }}</li></ul></section>
+            <section v-if="recommendationDetail.match_gaps?.length"><h3>可能不足</h3><ul class="recommendation-gap-list"><li v-for="item in recommendationDetail.match_gaps" :key="'gap-' + item">{{ item }}</li></ul></section>
+            <section v-if="recommendationDetail.ai_role_profile" class="recommendation-profile-grid">
+              <div v-if="recommendationDetail.ai_role_profile.work_content?.length"><b>典型工作</b><span>{{ recommendationDetail.ai_role_profile.work_content.join('；') }}</span></div>
+              <div v-if="recommendationDetail.ai_role_profile.likely_requirements?.length"><b>可能要求</b><span>{{ recommendationDetail.ai_role_profile.likely_requirements.join('；') }}</span></div>
+              <div v-if="recommendationDetail.ai_role_profile.likely_tech_stack?.length"><b>技术栈</b><span>{{ recommendationDetail.ai_role_profile.likely_tech_stack.join(' / ') }}</span></div>
+              <div v-if="recommendationDetail.ai_role_profile.business_context"><b>业务场景</b><span>{{ recommendationDetail.ai_role_profile.business_context }}</span></div>
+              <div><b>薪酬待遇</b><span>{{ recommendationDetail.ai_role_profile.compensation || '暂无可靠薪酬信息' }}</span></div>
+              <div><b>工作风险</b><span>{{ recommendationDetail.ai_role_profile.work_style_risk || '信息不足' }}</span></div>
+            </section>
+            <p class="recommendation-detail-note">岗位画像由 AI 推断，置信度：{{ recommendationDetail.ai_role_profile?.confidence === 'medium' ? '中' : '低' }}。投递前请以官方 JD 为准。</p>
+          </div>
+          <div class="modal-ft"><a v-if="externalHttpUrl(recommendationDetail.url)" :href="externalHttpUrl(recommendationDetail.url)" target="_blank" rel="noopener noreferrer" class="btn">查看岗位</a><button class="btn btn-primary" :disabled="recommendationDetail.is_added" @click="addToPersonal(recommendationDetail)">{{ recommendationDetail.is_added ? '已添加' : '添加个人' }}</button></div>
+        </div>
+      </div>
+    </Teleport>
+  </section>
+</template>
+
+<style scoped>
+.records-page{min-width:0}.records-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:18px}.records-page-head h2{margin:0;font-size:clamp(22px,2.5vw,30px);line-height:1.2;letter-spacing:-.035em}.records-page-head p{max-width:620px;margin-top:7px;color:var(--muted);font-size:13px}.records-count{display:flex;align-items:baseline;gap:7px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.records-count strong{color:var(--blue);font-size:18px}.records-count span{color:var(--sub);font-size:10px}.records-shell{overflow:hidden;border-radius:16px}.total-tools{display:grid;grid-template-columns:auto minmax(220px,1fr) auto auto auto;align-items:center;gap:9px;padding:13px 14px;border-bottom:1px solid var(--line);background:var(--panel)}.total-view-switch{padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}.total-view-switch button{height:31px;padding:0 13px;border:0;border-radius:7px;background:transparent;color:var(--muted);font:800 10px var(--font);cursor:pointer}.total-view-switch button.active{background:var(--panel);color:var(--ink);box-shadow:0 1px 5px color-mix(in srgb,var(--ink) 10%,transparent)}.total-search input,.total-tools>select{height:39px;border:1px solid var(--line2);border-radius:10px;outline:none;background:var(--bg);color:var(--ink);font:11px var(--font)}.total-search input{width:100%;padding:0 12px}.total-tools>select{padding:0 30px 0 10px}.total-search input:focus,.total-tools>select:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueS)}.records-shell .tbl{background:var(--panel)}.records-shell .table-actions{min-height:58px;padding:10px 14px;border-top:1px solid var(--line);background:var(--bg)}.master-table tbody tr{transition:background .15s ease}.master-table tbody tr:hover{background:var(--blueS)}.master-table .total-action .btn{min-width:72px}.hide-applied-btn.active{border-color:var(--blue);background:var(--blueS);color:var(--blue)}@media(max-width:1100px){.total-tools{grid-template-columns:auto minmax(200px,1fr) auto}.total-tools>.btn,.total-tools>select{grid-row:2}}@media(max-width:720px){.records-page-head{align-items:flex-start;flex-direction:column}.records-count{width:100%;justify-content:space-between}.total-tools{grid-template-columns:1fr}.total-tools>*{width:100%}.total-tools>.btn,.total-tools>select{grid-row:auto}.total-view-switch{display:grid;grid-template-columns:1fr 1fr}.records-shell{border-radius:12px}}@media(prefers-reduced-motion:reduce){.master-table tbody tr{transition:none}}
+.shared-load-more-row td{height:42px;color:var(--muted);font-size:10px;background:var(--bg)}@media(max-width:720px){.records-shell .table-actions{flex-wrap:wrap}}
+.total-search input{padding-left:40px}.records-inline-count{justify-self:end;color:var(--sub);font-size:10px;white-space:nowrap}@media(max-width:1100px){.records-inline-count{grid-row:2;justify-self:end}}@media(max-width:720px){.records-inline-count{grid-row:auto;justify-self:start}}
+.group-parent-row{cursor:default}.position-cell-actions{display:grid;grid-template-columns:minmax(0,1fr) 34px;align-items:center;gap:5px;width:100%}.position-picker-trigger{display:grid;grid-template-columns:minmax(0,1fr) 12px;align-items:center;gap:3px;width:100%;height:30px;padding:0;overflow:hidden;border:0;border-radius:7px;color:var(--ink);text-align:left;background:transparent;font:inherit;cursor:pointer}.position-picker-trigger span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.position-picker-trigger b{justify-self:end;color:var(--muted);font-size:11px}.position-picker-trigger:hover,.position-picker-trigger:focus-visible{outline:none;color:var(--blue);background:var(--blueS)}.position-expand-btn{height:26px;padding:0;border:1px solid var(--line);border-radius:6px;color:var(--muted);background:var(--bg);font:800 9px var(--font);cursor:pointer}.position-expand-btn:hover,.position-expand-btn[aria-expanded="true"]{border-color:var(--blue);color:var(--blue);background:var(--blueS)}.position-child-row{background:color-mix(in srgb,var(--blueS) 42%,var(--panel))}.position-child-row td{border-top-color:transparent}.child-company{padding-left:12px;color:var(--muted)}.position-child-job{max-width:150px;border:0;background:transparent;color:var(--ink);padding-left:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:inherit;cursor:pointer}.position-child-job:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+.recommendation-toolbar-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.recommendation-toolbar-actions>.btn.active{box-shadow:0 0 0 3px var(--blueS)}.recommendation-company-link{font-weight:850}.recommendation-table-score{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.recommendation-table-score b{display:grid;width:24px;height:24px;place-items:center;border-radius:6px;background:var(--blueS);color:var(--blue);font:900 12px var(--mono)}
+.recommendation-detail-mask{z-index:10020}
+.recommendation-detail-modal{width:min(820px,94vw)}.recommendation-detail-body{display:grid;grid-template-columns:82px minmax(0,1fr);gap:14px 18px;max-height:70vh;overflow:auto;padding:20px}.recommendation-detail-score{display:grid;align-self:start;place-content:center;width:72px;height:72px;border:2px solid var(--ink);border-radius:12px;text-align:center;background:var(--blueS)}.recommendation-detail-score b{font:900 30px/1 var(--mono)}.recommendation-detail-score span{margin-top:5px;font-size:10px}.recommendation-detail-score.grade-S{background:var(--blue);color:#fff}.recommendation-detail-score.grade-A{background:var(--greenS)}.recommendation-detail-lead{min-width:0}.recommendation-detail-body section h3{margin:0 0 7px;font-size:12px}.recommendation-detail-body section p{margin:0;color:var(--sub);font-size:12px;line-height:1.6}.recommendation-detail-summary{margin-top:7px!important;color:var(--ink)!important}.recommendation-detail-body>section:not(.recommendation-detail-lead),.recommendation-profile-grid,.recommendation-detail-note{grid-column:2}.recommendation-detail-body ul{display:grid;gap:5px;margin:0;padding-left:18px;color:var(--green);font-size:11px;line-height:1.5}.recommendation-detail-body .recommendation-gap-list{color:var(--red)}.recommendation-profile-grid{display:grid;gap:0;border:1px solid var(--line);border-radius:11px;overflow:hidden}.recommendation-profile-grid>div{display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);font-size:11px;line-height:1.5}.recommendation-profile-grid>div:last-child{border-bottom:0}.recommendation-profile-grid span{color:var(--sub)}.recommendation-detail-note{margin:0;color:var(--muted);font-size:10px;line-height:1.5}@media(max-width:620px){.recommendation-detail-body{grid-template-columns:1fr}.recommendation-detail-body>section,.recommendation-profile-grid,.recommendation-detail-note{grid-column:1}.recommendation-detail-score{width:62px;height:62px}.recommendation-apply-item{grid-template-columns:1fr}.recommendation-apply-meta{text-align:left}}
+</style>

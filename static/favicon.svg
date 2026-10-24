@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" shape-rendering="crispEdges">
+  <!-- Same mark used beside “校招信息看板”, enlarged for browser tabs -->
+  <path fill="#20241f" d="M8 4h48v4h4v48h-4v4H8v-4H4V8h4z"/>
+  <path fill="#386a57" d="M4 0h48v4h4v48h-4v4H4v-4H0V4h4z"/>
+  <path fill="#fffdf4" d="M12 12h24v12h12v24H24V36H12z"/>
+</svg>

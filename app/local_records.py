@@ -1,0 +1,822 @@
+"""Per-user local job records and dashboard aggregation."""
+import json
+import hashlib
+import time
+import uuid
+from collections import Counter
+from datetime import datetime, timedelta, timezone
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+from app import database
+from app.qiuzhi_sync import _normalize_batch
+
+
+CHINA_TZ = timezone(timedelta(hours=8))
+
+
+FIELD_COLUMNS = {
+    "公司名称": "company",
+    "公司/行业类型": "company_type",
+    "嵌入式方向": "directions",
+    "进展": "progress",
+    "秋招岗位": "job",
+    "城市": "city",
+    "批次": "batch",
+    "优先级": "priority",
+    "备注": "note",
+    "岗位JD": "job_jd",
+    "投递链接": "url",
+    "投递截止时间": "deadline",
+    "投递时间": "apply_date",
+    "机考时间": "exam_date",
+    "一面": "interview1",
+    "二面": "interview2",
+    "三面": "interview3",
+    "四面": "interview4",
+    "泡池子": "warm",
+    "结果": "result",
+    "Offer详情": "offer_details",
+    "简历版本": "resume_version",
+}
+JSON_FIELDS = {"嵌入式方向", "进展", "Offer详情"}
+
+_PROGRESS_RANK = {"未投递": 0, "已投递": 1, "机考": 2, "面试": 3,
+                  "泡池子": 3.5, "OC": 4, "已挂": 4, "放弃": 4}
+_DATE_PROGRESS = {
+    "投递时间": "已投递",
+    "机考时间": "机考",
+    "一面": "面试",
+    "二面": "面试",
+    "三面": "面试",
+    "四面": "面试",
+    "泡池子": "泡池子",
+}
+
+_PROGRESS_DATE_FIELDS = {
+    "已投递": ("投递时间",),
+    "机考": ("机考时间",),
+    "面试": ("一面", "二面", "三面", "四面"),
+    "泡池子": ("泡池子",),
+    "OC": ("结果",),
+    "已挂": ("结果",),
+    "放弃": ("结果",),
+}
+
+_STAGE_DATE_RANK = {
+    "投递时间": 1,
+    "机考时间": 2,
+    "一面": 3,
+    "二面": 3,
+    "三面": 3,
+    "四面": 3,
+    "泡池子": 3.5,
+    "结果": 4,
+}
+
+
+def _sync_progress_with_dates(fields: dict, current_fields: dict | None = None) -> dict:
+    """Keep non-terminal progress aligned with explicitly edited stage dates."""
+    result = dict(fields)
+    current_fields = current_fields or {}
+
+    old_progress = current_fields.get("进展") or []
+    if not isinstance(old_progress, list):
+        old_progress = [old_progress] if old_progress else []
+    old_stage = old_progress[0] if old_progress else "未投递"
+
+    progress = result.get("进展", current_fields.get("进展")) or []
+    if not isinstance(progress, list):
+        progress = [progress] if progress else []
+    current = progress[0] if progress else "未投递"
+    current_rank = _PROGRESS_RANK.get(current, 0)
+    old_rank = _PROGRESS_RANK.get(old_stage, 0)
+
+    # An explicit rollback must also discard dates belonging to later stages.
+    # Otherwise the reconciliation below would immediately promote the record
+    # back to the stage implied by those stale dates.
+    if "进展" in result and current_rank < old_rank:
+        for date_field, stage_rank in _STAGE_DATE_RANK.items():
+            if stage_rank > current_rank:
+                result[date_field] = None
+
+    # When a user explicitly advances progress from the record detail page,
+    # timestamp the destination stage if it has no date yet.  The detail form
+    # submits empty date fields as None, so this must happen before the
+    # date-to-progress reconciliation below (which would otherwise roll the
+    # manually selected progress back).
+    if "进展" in result and current_rank > old_rank:
+        stage_fields = _PROGRESS_DATE_FIELDS.get(current, ())
+        if stage_fields and not any(
+            result.get(field, current_fields.get(field)) for field in stage_fields
+        ):
+            result[stage_fields[0]] = _now_ms()
+
+    required = None
+    for date_field, target in _DATE_PROGRESS.items():
+        value = result.get(date_field, current_fields.get(date_field))
+        if value and (required is None or _PROGRESS_RANK[target] > _PROGRESS_RANK[required]):
+            required = target
+    if required and _PROGRESS_RANK[required] > current_rank:
+        result["进展"] = [required]
+    elif any(field in result and result[field] is None for field in _DATE_PROGRESS):
+        if current not in {"OC", "已挂", "放弃"}:
+            result["进展"] = [required or "未投递"]
+    return result
+
+
+def _url_value(value) -> str:
+    if isinstance(value, dict):
+        return str(value.get("link") or value.get("text") or "")
+    return str(value or "")
+
+
+def _db_value(field: str, value):
+    if field == "Offer详情":
+        return json.dumps(value if isinstance(value, dict) else {}, ensure_ascii=False)
+    if field in JSON_FIELDS:
+        if not isinstance(value, list):
+            value = [value] if value else []
+        return json.dumps(value, ensure_ascii=False)
+    if field == "投递链接":
+        return _url_value(value)
+    return value
+
+
+def _json_list(value: str | None) -> list:
+    try:
+        parsed = json.loads(value or "[]")
+        return parsed if isinstance(parsed, list) else []
+    except (TypeError, json.JSONDecodeError):
+        return []
+
+
+def _json_object(value: str | None) -> dict:
+    try:
+        parsed = json.loads(value or "{}")
+        return parsed if isinstance(parsed, dict) else {}
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
+
+def _row_fields(row: dict) -> dict:
+    result = row["result"]
+    if isinstance(result, str) and result.isdigit():
+        result = int(result)
+    return {
+        "公司名称": row["company"],
+        "公司/行业类型": [row["company_type"]] if row["company_type"] else [],
+        "嵌入式方向": _json_list(row["directions"]),
+        "进展": _json_list(row["progress"]),
+        "秋招岗位": row["job"],
+        "城市": row["city"],
+        "批次": row["batch"],
+        "优先级": row["priority"],
+        "备注": row["note"],
+        "岗位JD": row["job_jd"],
+        "投递链接": row["url"],
+        "投递截止时间": row["deadline"],
+        "投递时间": row["apply_date"],
+        "机考时间": row["exam_date"],
+        "一面": row["interview1"],
+        "二面": row["interview2"],
+        "三面": row["interview3"],
+        "四面": row["interview4"] if "interview4" in row.keys() else None,
+        "泡池子": row["warm"],
+        "结果": result,
+        "Offer详情": _json_object(row["offer_details"]) if "offer_details" in row.keys() else {},
+        "简历版本": row["resume_version"] if "resume_version" in row.keys() else "",
+        "progress_updated_at": row["progress_updated_at"] if "progress_updated_at" in row.keys() else None,
+    }
+
+
+def list_records(user_id: int) -> list[dict]:
+    db = database.get_db()
+    rows = db.execute(
+        "SELECT * FROM job_records WHERE user_id = ? ORDER BY created_at DESC, id DESC",
+        (user_id,),
+    ).fetchall()
+    return [{"record_id": row["id"], "fields": _row_fields(dict(row))} for row in rows]
+
+
+def get_record(user_id: int, record_id: str) -> dict | None:
+    db = database.get_db()
+    row = db.execute(
+        "SELECT * FROM job_records WHERE id = ? AND user_id = ?",
+        (record_id, user_id),
+    ).fetchone()
+    return {"record_id": row["id"], "fields": _row_fields(dict(row))} if row else None
+
+
+def create_record(user_id: int, fields: dict) -> dict:
+    record_id = "rec" + uuid.uuid4().hex
+    fields = _sync_progress_with_dates(fields)
+    values = {FIELD_COLUMNS[key]: _db_value(key, value) for key, value in fields.items() if key in FIELD_COLUMNS}
+    values["progress_updated_at"] = _now_ms()
+    columns = ["id", "user_id", *values.keys()]
+    params = [record_id, user_id, *values.values()]
+    placeholders = ", ".join("?" for _ in columns)
+    with database._write_lock:
+        db = database.get_db()
+        db.execute(
+            f"INSERT INTO job_records ({', '.join(columns)}) VALUES ({placeholders})",
+            params,
+        )
+        db.commit()
+    return {"record_id": record_id}
+
+
+def create_records(user_id: int, records: list[dict]) -> list[str]:
+    """Atomically insert several records and return their generated IDs."""
+    prepared: list[tuple[list[str], list]] = []
+    record_ids: list[str] = []
+    for fields in records:
+        fields = _sync_progress_with_dates(fields)
+        record_id = "rec" + uuid.uuid4().hex
+        values = {
+            FIELD_COLUMNS[key]: _db_value(key, value)
+            for key, value in fields.items()
+            if key in FIELD_COLUMNS
+        }
+        columns = ["id", "user_id", *values.keys()]
+        params = [record_id, user_id, *values.values()]
+        prepared.append((columns, params))
+        record_ids.append(record_id)
+
+    with database._write_lock:
+        db = database.get_db()
+        try:
+            for columns, params in prepared:
+                placeholders = ", ".join("?" for _ in columns)
+                db.execute(
+                    f"INSERT INTO job_records ({', '.join(columns)}) VALUES ({placeholders})",
+                    params,
+                )
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+    return record_ids
+
+
+def _shared_values(fields: dict) -> dict:
+    company_types = fields.get("公司/行业类型") or []
+    company_type = company_types[0] if isinstance(company_types, list) and company_types else company_types
+    directions = list(dict.fromkeys(
+        str(item).strip() for item in (fields.get("嵌入式方向") or []) if str(item).strip()
+    ))
+    return {
+        "company": str(fields.get("公司名称") or "").strip(),
+        "company_type": str(company_type or "").strip(),
+        "directions": directions,
+        "job": str(fields.get("秋招岗位") or "").strip(),
+        "city": str(fields.get("城市") or "").strip(),
+        "batch": _normalize_batch(fields.get("批次") or "秋招"),
+        "url": _url_value(fields.get("投递链接")).strip(),
+        "deadline": fields.get("投递截止时间"),
+        "source": str(fields.get("__source") or "manual").strip() or "manual",
+    }
+
+
+def _shared_fingerprint(values: dict) -> str:
+    canonical = json.dumps({
+        "company": values["company"].casefold(),
+        "company_type": values["company_type"].casefold(),
+        "job": values["job"].casefold(),
+        "directions": sorted(item.casefold() for item in values["directions"]),
+        "url": values["url"].casefold(),
+    }, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def shared_missing_fields(fields: dict) -> list[str]:
+    values = _shared_values(fields)
+    required = [
+        ("公司名称", values["company"]),
+        ("公司类型", values["company_type"]),
+        ("岗位", values["job"]),
+        ("方向", values["directions"]),
+        ("入口", values["url"]),
+    ]
+    return [label for label, value in required if not value]
+
+
+def publish_shared_record(user_id: int, record_id: str) -> tuple[dict, bool]:
+    record = get_record(user_id, record_id)
+    if not record:
+        raise LookupError("未找到对应的个人总表记录")
+    fields = record["fields"]
+    missing = shared_missing_fields(fields)
+    if missing:
+        raise ValueError("缺少共享必填项：" + "、".join(missing))
+    shared_record, created = create_shared_record(user_id, fields)
+    with database._write_lock:
+        db = database.get_db()
+        db.execute(
+            """UPDATE job_records SET source_shared_id = ?, updated_at = datetime('now')
+               WHERE id = ? AND user_id = ?""",
+            (shared_record["record_id"], record_id, user_id),
+        )
+        db.commit()
+    shared_record["is_added"] = True
+    return shared_record, created
+
+
+def create_shared_record(user_id: int, fields: dict) -> tuple[dict, bool]:
+    missing = shared_missing_fields(fields)
+    if missing:
+        raise ValueError("缺少共享必填项：" + "、".join(missing))
+    values = _shared_values(fields)
+    fingerprint = _shared_fingerprint(values)
+    shared_id = "shr" + uuid.uuid4().hex
+    with database._write_lock:
+        db = database.get_db()
+        cur = db.execute(
+            """INSERT OR IGNORE INTO shared_job_records
+               (id, company, company_type, directions, job, city, batch, url,
+                deadline, fingerprint, source, created_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                shared_id, values["company"], values["company_type"],
+                json.dumps(values["directions"], ensure_ascii=False), values["job"],
+                values["city"], values["batch"], values["url"], values["deadline"],
+                fingerprint, values["source"], user_id,
+            ),
+        )
+        created = cur.rowcount > 0
+        db.commit()
+        row = db.execute(
+            """SELECT s.*, u.username AS contributor
+               FROM shared_job_records s LEFT JOIN users u ON u.id = s.created_by
+               WHERE s.fingerprint = ?""",
+            (fingerprint,),
+        ).fetchone()
+    return _serialize_shared(dict(row), False), created
+
+
+def create_shared_records(user_id: int, records: list[dict]) -> tuple[int, int]:
+    """Validate and insert shared records in one transaction.
+
+    Returns ``(added, skipped)``. The unique fingerprint constraint handles both
+    records already in the database and duplicates inside the incoming batch.
+    """
+    prepared = []
+    for fields in records:
+        missing = shared_missing_fields(fields)
+        if missing:
+            raise ValueError("缺少共享必填项：" + "、".join(missing))
+        values = _shared_values(fields)
+        fingerprint = _shared_fingerprint(values)
+        prepared.append((
+            "shr" + uuid.uuid4().hex,
+            values["company"],
+            values["company_type"],
+            json.dumps(values["directions"], ensure_ascii=False),
+            values["job"],
+            values["city"],
+            values["batch"],
+            values["url"],
+            values["deadline"],
+            fingerprint,
+            values["source"],
+            user_id,
+        ))
+    if not prepared:
+        return 0, 0
+    with database._write_lock:
+        db = database.get_db()
+        before = db.total_changes
+        try:
+            db.executemany(
+                """INSERT OR IGNORE INTO shared_job_records
+                   (id, company, company_type, directions, job, city, batch, url,
+                    deadline, fingerprint, source, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                prepared,
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        added = db.total_changes - before
+    return added, len(prepared) - added
+
+
+def tag_shared_records_source(records: list[dict], source: str) -> int:
+    """Mark existing rows that match a source feed, including rows imported before source tracking."""
+    fingerprints = [_shared_fingerprint(_shared_values(fields)) for fields in records]
+    if not fingerprints:
+        return 0
+    with database._write_lock:
+        db = database.get_db()
+        total = 0
+        for index in range(0, len(fingerprints), 900):
+            part = fingerprints[index:index + 900]
+            marks = ",".join("?" for _ in part)
+            cur = db.execute(
+                f"UPDATE shared_job_records SET source = ? WHERE fingerprint IN ({marks})",
+                (source, *part),
+            )
+            total += cur.rowcount
+        db.commit()
+        return total
+
+
+def delete_shared_records_by_source_fingerprints(source: str, records: list[dict]) -> int:
+    fingerprints = [_shared_fingerprint(_shared_values(fields)) for fields in records]
+    if not fingerprints:
+        return 0
+    with database._write_lock:
+        db = database.get_db()
+        total = 0
+        for index in range(0, len(fingerprints), 900):
+            part = fingerprints[index:index + 900]
+            marks = ",".join("?" for _ in part)
+            db.execute(
+                f"UPDATE job_records SET source_shared_id = NULL WHERE source_shared_id IN "
+                f"(SELECT id FROM shared_job_records WHERE source = ? AND fingerprint IN ({marks}))",
+                (source, *part),
+            )
+            cur = db.execute(
+                f"DELETE FROM shared_job_records WHERE source = ? AND fingerprint IN ({marks})",
+                (source, *part),
+            )
+            total += cur.rowcount
+        db.commit()
+        return total
+
+
+def _serialize_shared(row: dict, is_added: bool) -> dict:
+    return {
+        "record_id": row["id"],
+        "company": row["company"],
+        "type": row["company_type"],
+        "dir": _json_list(row["directions"]),
+        "job": row["job"],
+        "city": row["city"],
+        "batch": row["batch"],
+        "url": row["url"],
+        "deadline": row["deadline"],
+        "priority": "",
+        "progress": [],
+        "contributor": row.get("contributor") or "已注销用户",
+        "created_at": row.get("created_at") or "",
+        "is_added": bool(is_added),
+    }
+
+
+def list_shared_records(user_id: int) -> list[dict]:
+    db = database.get_db()
+    rows = db.execute(
+        """SELECT s.*, u.username AS contributor,
+                  EXISTS(
+                      SELECT 1 FROM job_records j
+                      WHERE j.user_id = ? AND (
+                          j.source_shared_id = s.id OR
+                          (j.company = s.company AND
+                           j.company_type = s.company_type AND
+                           j.directions = s.directions AND
+                           j.job = s.job AND
+                           j.url = s.url)
+                      )
+                  ) AS is_added
+           FROM shared_job_records s
+           LEFT JOIN users u ON u.id = s.created_by
+           ORDER BY s.created_at DESC, s.id DESC""",
+        (user_id,),
+    ).fetchall()
+    return [_serialize_shared(dict(row), bool(row["is_added"])) for row in rows]
+
+
+def copy_shared_record(user_id: int, shared_id: str) -> tuple[str, bool]:
+    with database._write_lock:
+        db = database.get_db()
+        shared = db.execute(
+            "SELECT * FROM shared_job_records WHERE id = ?", (shared_id,)
+        ).fetchone()
+        if not shared:
+            raise LookupError("未找到对应的共享记录")
+        existing = db.execute(
+            """SELECT id, source_shared_id FROM job_records
+               WHERE user_id = ? AND (
+                   source_shared_id = ? OR
+                   (company = ? AND company_type = ? AND directions = ? AND job = ? AND url = ?)
+               ) LIMIT 1""",
+            (
+                user_id, shared_id, shared["company"], shared["company_type"],
+                shared["directions"], shared["job"], shared["url"],
+            ),
+        ).fetchone()
+        if existing:
+            if not existing["source_shared_id"]:
+                db.execute(
+                    "UPDATE job_records SET source_shared_id = ? WHERE id = ?",
+                    (shared_id, existing["id"]),
+                )
+                db.commit()
+            return existing["id"], False
+        record_id = "rec" + uuid.uuid4().hex
+        db.execute(
+            """INSERT INTO job_records
+               (id, user_id, company, company_type, directions, progress, job,
+                city, batch, url, deadline, source_shared_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                record_id, user_id, shared["company"], shared["company_type"],
+                shared["directions"], json.dumps(["未投递"], ensure_ascii=False),
+                shared["job"], shared["city"], shared["batch"], shared["url"],
+                shared["deadline"], shared_id,
+            ),
+        )
+        db.commit()
+        return record_id, True
+
+
+def delete_shared_record(shared_id: str) -> bool:
+    with database._write_lock:
+        db = database.get_db()
+        db.execute(
+            "UPDATE job_records SET source_shared_id = NULL WHERE source_shared_id = ?",
+            (shared_id,),
+        )
+        cur = db.execute("DELETE FROM shared_job_records WHERE id = ?", (shared_id,))
+        db.commit()
+        return cur.rowcount > 0
+
+
+def delete_shared_records(shared_ids: list[str]) -> int:
+    """Delete several shared records and clear their personal-table links."""
+    ids = [item for item in dict.fromkeys(shared_ids) if str(item).startswith("shr")]
+    if not ids:
+        return 0
+    with database._write_lock:
+        db = database.get_db()
+        deleted = 0
+        for offset in range(0, len(ids), 900):
+            part = ids[offset:offset + 900]
+            marks = ",".join("?" for _ in part)
+            db.execute(f"UPDATE job_records SET source_shared_id = NULL WHERE source_shared_id IN ({marks})", part)
+            cursor = db.execute(f"DELETE FROM shared_job_records WHERE id IN ({marks})", part)
+            deleted += cursor.rowcount
+        db.commit()
+        return deleted
+
+
+def merge_shared_records(duplicate_to_survivor: dict[str, str]) -> int:
+    """Delete duplicate shared rows while preserving personal-table links.
+
+    If a user already copied both rows, the extra personal record remains but is
+    detached from the deleted shared row to satisfy the per-user unique link.
+    """
+    requested = {
+        str(duplicate_id): str(survivor_id)
+        for duplicate_id, survivor_id in duplicate_to_survivor.items()
+        if (
+            str(duplicate_id).startswith("shr")
+            and str(survivor_id).startswith("shr")
+            and str(duplicate_id) != str(survivor_id)
+        )
+    }
+    if not requested:
+        return 0
+    with database._write_lock:
+        db = database.get_db()
+        ids = list(dict.fromkeys([*requested.keys(), *requested.values()]))
+        existing_ids: set[str] = set()
+        for offset in range(0, len(ids), 900):
+            part = ids[offset:offset + 900]
+            marks = ",".join("?" for _ in part)
+            existing_ids.update(
+                row["id"]
+                for row in db.execute(
+                    f"SELECT id FROM shared_job_records WHERE id IN ({marks})", part
+                ).fetchall()
+            )
+        merge_map = {
+            duplicate_id: survivor_id
+            for duplicate_id, survivor_id in requested.items()
+            if duplicate_id in existing_ids and survivor_id in existing_ids
+        }
+        if not merge_map:
+            return 0
+        try:
+            for duplicate_id, survivor_id in merge_map.items():
+                linked = db.execute(
+                    "SELECT id, user_id FROM job_records WHERE source_shared_id = ?",
+                    (duplicate_id,),
+                ).fetchall()
+                for row in linked:
+                    already_linked = db.execute(
+                        """SELECT id FROM job_records
+                           WHERE user_id = ? AND source_shared_id = ? LIMIT 1""",
+                        (row["user_id"], survivor_id),
+                    ).fetchone()
+                    db.execute(
+                        "UPDATE job_records SET source_shared_id = ? WHERE id = ?",
+                        (None if already_linked else survivor_id, row["id"]),
+                    )
+            duplicate_ids = list(merge_map)
+            deleted = 0
+            for offset in range(0, len(duplicate_ids), 900):
+                part = duplicate_ids[offset:offset + 900]
+                marks = ",".join("?" for _ in part)
+                cursor = db.execute(
+                    f"DELETE FROM shared_job_records WHERE id IN ({marks})", part
+                )
+                deleted += cursor.rowcount
+            db.commit()
+            return deleted
+        except Exception:
+            db.rollback()
+            raise
+
+
+def shared_deadline_cutoff_ms(now: datetime | None = None) -> int:
+    """Return midnight today in China time as a millisecond timestamp."""
+    current = now.astimezone(CHINA_TZ) if now else datetime.now(CHINA_TZ)
+    today = current.replace(hour=0, minute=0, second=0, microsecond=0)
+    return int(today.timestamp() * 1000)
+
+
+def is_shared_deadline_expired(deadline: int | str | None, now: datetime | None = None) -> bool:
+    """A deadline is expired only when its calendar date is before today."""
+    if deadline in (None, ""):
+        return False
+    try:
+        return int(deadline) < shared_deadline_cutoff_ms(now)
+    except (TypeError, ValueError):
+        return False
+
+
+def delete_expired_shared_records(now: datetime | None = None) -> int:
+    """Remove expired shared records and unlink any personal copies.
+
+    Personal records remain intact; only their source_shared_id link is cleared.
+    """
+    cutoff = shared_deadline_cutoff_ms(now)
+    with database._write_lock:
+        db = database.get_db()
+        db.execute(
+            """UPDATE job_records SET source_shared_id = NULL
+               WHERE source_shared_id IN (
+                   SELECT id FROM shared_job_records
+                   WHERE deadline IS NOT NULL AND deadline < ?
+               )""",
+            (cutoff,),
+        )
+        cur = db.execute(
+            """DELETE FROM shared_job_records
+               WHERE deadline IS NOT NULL AND deadline < ?""",
+            (cutoff,),
+        )
+        db.commit()
+        return cur.rowcount
+
+
+def update_record(user_id: int, record_id: str, fields: dict) -> bool:
+    current = get_record(user_id, record_id)
+    fields = _sync_progress_with_dates(fields, current["fields"] if current else None)
+    values = {FIELD_COLUMNS[key]: _db_value(key, value) for key, value in fields.items() if key in FIELD_COLUMNS}
+    if not values:
+        return bool(get_record(user_id, record_id))
+    # 进展发生变化时，刷新"进入当前进展的时间"
+    if "进展" in fields:
+        old_progress = (current["fields"].get("进展") or []) if current else []
+        new_progress = fields.get("进展") or []
+        if not isinstance(new_progress, list):
+            new_progress = [new_progress] if new_progress else []
+        if old_progress != new_progress:
+            values["progress_updated_at"] = _now_ms()
+    assignments = ", ".join(f"{column} = ?" for column in values)
+    with database._write_lock:
+        db = database.get_db()
+        cur = db.execute(
+            f"UPDATE job_records SET {assignments}, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
+            [*values.values(), record_id, user_id],
+        )
+        db.commit()
+        return cur.rowcount > 0
+
+
+def delete_record(user_id: int, record_id: str) -> bool:
+    with database._write_lock:
+        db = database.get_db()
+        cur = db.execute(
+            "DELETE FROM job_records WHERE id = ? AND user_id = ?",
+            (record_id, user_id),
+        )
+        db.commit()
+        return cur.rowcount > 0
+
+
+def _serialize(record: dict) -> dict:
+    """Serialize a record for list display and detail views."""
+    fields = record["fields"]
+    return {
+        "record_id": record["record_id"],
+        "company": fields.get("公司名称", "") or "",
+        "type": (fields.get("公司/行业类型") or [""])[0] or "",
+        "dir": fields.get("嵌入式方向") or [],
+        "progress": fields.get("进展") or [],
+        "job": fields.get("秋招岗位") or "",
+        "city": fields.get("城市") or "",
+        "batch": fields.get("批次") or "",
+        "priority": fields.get("优先级") or "",
+        "note": fields.get("备注") or "",
+        "job_jd": fields.get("岗位JD") or "",
+        "url": fields.get("投递链接") or "",
+        "deadline": fields.get("投递截止时间"),
+        "apply_date": fields.get("投递时间"),
+        "exam_date": fields.get("机考时间"),
+        "interview1": fields.get("一面"),
+        "interview2": fields.get("二面"),
+        "interview3": fields.get("三面"),
+        "interview4": fields.get("四面"),
+        "warm": fields.get("泡池子"),
+        "result": fields.get("结果"),
+        "offer_details": fields.get("Offer详情") or {},
+        "resume_version": fields.get("简历版本") or "",
+        "progress_updated_at": fields.get("progress_updated_at"),
+    }
+
+
+def _is_applied(fields: dict) -> bool:
+    """Return whether a record has entered the application pipeline."""
+    progress = fields.get("进展") or []
+    if not isinstance(progress, list):
+        progress = [progress] if progress else []
+    if any(str(item).strip() and str(item).strip() != "未投递" for item in progress):
+        return True
+    return any(
+        fields.get(field)
+        for field in ("投递时间", "机考时间", "一面", "二面", "三面", "四面", "泡池子", "结果")
+    )
+
+
+def get_dashboard_data(user_id: int) -> dict:
+    """Single-pass aggregation for better performance."""
+    records = list_records(user_id)
+    rows = []
+    recent = []
+    deadlines = []
+    progress = Counter()
+    directions = Counter()
+    company_types = Counter()
+    applied_companies: set[str] = set()
+    exam_companies: set[str] = set()
+    interview_companies: set[str] = set()
+    offer_companies: set[str] = set()
+
+    for record in records:
+        fields = record["fields"]
+        if not fields.get("公司名称"):
+            continue
+        rows.append(record)
+
+        prog = fields.get("进展") or []
+        if _is_applied(fields):
+            company_key = str(fields.get("公司名称") or "").strip().casefold()
+            applied_companies.add(company_key)
+            # All dashboard statistics use applied records as their population.
+            progress.update(prog)
+            directions.update(fields.get("嵌入式方向") or [])
+            company_types.update(fields.get("公司/行业类型") or [])
+            if fields.get("机考时间"):
+                exam_companies.add(company_key)
+            if fields.get("一面") or fields.get("二面") or fields.get("三面") or fields.get("四面"):
+                interview_companies.add(company_key)
+            if any(item in {"OC", "Offer"} for item in prog):
+                offer_companies.add(company_key)
+            recent.append(record)
+
+        if fields.get("投递截止时间"):
+            deadlines.append(record)
+
+    # Sort only what we need
+    recent.sort(
+        key=lambda r: (
+            r["fields"].get("投递时间")
+            or r["fields"].get("progress_updated_at")
+            or 0
+        ),
+        reverse=True,
+    )
+    deadlines.sort(key=lambda r: r["fields"].get("投递截止时间") or 0)
+
+    # Serialize (only once per record)
+    return {
+        "main": {
+            "total_companies": len(applied_companies),
+            "exam_count": len(exam_companies),
+            "interview_count": len(interview_companies),
+            "offer_count": len(offer_companies),
+            "directions": directions.most_common(15),
+            "ctypes": company_types.most_common(15),
+            "deadlines": [{"company": r["fields"].get("公司名称", ""), "job": r["fields"].get("秋招岗位", ""), "deadline": r["fields"].get("投递截止时间"), "progress": r["fields"].get("进展", [])} for r in deadlines],
+            "recent": [_serialize(r) for r in recent],
+            "records": [_serialize(r) for r in rows],
+        },
+        "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }

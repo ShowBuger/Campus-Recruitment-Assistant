@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>校招信息看板</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=brand-4">
+  <link rel="shortcut icon" href="/static/favicon.svg?v=brand-4">
+  <meta name="theme-color" content="#386a57">
+  <!-- Always-loaded base styles -->
+  <link rel="stylesheet" href="/static/base.css?v=20260808-5">
+  <link rel="stylesheet" href="/static/components-extra.css?v=20260730-6">
+  <link rel="stylesheet" href="/static/app-layout.css?v=20260730-6">
+  <!-- Pixelium theme (default style) -->
+  <link rel="stylesheet" href="/static/pixelium-font.css?v=20260730-6" id="css-pixelfont">
+  <link rel="stylesheet" href="/static/pixelium-vue.css?v=20260730-6" id="css-pixelvue">
+  <link rel="stylesheet" href="/static/pixelium-theme.css?v=20260929-1" id="css-pixelium">
+    <link rel="stylesheet" href="/static/theme-system.css?v=20260905-68">
+  <link rel="stylesheet" href="/static/responsive-layout.css?v=20260929-3">
+  <script>
+    (function(){
+      var styles = ['classic', 'pixelium', 'aurora', 'anime', 'journal', 'cyber'];
+      var style = localStorage.getItem('radar_style') || 'pixelium';
+      var requestedStyle = style;
+      var styleFont = localStorage.getItem('radar_style_font') === 'default' ? 'default' : 'themed';
+      if (styles.indexOf(style) < 0) {
+        style = 'pixelium';
+        requestedStyle = style;
+        localStorage.setItem('radar_style', style);
+      }
+      if (style === 'aurora' || (styleFont === 'themed' && (style === 'anime' || style === 'cyber'))) {
+        document.documentElement.dataset.pendingStyle = style;
+        style = 'pixelium';
+      }
+      document.documentElement.dataset.style = style;
+      document.documentElement.dataset.styleFont = styleFont;
+      var savedTheme = requestedStyle === 'aurora'
+        ? 'dark'
+        : (localStorage.getItem('radar_non_aurora_theme') || localStorage.getItem('radar_theme'));
+      document.documentElement.dataset.theme = savedTheme === 'dark' ? 'dark' : 'light';
+      // Pixelium is default — already enabled. Disable only if classic.
+      if (style !== 'pixelium') {
+        var el;
+        el = document.getElementById('css-pixelium'); if (el) el.setAttribute('disabled', '');
+        el = document.getElementById('css-pixelfont'); if (el) el.setAttribute('disabled', '');
+        el = document.getElementById('css-pixelvue'); if (el) el.setAttribute('disabled', '');
+      }
+    })();
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
