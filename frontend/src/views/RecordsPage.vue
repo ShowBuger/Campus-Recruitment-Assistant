@@ -83,25 +83,25 @@ function toggleExpanded(group) {
   _toggleExpanded(group)
   // Check if we need to load more after expanding
   nextTick(() => {
-    if (sharedTableScroll.value) {
-      const target = sharedTableScroll.value
-      if (target.scrollHeight - target.scrollTop - target.clientHeight <= 160) {
-        if (showShared.value) {
-          if (sharedVisibleCount.value < displayRecords.value.length) {
-            sharedVisibleCount.value = Math.min(
-              displayRecords.value.length,
-              sharedVisibleCount.value + TABLE_LOAD_SIZE,
-            )
-          }
-        } else {
-          if (personalVisibleCount.value < groupedRecords.value.length) {
-            personalVisibleCount.value = Math.min(
-              groupedRecords.value.length,
-              personalVisibleCount.value + TABLE_LOAD_SIZE,
-            )
-          }
-        }
+    if (!sharedTableScroll.value || tableLoadingMore) return
+    const target = sharedTableScroll.value
+    if (target.scrollHeight - target.scrollTop - target.clientHeight <= 160) {
+      if (!hasMoreTableRecords.value) return
+      tableLoadingMore = true
+      if (showShared.value) {
+        sharedVisibleCount.value = Math.min(
+          displayRecords.value.length,
+          sharedVisibleCount.value + TABLE_LOAD_SIZE,
+        )
+      } else {
+        personalVisibleCount.value = Math.min(
+          groupedRecords.value.length,
+          personalVisibleCount.value + TABLE_LOAD_SIZE,
+        )
       }
+      nextTick(() => {
+        tableLoadingMore = false
+      })
     }
   })
 }

@@ -298,20 +298,7 @@ const searchedGroupSource = computed(() => {
   ].join(' ').toLocaleLowerCase('zh-CN').includes(query)).map(item => String(item.company || '').trim().toLocaleLowerCase('zh-CN')))
   return recordGroupSource.value.filter(item => matchingCompanies.has(String(item.company || '').trim().toLocaleLowerCase('zh-CN')))
 })
-const { groupedRecords, selectPosition, toggleExpanded: _toggleExpanded, isExpanded } = useRecordGroups(searchedGroupSource)
-
-function toggleExpanded(group) {
-  _toggleExpanded(group)
-  // Check if we need to load more after expanding
-  nextTick(() => {
-    if (recordsTableScroll.value) {
-      const target = recordsTableScroll.value
-      if (target.scrollHeight - target.scrollTop - target.clientHeight <= 160) {
-        loadMoreRecordGroups()
-      }
-    }
-  })
-}
+const { groupedRecords, selectPosition, toggleExpanded, isExpanded } = useRecordGroups(searchedGroupSource)
 const visibleRecordGroups = computed(() => {
   const items = [...groupedRecords.value]
   const timestamp = (record, field) => Number(record?.[field] || 0)
@@ -398,11 +385,6 @@ function onRecordsTableScroll(event) {
   loadMoreRecordGroups()
 }
 
-function onPageScroll() {
-  if (!calendarCollapsed.value || !hasMoreRecordGroups.value || !recordsTableScroll.value || recordsLoadingMore) return
-  const tableBottom = recordsTableScroll.value.getBoundingClientRect().bottom
-  if (tableBottom - window.innerHeight <= 160) loadMoreRecordGroups()
-}
 const draftFilteredCount = computed(() => {
   return filterRecords(records.value, draftFilter.value).length
 })
@@ -446,7 +428,6 @@ function changeFilterColumn(condition) {
 function toggleCalendarFromRecordHeader(event) {
   if (event.target.closest('button, input, select, label, a, [role="dialog"]')) return
   calendarCollapsed.value = !calendarCollapsed.value
-  if (calendarCollapsed.value) nextTick(onPageScroll)
 }
 
 function openPositionPicker(group) { positionPickerGroup.value = group }
@@ -668,8 +649,8 @@ async function deleteCalendarEvent(id, etype) {
 function onKeydown(e) { if (e.key === 'Escape' && showFilter.value) applyFilter() }
 
 let trackerPollTimer = null
-onMounted(() => { loadRecordViewState(); store.fetch(); loadSavedFilters(); loadLocalEvents(); loadTrackerPending(); store.startPolling(); trackerPollTimer = setInterval(loadTrackerPending, 30000); document.addEventListener('keydown', onKeydown); window.addEventListener('scroll', onPageScroll, { passive: true }) })
-onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(trackerPollTimer); document.removeEventListener('keydown', onKeydown); window.removeEventListener('scroll', onPageScroll) })
+onMounted(() => { loadRecordViewState(); store.fetch(); loadSavedFilters(); loadLocalEvents(); loadTrackerPending(); store.startPolling(); trackerPollTimer = setInterval(loadTrackerPending, 30000); document.addEventListener('keydown', onKeydown) })
+onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(trackerPollTimer); document.removeEventListener('keydown', onKeydown) })
 </script>
 
 <template>
@@ -945,7 +926,7 @@ onUnmounted(() => { store.stopPolling(); if (trackerPollTimer) clearInterval(tra
 <style scoped>
 .date-edit{appearance:none;padding:4px 3px;border:1px solid transparent;border-radius:6px;background:transparent;cursor:pointer;transition:color .15s ease,border-color .15s ease,background .15s ease}.date-edit:hover,.date-edit:focus-visible{border-color:var(--line);color:var(--blue);background:var(--blueS);outline:none}.date-editor-modal{width:min(420px,94vw)}
 .day-event-actions{display:flex;flex-shrink:0;gap:6px}.day-event-actions .btn{height:28px;padding:0 10px;font-size:11px}
-.record-card-hd{cursor:pointer;user-select:none}.record-card-hd :is(button,input,select,label,a){cursor:pointer}.record-expand-hint{margin-left:2px;color:var(--muted);font:500 10px/1.2 var(--font);letter-spacing:.01em;opacity:.82;transition:color .15s ease,opacity .15s ease}.record-card-hd:hover .record-expand-hint,.calendar-collapsed .record-expand-hint{color:var(--sub);opacity:1}.data-table-card.filter-open{position:relative;z-index:40;overflow:visible}.data-table-card.filter-open .record-card-hd{position:relative;z-index:41}.records-table-scroll{max-height:440px}.calendar-collapsed .data-table-card{display:flex;min-height:calc(100dvh - 260px);flex-direction:column}.calendar-collapsed .records-table-scroll{flex:1;max-height:none;min-height:280px}.calendar-collapsed .data-table-card .table-actions{margin-top:auto}
+.record-card-hd{cursor:pointer;user-select:none}.record-card-hd :is(button,input,select,label,a){cursor:pointer}.record-expand-hint{margin-left:2px;color:var(--muted);font:500 10px/1.2 var(--font);letter-spacing:.01em;opacity:.82;transition:color .15s ease,opacity .15s ease}.record-card-hd:hover .record-expand-hint,.calendar-collapsed .record-expand-hint{color:var(--sub);opacity:1}.data-table-card.filter-open{position:relative;z-index:40;overflow:visible}.data-table-card.filter-open .record-card-hd{position:relative;z-index:41}.records-table-scroll{max-height:440px}.calendar-collapsed .records-table-scroll{max-height:calc(100vh - 320px)}
 .dashboard-record-count{margin-left:auto;text-align:right}@media(max-width:700px){.dashboard-record-count{width:100%;margin-left:0;text-align:left}}
 .record-controls{position:relative;display:grid;grid-template-columns:minmax(260px,1fr) minmax(170px,220px) auto auto;align-items:end;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--bg)}.record-search,.record-sort{display:grid;min-width:0;gap:5px}.record-search>span,.record-sort>span{color:var(--muted);font-size:9px;font-weight:800}.record-search input,.record-sort select{width:100%;height:38px;padding:0 11px;border:1px solid var(--line2);border-radius:9px;outline:none;color:var(--ink);background:var(--panel);font:600 11px var(--font)}.record-search input:focus,.record-sort select:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blueS)}.record-search input::placeholder{color:var(--muted)}.record-controls .progress-filter{align-self:end}.record-controls .progress-filter-toggle{height:38px;min-width:112px;border-radius:9px;background:var(--panel);box-shadow:none}.record-controls .progress-filter-toggle.has-filter,.record-controls .progress-filter.active .progress-filter-toggle.has-filter{color:#fff;border-color:transparent;background:var(--blue)}.record-search-clear{align-self:end;height:38px;padding:0 10px;border:0;color:var(--muted);background:transparent;font:700 10px var(--font);white-space:nowrap;cursor:pointer}.record-search-clear:hover{color:var(--blue)}.data-table-card.filter-open .record-controls{z-index:42}
 .progress-filter-menu{width:min(680px,calc(100vw - 32px))}.filter-builder{display:grid;gap:8px;max-height:min(52dvh,420px);padding:12px;overflow:auto;background:var(--panel)}.filter-condition{display:grid;grid-template-columns:24px minmax(112px,.8fr) minmax(86px,.55fr) minmax(190px,1.5fr) 30px;align-items:center;gap:8px;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}.filter-condition-index{display:grid;width:22px;height:22px;place-items:center;border-radius:50%;color:var(--muted);background:var(--panel);font:800 10px var(--mono)}.filter-condition :is(select,input){min-width:0;width:100%;height:34px;padding:0 9px;border:1px solid var(--line2);border-radius:7px;outline:none;color:var(--ink);background:var(--panel);font:600 11px var(--font)}.filter-condition :is(select,input):focus{border-color:var(--blue);box-shadow:0 0 0 2px var(--blueS)}.filter-range-label{color:var(--sub);font-size:11px;font-weight:700;text-align:center}.filter-date-range{display:grid;grid-template-columns:minmax(118px,1fr) auto minmax(118px,1fr);align-items:center;gap:6px}.filter-date-range span{color:var(--muted);font-size:10px}.filter-condition-remove{display:grid;width:28px;height:28px;place-items:center;padding:0;border:1px solid transparent;border-radius:7px;color:var(--muted);background:transparent;font:700 17px/1 var(--font);cursor:pointer}.filter-condition-remove:hover{border-color:var(--line);color:var(--red);background:var(--redS)}.filter-add-condition{justify-self:start;padding:7px 10px;border:1px dashed var(--line2);border-radius:8px;color:var(--blue);background:transparent;font:800 11px var(--font);cursor:pointer}.filter-add-condition:hover{border-color:var(--blue);background:var(--blueS)}.filter-builder-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--line);background:var(--panel)}.filter-builder-footer span{color:var(--muted);font-size:10px}.filter-builder-footer .btn{height:30px}
